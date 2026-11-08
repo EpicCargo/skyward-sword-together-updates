@@ -1,0 +1,110 @@
+From 83e61fcec76ad25319d96e8c07ed54ca0ec54e36 Mon Sep 17 00:00:00 2001
+From: SST development <sst-development@localhost>
+Date: Tue, 3 Nov 2026 18:30:06 -0500
+Subject: [PATCH] Bind carried-object presentation to rendered carry poses
+
+---
+ runtime/hle/sst_prop_bridge.h | 21 +++++++++++++++------
+ runtime/nvn/vulkan/exec.c     |  7 ++++++-
+ 2 files changed, 21 insertions(+), 7 deletions(-)
+
+diff --git a/runtime/hle/sst_prop_bridge.h b/runtime/hle/sst_prop_bridge.h
+index fd2c6d8..6f7c99b 100644
+--- a/runtime/hle/sst_prop_bridge.h
++++ b/runtime/hle/sst_prop_bridge.h
+@@ -20,6 +20,8 @@ static struct {
+     SstPropState state;
+     PropBinding bindings[SST_PROPS];
+ } props_bridge = {.mu = PTHREAD_MUTEX_INITIALIZER};
++struct {uint64_t received,carry_denied,carried_presented,placed_presented,last_sequence,last_owner;}
++    sst_prop_presentation_stats;
+ 
+ static void prop_release(PropBinding *b) {
+     if (b->remote_held && sst_prop_native_vase(b->actor) && r32(b->actor + 8) == b->instance)
+@@ -93,6 +95,7 @@ static void prop_incoming(const SstProp *p, void *unused) {
+     (void)unused;
+     if (!props_bridge.enabled || !sst_props_update(&props_bridge.state, p->from,
+             p->presence_generation, p, sst_now_ms())) return;
++    sst_prop_presentation_stats.received++;
+     for (unsigned i = 0; i < SST_PROPS; i++) {
+         PropBinding *b = &props_bridge.bindings[i];
+         if (sst_prop_key_equal(&b->key, &p->key)) b->local_placed = false;
+@@ -169,13 +172,15 @@ static void prop_send(PropBinding *b, bool held, uint64_t now) {
+     if (ENV("SST_TRACE")) LOG("[sst-prop] send id=%u phase=%u seq=%u\n", b->key.placed_id, p.phase, p.sequence);
+ }
+ 
+-static SstPropNativePose prop_display_pose(const SstProp *p) {
++static bool prop_display_pose(const SstProp *p,SstPropNativePose *out) {
+     SstPropNativePose target;
+     memcpy(target.pos, p->pos, sizeof target.pos); memcpy(target.rot, p->rot, sizeof target.rot);
+     memcpy(target.matrix, p->matrix, sizeof target.matrix);
+     SstPose display;
+-    if (p->phase != SST_PROP_CARRY || !sst_remote_displayed(&p->scene, p->from,
+-            p->presence_generation, &display)) return target;
++    if(p->phase!=SST_PROP_CARRY){*out=target;return true;}
++    if(!sst_remote_carry_displayed(&p->scene,p->from,p->presence_generation,&display)) {
++        sst_prop_presentation_stats.carry_denied++;return false;
++    }
+     float angle = (int16_t)(display.rot[1] - p->yaw) * (6.283185307179586f / 65536.0f);
+     float co = cosf(angle), si = sinf(angle);
+     float x = p->pos[0] - p->origin[0], z = p->pos[2] - p->origin[2];
+@@ -193,7 +198,7 @@ static SstPropNativePose prop_display_pose(const SstProp *p) {
+             target.matrix[7] = display.pos[1] + p->matrix[7] - p->origin[1];
+         }
+     }
+-    return target;
++    *out=target;return true;
+ }
+ 
+ static GuestFn prop_original[SST_PROP_NATIVE_ADAPTERS];
+@@ -209,8 +214,8 @@ static void prop_execute(Cpu *c, GuestFn original) {
+             target.from != sst_net_my_id() && (target.phase == SST_PROP_CARRY ||
+             target.from != b->applied_owner || target.sequence != b->applied_sequence ||
+             target.presence_generation != b->applied_generation)) {
+-            pose = prop_display_pose(&target); candidate = true;
+-            instance = b->instance; load = props_bridge.load; gen = props_bridge.generation;
++            candidate=prop_display_pose(&target,&pose);
++            if(candidate){instance = b->instance; load = props_bridge.load; gen = props_bridge.generation;}
+         }
+         if (!candidate) prop_release(b);
+     }
+@@ -225,6 +230,10 @@ static void prop_execute(Cpu *c, GuestFn original) {
+         b = props_bridge.enabled && props_bridge.load == load && props_bridge.generation == gen ?
+             prop_binding(actor) : NULL;
+         if (b) {
++            if(target.phase==SST_PROP_CARRY)sst_prop_presentation_stats.carried_presented++;
++            else sst_prop_presentation_stats.placed_presented++;
++            sst_prop_presentation_stats.last_sequence=target.sequence;
++            sst_prop_presentation_stats.last_owner=target.from;
+             b->applied_owner = target.from; b->applied_sequence = target.sequence;
+             b->applied_generation = target.presence_generation;
+             b->remote_held = target.phase == SST_PROP_CARRY;
+diff --git a/runtime/nvn/vulkan/exec.c b/runtime/nvn/vulkan/exec.c
+index 1ad7187..113d8cb 100644
+--- a/runtime/nvn/vulkan/exec.c
++++ b/runtime/nvn/vulkan/exec.c
+@@ -3269,8 +3269,11 @@ static void draw_(CmdRec *r, bool indexed,SstOriginMarker origin) {
+             if(!forced)sst_animation_set_length(local.pose.anim_id,local.animation_length);
+             if (sampled_frame != frame) {
+                 nremote = sst_remote_network_sample(&local.scene, remote, SST_MAX_PLAYERS);
+-                for (int peer = 0; peer < nremote; peer++)
++                for (int peer = 0; peer < nremote; peer++) {
+                     sst_animation_replay_prepare(&remote[peer].pose, &replay[peer]);
++                    if(!replay[peer].ready || (replay[peer].pose.equip_flags & SST_POSE_IDENTITY_MASK)!=SST_POSE_CONTEXT_SMALL_CARRY)
++                        sst_remote_carry_drawn(&local.scene,&remote[peer],NULL);
++                }
+                 sampled_frame = frame;
+             }
+             float view[12];
+@@ -3325,6 +3328,8 @@ static void draw_(CmdRec *r, bool indexed,SstOriginMarker origin) {
+                         }
+                         if (!use_index) vkCmdDraw(cb, count, 1, first, base_inst);
+                         else vkCmdDrawIndexed(cb, icount, 1, 0, base_vertex, base_inst);
++                        if(positions.size && (use_index?icount:count))
++                            sst_remote_carry_drawn(&local.scene,&remote[peer],&replay[peer].pose);
+                         if(depth77_index!=UINT32_MAX)vkCmdEndQuery(cb,depth77_queries[cur_sub].pool,depth77_index);
+                         if(depth77_override){vkCmdSetDepthTestEnable(cb,dt);vkCmdSetDepthWriteEnable(cb,dw);sst_depth77_stats.restores++;}
+                         if(forced)sst_source74_render_stats.remote_draws++;
+-- 
+2.56.0
+

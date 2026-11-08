@@ -1,0 +1,19 @@
+{
+  "repository": "https://github.com/cranebeaker/coop-anything",
+  "commit": "5b86e5bb10ce864ab9872f2589651f73ffcae5db",
+  "license": "MIT",
+  "files": {
+    "relay.py": {
+      "upstream": "tools/chaos/relay.py",
+      "sha256": "1be86b1a51fc1aff526003dd982d2838493f8c8bc725de8b4ddcb82a8e9cadc7"
+    },
+    "impair.py": {
+      "upstream": "tools/chaos/impair.py",
+      "sha256": "eb3f48d8cda353a9e70ff1440fee70056d3780a27264a9ad1d61b4b97564ee8e"
+    },
+    "profiles.json": {
+      "upstream": "tools/chaos/profiles.json",
+      "sha256": "08a0a1ae8e67598f8186bea348c927f038a3bb8393430af30620aae960ef7a0f"
+    }
+  }
+}

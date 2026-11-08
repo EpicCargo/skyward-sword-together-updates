@@ -1,0 +1,176 @@
+From 615c176d5f9fbecbc7a664c9c85cdab29d51d175 Mon Sep 17 00:00:00 2001
+From: SST development <sst-development@localhost>
+Date: Tue, 3 Nov 2026 18:54:44 -0500
+Subject: [PATCH] Restore verified unheld placements when carry presentation is
+ unavailable
+
+---
+ runtime/hle/sst_prop_bridge.h | 59 +++++++++++++++++++++++++++--------
+ runtime/hle/sst_prop_native.h |  5 +--
+ runtime/hle/sst_prop_rest.h   | 26 +++++++++++++++
+ 3 files changed, 75 insertions(+), 15 deletions(-)
+ create mode 100644 runtime/hle/sst_prop_rest.h
+
+diff --git a/runtime/hle/sst_prop_bridge.h b/runtime/hle/sst_prop_bridge.h
+index 6f7c99b..68bb471 100644
+--- a/runtime/hle/sst_prop_bridge.h
++++ b/runtime/hle/sst_prop_bridge.h
+@@ -1,5 +1,6 @@
+ // Ordinary SSHD vases only. Included after the world bridge's memory helpers.
+ #include "sst_prop_native.h"
++#include "sst_prop_rest.h"
+ #include "../sst/sst_props.h"
+ #include "../sst/sst_remote.h"
+ 
+@@ -9,6 +10,7 @@ typedef struct {
+     uint16_t applied_owner;
+     SstPropKey key;
+     bool seen, local_held, local_placed, remote_held;
++    SstPropRest rest;
+ } PropBinding;
+ static struct {
+     pthread_mutex_t mu;
+@@ -20,7 +22,7 @@ static struct {
+     SstPropState state;
+     PropBinding bindings[SST_PROPS];
+ } props_bridge = {.mu = PTHREAD_MUTEX_INITIALIZER};
+-struct {uint64_t received,carry_denied,carried_presented,placed_presented,last_sequence,last_owner;}
++struct {uint64_t received,carry_denied,carried_presented,placed_presented,last_sequence,last_owner,parked_presented;}
+     sst_prop_presentation_stats;
+ 
+ static void prop_release(PropBinding *b) {
+@@ -204,19 +206,41 @@ static bool prop_display_pose(const SstProp *p,SstPropNativePose *out) {
+ static GuestFn prop_original[SST_PROP_NATIVE_ADAPTERS];
+ static void prop_execute(Cpu *c, GuestFn original) {
+     uint64_t actor = c->x[0]; SstProp target = {0}; SstPropNativePose pose;
+-    uint32_t instance = 0, load = 0, gen = 0; bool candidate = false;
++    uint32_t instance = 0, load = 0, gen = 0; bool candidate = false, parked=false;
+     pthread_mutex_lock(&props_bridge.mu);
+     PropBinding *b = props_bridge.enabled && g_sst.sync_props &&
+         sst_net_status(NULL, 0) == SST_ONLINE ? prop_binding(actor) : NULL;
+-    if (b && sst_prop_native_held(actor, props_bridge.player)) b->remote_held = false;
++    if (b && sst_prop_native_held(actor, props_bridge.player)) {
++        b->remote_held = false;sst_prop_rest_reset(&b->rest);
++    }
+     if (b && !sst_prop_native_held(actor, props_bridge.player)) {
+-        if (sst_props_get(&props_bridge.state, &b->key, sst_now_ms(), &target) &&
++        uint32_t state=r32(actor+0x358);
++        bool passive=state==0 || state==3; // native Wait / unlinked release, never force a state
++        if(!passive)sst_prop_rest_reset(&b->rest);
++        if(!b->remote_held && passive) {
++            SstPropNativePose actual;
++            bool sampled=sst_prop_native_sample(actor,&actual);
++            sst_prop_rest_observe(&b->rest,sampled?&actual:NULL,sampled,sst_now_ms());
++        }
++        bool have_target=sst_props_get(&props_bridge.state,&b->key,sst_now_ms(),&target);
++        if (have_target &&
+             target.from != sst_net_my_id() && (target.phase == SST_PROP_CARRY ||
+             target.from != b->applied_owner || target.sequence != b->applied_sequence ||
+             target.presence_generation != b->applied_generation)) {
+-            candidate=prop_display_pose(&target,&pose);
+-            if(candidate){instance = b->instance; load = props_bridge.load; gen = props_bridge.generation;}
++            if(target.phase==SST_PROP_CARRY) {
++                // Before the first remote lift, retain a real stationary native
++                // unheld placement. A missing body must not drop/break this actor.
++                if(passive && b->rest.ready) {
++                    candidate=prop_display_pose(&target,&pose);
++                    if(!candidate){pose=b->rest.pose;candidate=parked=true;}
++                } else sst_prop_presentation_stats.carry_denied++;
++            } else if(passive)candidate=prop_display_pose(&target,&pose);
++        } else if(!have_target && b->remote_held && passive && b->rest.ready) {
++            // Expiry restores once, in this exact live actor callback; ordinary
++            // simulation may resume from the actual unheld placement next tick.
++            pose=b->rest.pose;candidate=parked=true;
+         }
++        if(candidate){instance = b->instance; load = props_bridge.load; gen = props_bridge.generation;}
+         if (!candidate) prop_release(b);
+     }
+     pthread_mutex_unlock(&props_bridge.mu);
+@@ -230,13 +254,22 @@ static void prop_execute(Cpu *c, GuestFn original) {
+         b = props_bridge.enabled && props_bridge.load == load && props_bridge.generation == gen ?
+             prop_binding(actor) : NULL;
+         if (b) {
+-            if(target.phase==SST_PROP_CARRY)sst_prop_presentation_stats.carried_presented++;
+-            else sst_prop_presentation_stats.placed_presented++;
+-            sst_prop_presentation_stats.last_sequence=target.sequence;
+-            sst_prop_presentation_stats.last_owner=target.from;
+-            b->applied_owner = target.from; b->applied_sequence = target.sequence;
+-            b->applied_generation = target.presence_generation;
+-            b->remote_held = target.phase == SST_PROP_CARRY;
++            if(parked) {
++                sst_prop_presentation_stats.parked_presented++;b->remote_held=false;
++            } else {
++                if(target.phase==SST_PROP_CARRY)sst_prop_presentation_stats.carried_presented++;
++                else {
++                    sst_prop_presentation_stats.placed_presented++;
++                    // A packet's PLACE may still be a release transition. It is
++                    // not a stationary native observation for future restoration.
++                    sst_prop_rest_reset(&b->rest);
++                }
++                sst_prop_presentation_stats.last_sequence=target.sequence;
++                sst_prop_presentation_stats.last_owner=target.from;
++                b->applied_owner = target.from; b->applied_sequence = target.sequence;
++                b->applied_generation = target.presence_generation;
++                b->remote_held = target.phase == SST_PROP_CARRY;
++            }
+         }
+         pthread_mutex_unlock(&props_bridge.mu);
+         return;
+diff --git a/runtime/hle/sst_prop_native.h b/runtime/hle/sst_prop_native.h
+index b0fd1ab..228910e 100644
+--- a/runtime/hle/sst_prop_native.h
++++ b/runtime/hle/sst_prop_native.h
+@@ -138,7 +138,7 @@ static inline bool sst_prop_native_sample(uint64_t a, SstPropNativePose *pose) {
+ static inline bool sst_prop_native_present(Cpu *c, uint64_t a,
+                                            const SstPropNativePose *pose) {
+     if (!c || !sst_prop_native_pose_valid(pose) || !sst_prop_native_vase(a) ||
+-        r32(a + 0x358) == 1)
++        (r32(a + 0x358) != 0 && r32(a + 0x358) != 3))
+         return false;
+     const SstPropNativeDescriptor *d = sst_prop_native_actor_descriptor(a);
+     uint64_t model = sst_prop_native_model(a);
+@@ -183,7 +183,8 @@ static inline bool sst_prop_native_present(Cpu *c, uint64_t a,
+ // Zero fields have exact native carry-init/put-finalize evidence; old position
+ // must match the applied final position so remote motion cannot become a fall.
+ static inline bool sst_prop_native_release_velocity(uint64_t a) {
+-    if (!sst_prop_native_model(a) || r32(a + 0x358) == 1) return false;
++    if (!sst_prop_native_vase(a) || (r32(a + 0x358) != 0 && r32(a + 0x358) != 3) ||
++        !sst_prop_native_model(a)) return false;
+     const SstPropNativeDescriptor *d = sst_prop_native_actor_descriptor(a);
+     if (!d) return false;
+     memcpy((void *)(uintptr_t)(a + 0x1b0), (void *)(uintptr_t)(a + 0x144), 12);
+diff --git a/runtime/hle/sst_prop_rest.h b/runtime/hle/sst_prop_rest.h
+new file mode 100644
+index 0000000..13983cd
+--- /dev/null
++++ b/runtime/hle/sst_prop_rest.h
+@@ -0,0 +1,26 @@
++// Value-only unheld placement, scoped by its enclosing live PropBinding.
++// No actor/model address, ground height, linkage state or collision data is kept.
++#ifndef SST_PROP_REST_H
++#define SST_PROP_REST_H
++typedef struct {
++    SstPropNativePose candidate, pose;
++    uint64_t since, last_at;
++    bool observing, ready;
++} SstPropRest;
++static inline void sst_prop_rest_reset(SstPropRest *rest) {memset(rest,0,sizeof *rest);}
++static inline bool sst_prop_rest_equal(const SstPropNativePose *a,const SstPropNativePose *b) {
++    for(unsigned i=0;i<3;i++)if(fabsf(a->pos[i]-b->pos[i])>.05f || a->rot[i]!=b->rot[i])return false;
++    for(unsigned i=0;i<12;i++)if(fabsf(a->matrix[i]-b->matrix[i])>.01f)return false;
++    return true;
++}
++static inline void sst_prop_rest_observe(SstPropRest *rest,const SstPropNativePose *pose,
++                                        bool eligible,uint64_t now) {
++    if(!eligible || !pose || !sst_prop_native_pose_valid(pose)){sst_prop_rest_reset(rest);return;}
++    if(!rest->observing || now<rest->last_at || !sst_prop_rest_equal(&rest->candidate,pose)) {
++        rest->candidate=*pose;rest->since=rest->last_at=now;rest->observing=true;rest->ready=false;return;
++    }
++    rest->last_at=now;
++    // Multiple callbacks in one tick cannot manufacture a stationary placement.
++    if(now-rest->since>=100){rest->pose=*pose;rest->ready=true;}
++}
++#endif
+-- 
+2.56.0
+

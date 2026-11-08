@@ -1,0 +1,206 @@
+From 601143601731db6f18cdbdb7d9f6208c60997f85 Mon Sep 17 00:00:00 2001
+From: SST development <sst-development@localhost>
+Date: Tue, 3 Nov 2026 15:15:49 -0500
+Subject: [PATCH] Journal private model attempts and verify named cohort
+ bindings
+
+---
+ runtime/hle/sst_source_lifecycle.c | 124 ++++++++++++++++++++++++-----
+ runtime/nvn/vulkan/exec.c          |   5 ++
+ 2 files changed, 111 insertions(+), 18 deletions(-)
+
+diff --git a/runtime/hle/sst_source_lifecycle.c b/runtime/hle/sst_source_lifecycle.c
+index 15fb3d1..c0895a3 100644
+--- a/runtime/hle/sst_source_lifecycle.c
++++ b/runtime/hle/sst_source_lifecycle.c
+@@ -2,6 +2,13 @@
+ #include "../hle.h"
+ #include "sst_source_lifecycle.h"
+ #include "../sst/sst_origin.h"
++#include "../sst/sst_model_bindings.h"
++#ifdef _WIN32
++#include <windows.h>
++#else
++#include <fcntl.h>
++#include <unistd.h>
++#endif
+ #include <stdatomic.h>
+ #include <string.h>
+ 
+@@ -18,26 +25,94 @@ static uint64_t birth78_u64(uint64_t p){uint64_t v;memcpy(&v,(void *)(uintptr_t)
+ static uint32_t birth78_u32(uint64_t p){uint32_t v;memcpy(&v,(void *)(uintptr_t)p,4);return v;}
+ static uint16_t birth78_u16(uint64_t p){uint16_t v;memcpy(&v,(void *)(uintptr_t)p,2);return v;}
+ static uint8_t birth78_u8(uint64_t p){uint8_t v;memcpy(&v,(void *)(uintptr_t)p,1);return v;}
+-static void birth78_observe(uint64_t actor,uint64_t result) {
++typedef struct {uint64_t ticket,actor,instance;bool pre_valid;} Source79Receipt;
++static _Atomic uint64_t sst_source79_attempt_id;
++struct {uint64_t reserved,pre_valid,pre_invalid,matched_post,unmatched_post,overflow;
++    uint64_t last_ticket,last_actor,last_pre_instance,last_post_instance,last_kind,last_current;} sst_source79_receipt_stats;
++_Static_assert(sizeof(sst_source79_receipt_stats)==96,"bounded attempt journal");
++typedef struct {uint64_t table,self,reason;uint32_t instance;uint16_t profile;uint8_t lifecycle;} Birth79Header;
++static Birth79Header birth79_header(uint64_t actor) {
++    Birth79Header h={.lifecycle=255};
++    if(!birth78_span(actor,0x6b00)){h.reason=1;return h;}
++    h.table=birth78_u64(actor);h.self=birth78_u64(actor+0x38);h.profile=birth78_u16(actor+0x10);
++    h.lifecycle=birth78_u8(actor+0x12);h.instance=birth78_u32(actor+8);
++    if(h.table!=UINT64_C(0x7001637d28))h.reason|=2;
++    if(h.profile!=0xc8)h.reason|=4;
++    // Native postCreate EC5EF8 sets ACTIVE1 AFTER init1/heap/init_models.
++    if(h.lifecycle>1)h.reason|=8;
++    if(h.self!=actor)h.reason|=16;
++    return h;
++}
++static uint64_t source79_reserve_attempt(void) {
++    uint64_t old=atomic_load(&sst_source79_attempt_id);
++    for(;;) {
++        if(old==UINT64_MAX){sst_origin_latch_unsupported();pthread_mutex_lock(&birth78_mu);sst_source79_receipt_stats.overflow++;pthread_mutex_unlock(&birth78_mu);return 0;}
++        if(atomic_compare_exchange_weak(&sst_source79_attempt_id,&old,old+1))return old+1;
++    }
++}
++static void source79_bind_pre(Source79Receipt *r,unsigned kind) {
++    // Receipt was already reserved at callback entry, before known mutation and
++    // original heap reset. No old model/object/resource field is read here.
++    bool inspect=kind==0 && getenv("SST_TEST_MODEL_BIRTH_LOG") && getenv("LARECOMP_DEBUG_DATA");
++    if(inspect && sst_origin_observation_enter()) {
++        Birth79Header h=birth79_header(r->actor);r->pre_valid=!h.reason;r->instance=h.instance;
++        sst_origin_observation_leave();
++    }
++    pthread_mutex_lock(&birth78_mu);
++    if(r->ticket)sst_source79_receipt_stats.reserved++;
++    if(inspect){if(r->pre_valid)sst_source79_receipt_stats.pre_valid++;else sst_source79_receipt_stats.pre_invalid++;}
++    sst_source79_receipt_stats.last_ticket=r->ticket;sst_source79_receipt_stats.last_actor=r->actor;
++    sst_source79_receipt_stats.last_pre_instance=r->instance;sst_source79_receipt_stats.last_kind=kind;
++    pthread_mutex_unlock(&birth78_mu);
++}
++typedef struct {uint64_t base;int fd;} Source79FileReader;
++static bool source79_file_read(void *context,uint64_t offset,void *out,size_t bytes) {
++    Source79FileReader *r=context;
++    if(!birth78_span(r->base,1) || offset>GUEST_HI-r->base || !birth78_span(r->base+offset,bytes))return false;
++#ifdef _WIN32
++    SIZE_T copied=0;return ReadProcessMemory(GetCurrentProcess(),(void *)(uintptr_t)(r->base+offset),out,bytes,&copied) && copied==bytes;
++#else
++    return r->fd>=0 && pread(r->fd,out,bytes,(off_t)(r->base+offset))==(ssize_t)bytes;
++#endif
++}
++static bool source79_named_bindings(uint64_t file,const uint64_t resources[4],SstModelBindings *out) {
++    memset(out,0,sizeof *out);if(!birth78_span(file,0x20))return false;
++    uint64_t offsets[4];for(unsigned i=0;i<4;i++){if(resources[i]<file)return false;offsets[i]=resources[i]-file;}
++    Source79FileReader reader={file,-1};
++#ifndef _WIN32
++    reader.fd=open("/proc/self/mem",O_RDONLY|O_CLOEXEC);if(reader.fd<0)return false;
++#endif
++    bool ok=sst_model_bindings_validate(source79_file_read,&reader,GUEST_HI-file,offsets,out);
++#ifndef _WIN32
++    close(reader.fd);
++#endif
++    return ok;
++}
++static uint32_t source79_callback_mask(uint64_t actor,const uint64_t objects[4]) {
++    const uint32_t offset[4]={0xa90,0xaa8,0x1f38,0x820};
++    const uint64_t tables[4]={UINT64_C(0x700155f758),UINT64_C(0x700155f758),UINT64_C(0x700158f310),UINT64_C(0x7001674340)};
++    uint32_t mask=0;
++    for(unsigned i=0;i<4;i++) {
++        uint64_t expected=actor+offset[i],callback=birth78_u64(objects[i]+0xe0);
++        unsigned timing=i==3?5:4,operations=i==3?0x12:2;
++        if(callback!=expected || birth78_u64(expected)!=tables[i] || (birth78_u8(objects[i]+0xe8)&timing)!=timing || (birth78_u16(objects[i]+0xea)&operations)!=operations)continue;
++        if(i<2 && birth78_u64(expected+8)!=actor)continue;
++        if(i==3 && birth78_u64(expected+0x18)!=actor)continue;
++        // Face's actor-owner member is unproved; do not borrow another class's offset.
++        mask|=1u<<i;
++    }
++    return mask;
++}
++static void birth78_observe(uint64_t actor,uint64_t result,const Source79Receipt *receipt) {
+     const char *path=getenv("SST_TEST_MODEL_BIRTH_LOG");
+     if(!path || !getenv("LARECOMP_DEBUG_DATA"))return;
+     pthread_mutex_lock(&birth78_mu);sst_source78_birth_stats.returns++;
+     if(!(result&1)){sst_source78_birth_stats.false_returns++;pthread_mutex_unlock(&birth78_mu);return;}
+     if(!sst_origin_observation_enter()){sst_source78_birth_stats.busy++;pthread_mutex_unlock(&birth78_mu);return;}
+-    uint64_t table=0,self=0;uint16_t profile=0;uint8_t lifecycle=255;uint32_t instance=0;uint64_t reason=0;
+-    if(!birth78_span(actor,0x6b00))reason=1;
+-    else {
+-        table=birth78_u64(actor);self=birth78_u64(actor+0x38);profile=birth78_u16(actor+0x10);
+-        lifecycle=birth78_u8(actor+0x12);instance=birth78_u32(actor+8);
+-        if(table!=UINT64_C(0x7001637d28))reason|=2;
+-        if(profile!=0xc8)reason|=4;
+-        // Native postCreate EC5EF8 sets ACTIVE1 AFTER init1/heap/init_models.
+-        // This is a constructor-time observation, not steady actor eligibility.
+-        if(lifecycle>1)reason|=8;
+-        if(self!=actor)reason|=16;
+-    }
+-    sst_source78_header_stats=(__typeof__(sst_source78_header_stats)){actor,result,reason,table,self,profile,lifecycle,instance};
+-    if(reason) {
++    Birth79Header header=birth79_header(actor);
++    uint32_t instance=header.instance;uint8_t lifecycle=header.lifecycle;
++    sst_source78_header_stats=(__typeof__(sst_source78_header_stats)){actor,result,header.reason,header.table,header.self,header.profile,lifecycle,instance};
++    if(header.reason) {
+         sst_source78_birth_stats.bad_actor++;sst_origin_observation_leave();pthread_mutex_unlock(&birth78_mu);return;
+     }
+     const uint32_t wrappers[4]={0x540,0x5f8,0x648,0x7e0};
+@@ -56,6 +131,16 @@ static void birth78_observe(uint64_t actor,uint64_t result) {
+     }
+     if(!valid){sst_source78_birth_stats.bad_roles++;sst_origin_observation_leave();pthread_mutex_unlock(&birth78_mu);return;}
+     uint8_t family=birth78_u8(actor+0x1a2b);
++    uint64_t resource_file=birth78_u64(actor+0x538);uint32_t complex_mask=0;
++    for(unsigned i=0;i<4;i++)if(birth78_u64(objects[i])==UINT64_C(0x7001698d50))complex_mask|=1u<<i;
++    uint32_t callback_mask=source79_callback_mask(actor,objects);
++    SstModelBindings names={0};bool named=family==1 && source79_named_bindings(resource_file,resources,&names);
++    uint64_t current=atomic_load(&sst_source79_attempt_id);
++    bool receipt_match=receipt && receipt->ticket && receipt->pre_valid && receipt->actor==actor && receipt->instance==instance && receipt->ticket==current;
++    // Journal match AT THIS SNAPSHOT only. It is neither an atomic publication
++    // nor named-resource/callback/scene verification or allocation authority.
++    if(receipt_match)sst_source79_receipt_stats.matched_post++;else sst_source79_receipt_stats.unmatched_post++;
++    sst_source79_receipt_stats.last_post_instance=instance;sst_source79_receipt_stats.last_current=current;
+     sst_origin_observation_leave(); // all later work uses host scalar copies only
+     if(sst_source78_birth_stats.serial==UINT64_MAX){sst_source78_birth_stats.overflow++;pthread_mutex_unlock(&birth78_mu);return;}
+     sst_source78_birth_stats.serial++;sst_source78_birth_stats.complete++;
+@@ -63,12 +148,13 @@ static void birth78_observe(uint64_t actor,uint64_t result) {
+     sst_source78_birth_stats.result=result;sst_source78_birth_stats.family=family;
+     memcpy(sst_source78_birth_stats.objects,objects,sizeof objects);memcpy(sst_source78_birth_stats.resources,resources,sizeof resources);
+     static FILE *output;static unsigned rows;
+-    if(!output){output=fopen(path,"w");if(output)fprintf(output,"serial,actor,instance,result,family,lifecycle,body,head,face,hands,body_resource,head_resource,face_resource,hands_resource\n");}
++    if(!output){output=fopen(path,"w");if(output)fprintf(output,"serial,actor,instance,result,family,lifecycle,body,head,face,hands,body_resource,head_resource,face_resource,hands_resource,attempt_ticket,pre_instance,observed_current_attempt,receipt_matches,resource_file,complex_mask,callback_mask,named_resources_verified,named_mask,corroborated_mask,named_metadata_bytes\n");}
+     if(output && rows<256) {
+         fprintf(output,"%llu,%llu,%llu,%llu,%llu,%u",(unsigned long long)sst_source78_birth_stats.serial,(unsigned long long)actor,(unsigned long long)sst_source78_birth_stats.instance,(unsigned long long)result,(unsigned long long)sst_source78_birth_stats.family,lifecycle);
+         for(unsigned i=0;i<4;i++)fprintf(output,",%llu",(unsigned long long)objects[i]);
+         for(unsigned i=0;i<4;i++)fprintf(output,",%llu",(unsigned long long)resources[i]);
+-        fputc('\n',output);fflush(output);rows++;
++        fprintf(output,",%llu,%llu,%llu,%u,%llu,%u,%u,%u,%u,%u,%u\n",(unsigned long long)(receipt?receipt->ticket:0),(unsigned long long)(receipt?receipt->instance:0),(unsigned long long)current,receipt_match,(unsigned long long)resource_file,complex_mask,callback_mask,named,names.matched_mask,names.corroborated_mask,names.bytes_read);
++        fflush(output);rows++;
+     }
+     pthread_mutex_unlock(&birth78_mu);
+ }
+@@ -80,14 +166,16 @@ static const uint64_t source76_addresses[3]={
+     UINT64_C(0x7000ab1334),UINT64_C(0x7000ab3c08),UINT64_C(0x7000ab6dfc)};
+ static void source76_lifecycle(Cpu *c,unsigned kind) {
+     uint64_t incoming_actor=c->x[0]; // save this before native bool return replaces x0
++    Source79Receipt receipt={.ticket=source79_reserve_attempt(),.actor=incoming_actor};
+     atomic_fetch_add(&sst_source76_lifecycle_stats.entries[kind],1);
+     // No guest reads or live actor/health/global/membership eligibility. Arm watch
+     // before registration, not after publication. Even an unarmed original is
+     // bracketed so concurrent first admission cannot pass through its mutation.
+     sst_origin_lifecycle_begin();
+     if(sst_origin_unsupported())atomic_fetch_add(&sst_source76_lifecycle_stats.revoked[kind],1);
++    source79_bind_pre(&receipt,kind);
+     source76_original[kind](c); // exactly once, unchanged full input/output Cpu
+-    if(kind==0)birth78_observe(incoming_actor,c->x[0]); // still inside known mutator bracket
++    if(kind==0)birth78_observe(incoming_actor,c->x[0],&receipt); // still inside known mutator bracket
+     sst_origin_lifecycle_end(); // no native reads; all locks released before original
+ }
+ static void source76_init_models(Cpu *c){source76_lifecycle(c,0);}
+diff --git a/runtime/nvn/vulkan/exec.c b/runtime/nvn/vulkan/exec.c
+index 56e8d9d..7fea0c2 100644
+--- a/runtime/nvn/vulkan/exec.c
++++ b/runtime/nvn/vulkan/exec.c
+@@ -4214,6 +4214,11 @@ void backend_execute(uint64_t handle) {
+         if(source78_batch_pinned)sst_source78_gpu_stats.entered++;
+         sst_origin_set_gpu_guard_ready(source78_batch_pinned);
+     } else sst_origin_set_gpu_guard_ready(false);
++    // Private reason-dominance test only; no guest writes or fake GPU fault.
++    const char *reason_request=getenv("SST_TEST_SOURCE_HARD_STOP");
++    if(reason_request && getenv("LARECOMP_DEBUG_DATA")) {
++        FILE *f=fopen(reason_request,"r");if(f){fclose(f);remove(reason_request);sst_origin_latch_unsupported();}
++    }
+     depth77_control();
+     const char *avatar_request=getenv("SST_TEST_AVATAR_REQUEST");
+     if(avatar_request && getenv("LARECOMP_DEBUG_DATA")){FILE *f=fopen(avatar_request,"r");if(f){int value=-1;if(fscanf(f,"%d",&value)==1 && (value==0 || value==1))g_sst.show_avatars=value;fclose(f);remove(avatar_request);}}

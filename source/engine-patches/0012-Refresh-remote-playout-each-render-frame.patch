@@ -1,0 +1,29 @@
+From 299134266a4addb79a4096b0accad706fe587dfa Mon Sep 17 00:00:00 2001
+From: SST development <sst-dev@local.invalid>
+Date: Mon, 2 Nov 2026 18:27:44 -0500
+Subject: [PATCH] Refresh remote playout each render frame independently of
+ local Link draws
+
+---
+ runtime/nvn/vulkan/exec.c | 5 +++++
+ 1 file changed, 5 insertions(+)
+
+diff --git a/runtime/nvn/vulkan/exec.c b/runtime/nvn/vulkan/exec.c
+index 1e9e487..9f5bfc5 100644
+--- a/runtime/nvn/vulkan/exec.c
++++ b/runtime/nvn/vulkan/exec.c
+@@ -4039,6 +4039,11 @@ static void exec_list(uint64_t handle, int depth) {
+ }
+ 
+ void backend_execute(uint64_t handle) {
++    if (g_is_skyward) {
++        SstLocal local=sst_game_local();
++        sst_remote_frame(local.valid && local.pose.max_health ? &local.scene : NULL,
++                         renderer_present_count());
++    }
+     PROF_T0();
+     exec_list(handle, 0);
+     PROF_ADD(prof_exec);
+-- 
+2.56.0
+

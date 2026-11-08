@@ -1,0 +1,559 @@
+From bb3eefa7a11e6924f96ae9deb83a05ef5184ec34 Mon Sep 17 00:00:00 2001
+From: SST verification <sst-verification@localhost>
+Date: Thu, 29 Oct 2026 21:26:56 -0400
+Subject: [PATCH] Add reviewed prop adapters and collected-pickup removal
+
+Render big pots and normal barrels through explicit native adapters. Record collection as consumed-source receipts so matching placed pickups disappear for peers while native rewards remain with each collector. Keep guarded model calls, scene ownership and boss/event exclusions.
+---
+ runtime/dispatch.c              |   2 +
+ runtime/hle/sst_pickup_bridge.h | 215 ++++++++++++++++++++++++++++++++
+ runtime/hle/sst_prop_bridge.h   |  25 ++--
+ runtime/hle/sst_prop_native.h   | 109 ++++++++++++----
+ runtime/hle/sst_world.c         |   8 ++
+ runtime/ui/multiplayer_tab.mm   |   4 +-
+ 6 files changed, 328 insertions(+), 35 deletions(-)
+ create mode 100644 runtime/hle/sst_pickup_bridge.h
+
+diff --git a/runtime/dispatch.c b/runtime/dispatch.c
+index 262b278..dfd0429 100644
+--- a/runtime/dispatch.c
++++ b/runtime/dispatch.c
+@@ -116,6 +116,8 @@ void dispatch_init(void) {  // (after gamelib_load)
+     if (n1) tables[3] = (FnTable){g->subsdk1_addrs, g->subsdk1_fns, n1, g->subsdk1_addrs[0], g->subsdk1_addrs[n1 - 1]};
+     extern void sst_prop_dispatch_init(void);
+     sst_prop_dispatch_init();
++    extern void sst_pickup_dispatch_init(void);
++    sst_pickup_dispatch_init();
+ }
+ 
+ GuestFn dispatch_lookup(uint64_t addr) {
+diff --git a/runtime/hle/sst_pickup_bridge.h b/runtime/hle/sst_pickup_bridge.h
+new file mode 100644
+index 0000000..ff334cd
+--- /dev/null
++++ b/runtime/hle/sst_pickup_bridge.h
+@@ -0,0 +1,215 @@
++// Include after native inventory/recovery helpers. Session-only pickup sharing.
++#include "../sst/sst_pickup.h"
++#include "../sst/sst_socket.h"
++#define PICKUP_ITEM_VTABLE UINT64_C(0x700158c160)
++#define PICKUP_ITEM_EXECUTE UINT64_C(0x70004e477c)
++#define PICKUP_ITEM_GETTER UINT64_C(0x70004e57ac)
++#define PICKUP_NATIVE_QUEUE 256
++typedef struct {
++    SstPickup request;
++    uint64_t actor;
++    uint64_t sent_ms;
++    uint32_t instance, generation;
++    bool queued;
++} PickupObservation;
++static struct {
++    pthread_mutex_t mu;
++    SstPickupState state;
++    PickupObservation observed[PICKUP_NATIVE_QUEUE];
++    uint32_t generation, sequence;
++    uint64_t nonce;
++    uint64_t safe_since;
++    bool conflict;
++} pickup_bridge = {.mu=PTHREAD_MUTEX_INITIALIZER};
++static GuestFn pickup_original_getter, pickup_original_execute;
++static _Thread_local bool pickup_remote_grant;
++
++static bool pickup_actor(uint64_t a) {
++    return ptr(a,0x1288) && r64(a)==PICKUP_ITEM_VTABLE && r16(a+0x10)==0x281 &&
++        r8(a+0x12)==1 && !r8(a+0x13) && !r8(a+0x14);
++}
++// Fresh bounded membership, never a packet address or a stale actor binding.
++static bool pickup_in_tree(uint64_t a,uint64_t player) {
++    uint64_t node=player+0x18;
++    for(unsigned i=0;;i++) {
++        if(i==64 || !ptr(node,0x28))return false;
++        uint64_t parent=r64(node);if(!parent)break;node=parent;
++    }
++    uint64_t stack[4096],seen[4096];unsigned n=1,count=0;stack[0]=node;
++    while(n) {
++        node=stack[--n];if(!ptr(node,0x28) || count==4096)return false;
++        for(unsigned i=0;i<count;i++)if(seen[i]==node)return false;
++        seen[count++]=node;uint64_t owner=r64(node+0x20);
++        if(!ptr(owner,0x18) || owner+0x18!=node)return false;
++        if(owner==a)return true;
++        uint64_t child=r64(node+8),next=r64(node+0x18);
++        if(child){if(n==4096)return false;stack[n++]=child;}
++        if(next){if(n==4096)return false;stack[n++]=next;}
++    }
++    return false;
++}
++static void pickup_generation(void) {
++    uint32_t generation=sst_net_generation();
++    if(pickup_bridge.generation==generation)return;
++    sst_pickup_reset(&pickup_bridge.state);
++    memset(pickup_bridge.observed,0,sizeof pickup_bridge.observed);
++    pickup_bridge.generation=generation;pickup_bridge.conflict=false;
++}
++static void pickup_capture(uint64_t actor,uint64_t caller,uint16_t item) {
++    if(pickup_remote_grant || !g_sst.sync_pickups ||
++        caller!=UINT64_C(0x70004de570) ||
++        !sst_pickup_item(item,NULL,NULL) || !pickup_actor(actor) ||
++        sst_net_status(NULL,0)!=SST_ONLINE || sst_world_in_boss())return;
++    uint32_t params=r32(actor+0xc);
++    SstLocal local=sst_game_read_local(&SST_LAYOUT_SSHD_100,sst_game_pose_tick());
++    if(!local.valid || !local.pose.health || sst_world_boss_stage(local.scene.stage) ||
++        sst_world_trial_stage(local.scene.stage) || !pickup_in_tree(actor,local.player_address))return;
++    uint64_t fm=r64(FILE_MGR);
++    if(!ptr(fm,0xcd08) || !normal_inventory(fm) ||
++        (r64(SST_LAYOUT_SSHD_100.minigame_ptr) && r32(SST_LAYOUT_SSHD_100.minigame_mode)==3))return;
++    SstPickup candidate={.scene=local.scene,.placed_id=r16(actor+0x136),.params=params,.item=item,.sequence=1,
++        .token=r16(actor+0x136)==0xffff?1:0};
++    if(!sst_pickup_valid(&candidate))return;
++    pthread_mutex_lock(&pickup_bridge.mu);pickup_generation();
++    if(pickup_bridge.conflict)goto done;
++    uint32_t instance=r32(actor+8);PickupObservation *slot=NULL;
++    for(unsigned i=0;i<PICKUP_NATIVE_QUEUE;i++) {
++        PickupObservation *p=&pickup_bridge.observed[i];
++        if(p->actor==actor && p->instance==instance)goto done;
++        if((!p->actor || (!p->queued && (!pickup_actor(p->actor) || r32(p->actor+8)!=p->instance))) && !slot)slot=p;
++    }
++    if(!slot)goto done;
++    if(!pickup_bridge.nonce && !sst_socket_random((uint8_t*)&pickup_bridge.nonce,sizeof pickup_bridge.nonce))goto done;
++    SstPickup request={.scene=local.scene,.placed_id=r16(actor+0x136),.params=params,.item=item,
++        .sequence=++pickup_bridge.sequence};
++    if(!request.sequence)request.sequence=++pickup_bridge.sequence;
++    if(request.placed_id==0xffff) { request.token=++pickup_bridge.nonce;if(!request.token)request.token=++pickup_bridge.nonce; }
++    uint32_t epoch=sst_world_same_area(&pickup_bridge.state.scene,&local.scene)?pickup_bridge.state.epoch:0;
++    sst_pickup_begin(&pickup_bridge.state,&local.scene,epoch);
++    if(!sst_pickup_local(&pickup_bridge.state,sst_net_my_id(),&request,sst_now_ms()))goto done;
++    *slot=(PickupObservation){.request=request,.actor=actor,.instance=instance,.generation=pickup_bridge.generation,.queued=true};
++    if(ENV("SST_TRACE"))LOG("[sst-pickup] native collection item=%u placed=%u sequence=%u\n",item,request.placed_id,request.sequence);
++done:
++    pthread_mutex_unlock(&pickup_bridge.mu);
++}
++static void pickup_getter(Cpu *c) {
++    uint64_t actor=c->x[0],caller=c->x[30];
++    if(pickup_original_getter)pickup_original_getter(c);
++    if(c->x[0]<=UINT16_MAX)pickup_capture(actor,caller,(uint16_t)c->x[0]);
++}
++
++static void pickup_incoming(const SstPickupCommit *commit,void *unused) {
++    (void)unused;
++    pthread_mutex_lock(&pickup_bridge.mu);pickup_generation();
++    if(sst_world_same_area(&pickup_bridge.state.scene,&commit->pickup.scene))
++        sst_pickup_begin(&pickup_bridge.state,&commit->pickup.scene,commit->epoch);
++    SstPickupDecision decision=sst_pickup_accept(&pickup_bridge.state,commit,sst_now_ms());
++    // Collector-only policy: receipt processing never grants currency, healing,
++    // ammo, stamina or materials to another player. It authorizes removal only.
++    if(decision==SST_PICKUP_NEW)sst_pickup_applied(&pickup_bridge.state,commit);
++    if(decision!=SST_PICKUP_INVALID && decision!=SST_PICKUP_FULL)
++        for(unsigned i=0;i<PICKUP_NATIVE_QUEUE;i++) {
++            PickupObservation *p=&pickup_bridge.observed[i];
++            if(p->queued && sst_pickup_key_equal(&p->request,sst_net_my_id(),&commit->pickup,commit->from))p->queued=false;
++        }
++    if(ENV("SST_TRACE"))LOG("[sst-pickup] receipt epoch=%u item=%u from=%u snapshot=%u decision=%u\n",
++        commit->epoch,commit->pickup.item,commit->from,commit->snapshot,decision);
++    pthread_mutex_unlock(&pickup_bridge.mu);
++}
++
++static void pickup_tick(Cpu *c,SstLocal local,uint64_t fm,bool allowed) {
++    (void)c;(void)fm;
++    pthread_mutex_lock(&pickup_bridge.mu);pickup_generation();
++    if(sst_net_status(NULL,0)!=SST_ONLINE) {
++        sst_pickup_reset(&pickup_bridge.state);memset(pickup_bridge.observed,0,sizeof pickup_bridge.observed);
++        pickup_bridge.safe_since=0;
++    }
++    if(local.valid) {
++        uint32_t epoch=sst_world_same_area(&pickup_bridge.state.scene,&local.scene)?pickup_bridge.state.epoch:0;
++        sst_pickup_begin(&pickup_bridge.state,&local.scene,epoch);
++    }
++    bool enabled=g_sst.sync_pickups && !pickup_bridge.conflict && sst_net_status(NULL,0)==SST_ONLINE;
++    pthread_mutex_unlock(&pickup_bridge.mu);
++    sst_net_poll_pickups(enabled?pickup_incoming:NULL,NULL);
++    if(!enabled || !allowed) {pickup_bridge.safe_since=0;return;}
++    uint64_t now=sst_now_ms();if(!pickup_bridge.safe_since)pickup_bridge.safe_since=now;
++    // No mutex across guest calls: model/inventory calls can enter reboot safe points.
++    pthread_mutex_lock(&pickup_bridge.mu);
++    // One ordered claim in flight. Retry until its host receipt arrives, allowing
++    // normal-pose publication to catch up after a native item-get event.
++    PickupObservation *first=NULL;
++    for(unsigned i=0;i<PICKUP_NATIVE_QUEUE;i++) {
++        PickupObservation *p=&pickup_bridge.observed[i];
++        if(p->queued && p->generation==pickup_bridge.generation && sst_world_same_area(&p->request.scene,&local.scene) &&
++            (!first || (int32_t)(p->request.sequence-first->request.sequence)<0))first=p;
++    }
++    if(first && now-pickup_bridge.safe_since>=150 && now-first->sent_ms>=250 &&
++        sst_net_send_pickup(&first->request))first->sent_ms=now;
++    pthread_mutex_unlock(&pickup_bridge.mu);
++
++}
++static bool pickup_consumed(uint64_t actor) {
++    if(!g_sst.sync_pickups || sst_net_status(NULL,0)!=SST_ONLINE ||
++        !pickup_actor(actor) || r16(actor+0x136)==0xffff)return false;
++    SstLocal local=sst_game_read_local(&SST_LAYOUT_SSHD_100,0);if(!local.valid || sst_world_in_boss())return false;
++    bool found=false;pthread_mutex_lock(&pickup_bridge.mu);
++    if(!pickup_bridge.conflict && pickup_bridge.generation==sst_net_generation() &&
++        sst_world_same_area(&local.scene,&pickup_bridge.state.scene) && pickup_bridge.state.epoch)
++        for(unsigned i=0;i<SST_PICKUP_RECORDS;i++) {
++            const SstPickupClientRecord *p=&pickup_bridge.state.records[i];
++            if(p->used && p->has_commit && p->applied && p->commit.epoch==pickup_bridge.state.epoch &&
++                p->commit.pickup.placed_id==r16(actor+0x136) && p->commit.pickup.params==r32(actor+0xc) &&
++                sst_world_same_area(&p->commit.pickup.scene,&local.scene)) {found=true;break;}
++        }
++    pthread_mutex_unlock(&pickup_bridge.mu);return found;
++}
++static void pickup_execute(Cpu *c) {
++    uint64_t actor=c->x[0];
++    if(pickup_consumed(actor)) {
++        // This callback itself proves the actor is currently executing. Native
++        // deletion unregisters its interaction instead of hiding a rendered mesh.
++        unsigned flag=(r32(actor+0xc)>>10)&255;
++        if(flag<128) {
++            uint64_t fm=r64(FILE_MGR),sm=r64(SCENE_MGR);ChestReceipt receipt;
++            if(!ptr(fm,0xcd08) || !normal_inventory(fm) || !ptr(sm,0x50) || r16(sm+0x4a)>=26 ||
++                !chest_receipt(fm,sst_chest_index(true,r16(sm+0x4a),flag),&receipt) || !backup(fm) ||
++                !prepare_receipt(c,&receipt)) {if(pickup_original_execute)pickup_original_execute(c);return;}
++            mark_receipt(&receipt);
++        }
++        call(c,DELETE_REQUEST,actor,0,0);c->x[0]=1;return;
++    }
++    if(pickup_original_execute)pickup_original_execute(c);
++}
++void sst_pickup_dispatch_init(void) {
++    static bool registered;
++    pickup_original_getter=dispatch_lookup(PICKUP_ITEM_GETTER);
++    pickup_original_execute=dispatch_lookup(PICKUP_ITEM_EXECUTE);
++    if(!registered && pickup_original_getter && pickup_original_execute) {
++        hle_override(PICKUP_ITEM_GETTER,pickup_getter,"SST native pickup collection getter");
++        hle_override(PICKUP_ITEM_EXECUTE,pickup_execute,"SST consumed placed pickup execute");registered=true;
++    }
++}
++// Isolated verification uses the real native Item factory and normal pickup
++// behavior. No host pointers or arbitrary function arguments enter the guest.
++static uint64_t pickup_debug_scratch;
++static void pickup_debug_test_input(Cpu *c) {
++    const char *path=ENV("SST_PICKUP_TEST_FILE");
++    if(!path || !ENV("LARECOMP_DEBUG_DATA"))return;
++    FILE *file=fopen(path,"r");if(!file)return;unsigned item=0;float distance=0;int n=fscanf(file,"%u %f",&item,&distance);fclose(file);remove(path);
++    if(n<1 || !isfinite(distance) || fabsf(distance)>500 || item>UINT16_MAX || !sst_pickup_item((uint16_t)item,NULL,NULL))return;
++    SstLocal l=sst_game_read_local(&SST_LAYOUT_SSHD_100,0);
++    if(!l.valid || l.scene.room>62 || !safe_action(l.pose.action) || event_active() || native_paused() ||
++        r64(PICKUP_ITEM_VTABLE+0xf8)!=PICKUP_ITEM_GETTER)return;
++    if(!pickup_debug_scratch)pickup_debug_scratch=(uint64_t)(uintptr_t)hle_alloc(32);
++    float position[3]={l.pose.pos[0],l.pose.pos[1]+35,l.pose.pos[2]+distance};
++    memcpy((void*)(uintptr_t)pickup_debug_scratch,position,sizeof position);
++    memset((void*)(uintptr_t)(pickup_debug_scratch+16),0,8);
++    Cpu saved=*c;c->x[0]=l.scene.room;c->x[1]=(255u<<10)|0x200u|item;
++    c->x[2]=pickup_debug_scratch;c->x[3]=pickup_debug_scratch+16;c->x[4]=UINT32_MAX;c->x[5]=0;
++    guest_call(c,UINT64_C(0x70004e7a70));uint64_t actor=c->x[0];*c=saved;
++    LOG("[sst-pickup] isolated native spawn item=%u actor=%llx\n",item,(unsigned long long)actor);
++}
++RT_ON_RESET(sst_pickup_bridge_reset) {
++    sst_pickup_reset(&pickup_bridge.state);memset(pickup_bridge.observed,0,sizeof pickup_bridge.observed);
++    pickup_bridge.generation=0;pickup_bridge.conflict=false;pickup_remote_grant=false;pickup_debug_scratch=0;
++}
+diff --git a/runtime/hle/sst_prop_bridge.h b/runtime/hle/sst_prop_bridge.h
+index 913eb75..fd2c6d8 100644
+--- a/runtime/hle/sst_prop_bridge.h
++++ b/runtime/hle/sst_prop_bridge.h
+@@ -69,7 +69,7 @@ static bool prop_discover(uint64_t player, const SstScene *scene) {
+             }
+             if (!b && empty) {
+                 b = empty; memset(b, 0, sizeof *b); b->actor = actor; b->instance = r32(actor + 8);
+-                b->key = (SstPropKey){.placed_id=r16(actor + 0x136), .profile=SST_PROP_PROFILE,
++                b->key = (SstPropKey){.placed_id=r16(actor + 0x136), .profile=r16(actor + 0x10),
+                     .params=r32(actor + 0xc), .room=scene->room, .layer=scene->layer};
+             }
+             if (b) b->seen = true;
+@@ -196,8 +196,8 @@ static SstPropNativePose prop_display_pose(const SstProp *p) {
+     return target;
+ }
+ 
+-static GuestFn prop_original;
+-static void prop_execute(Cpu *c) {
++static GuestFn prop_original[SST_PROP_NATIVE_ADAPTERS];
++static void prop_execute(Cpu *c, GuestFn original) {
+     uint64_t actor = c->x[0]; SstProp target = {0}; SstPropNativePose pose;
+     uint32_t instance = 0, load = 0, gen = 0; bool candidate = false;
+     pthread_mutex_lock(&props_bridge.mu);
+@@ -232,7 +232,7 @@ static void prop_execute(Cpu *c) {
+         pthread_mutex_unlock(&props_bridge.mu);
+         return;
+     }
+-    if (prop_original) prop_original(c);
++    if (original) original(c);
+     pthread_mutex_lock(&props_bridge.mu);
+     b = props_bridge.enabled ? prop_binding(actor) : NULL;
+     if (b) {
+@@ -242,13 +242,18 @@ static void prop_execute(Cpu *c) {
+     pthread_mutex_unlock(&props_bridge.mu);
+ }
+ 
++static void prop_small_execute(Cpu *c) { prop_execute(c, prop_original[0]); }
++static void prop_big_execute(Cpu *c) { prop_execute(c, prop_original[1]); }
++static void prop_barrel_execute(Cpu *c) { prop_execute(c, prop_original[2]); }
+ void sst_prop_dispatch_init(void) {
+-    // The registry survives in-place reboot. Refresh the original game-library
+-    // function each boot, but register exactly once before first guest dispatch.
+-    static bool registered;
+-    prop_original = dispatch_lookup(SST_PROP_TUBO_EXECUTE);
+-    if (!registered && prop_original) {
+-        hle_override(SST_PROP_TUBO_EXECUTE, prop_execute, "SST ordinary vase execute"); registered = true;
++    static bool registered[SST_PROP_NATIVE_ADAPTERS];
++    HostFn callbacks[SST_PROP_NATIVE_ADAPTERS] = {prop_small_execute, prop_big_execute, prop_barrel_execute};
++    for (unsigned i = 0; i < SST_PROP_NATIVE_ADAPTERS; i++) {
++        uint64_t address = sst_prop_native_descriptors[i].execute;
++        prop_original[i] = dispatch_lookup(address);
++        if (!registered[i] && prop_original[i]) {
++            hle_override(address, callbacks[i], "SST reviewed carried object execute"); registered[i] = true;
++        }
+     }
+ }
+ 
+diff --git a/runtime/hle/sst_prop_native.h b/runtime/hle/sst_prop_native.h
+index ef5bbaa..b0fd1ab 100644
+--- a/runtime/hle/sst_prop_native.h
++++ b/runtime/hle/sst_prop_native.h
+@@ -1,32 +1,75 @@
+-// SSHD 1.0.0 ordinary-vase bridge. Include after sst_world.c's memory helpers.
++// SSHD 1.0.0 reviewed vase/normal-barrel adapters. Include after world memory helpers.
+ // Call only on the native guest thread, after exact live-tree/key/instance binding.
+ // This header owns no network authority and never changes native carry references.
+ #ifndef SST_PROP_NATIVE_H
+ #define SST_PROP_NATIVE_H
+ 
+ #include <math.h>
++#include "../sst/sst_props.h"
+ 
+ #define SST_PROP_TUBO_PROFILE 0x1f0u
+ #define SST_PROP_TUBO_VTABLE UINT64_C(0x700162f008)
+ #define SST_PROP_TUBO_EXECUTE UINT64_C(0x70009b7988)
++#define SST_PROP_BIG_VTABLE UINT64_C(0x700162f3b0)
++#define SST_PROP_BIG_EXECUTE UINT64_C(0x70009bb8c0)
++#define SST_PROP_BARREL_VTABLE UINT64_C(0x70015f6290)
++#define SST_PROP_BARREL_EXECUTE UINT64_C(0x700071858c)
+ #define SST_PROP_MODEL_VTABLE UINT64_C(0x7001698d50)
+ #define SST_PROP_MODEL_PROCESS UINT64_C(0x7000fe8b6c)
+ #define SST_PROP_MODEL_OPTIONS UINT64_C(0x7000fea658)
+ #define SST_PROP_CARRIED_GETTER UINT64_C(0x7000adc6d4)
+ 
++enum { SST_PROP_NATIVE_CALC_TASKS = 1, SST_PROP_NATIVE_COPY_SCALE = 2 };
++typedef struct {
++    uint16_t profile;
++    uint64_t vtable, execute;
++    uint32_t allocation, model_offset, fall_offset, tail_clear_offset;
++    float center_height[2];
++    uint8_t tail_flags;
++} SstPropNativeDescriptor;
++#define SST_PROP_NATIVE_ADAPTERS 3
++// Exact1.0.0 constructor/vtable/execute-tail facts, not layout guesses. Keep every
++// model under the same pinned inner-model/task targets below; a different model
++// class fails closed until separately reviewed. Scale is native, never packet data.
++static const SstPropNativeDescriptor sst_prop_native_descriptors[SST_PROP_NATIVE_ADAPTERS] = {
++    {.profile=SST_PROP_PROFILE, .vtable=SST_PROP_TUBO_VTABLE, .execute=SST_PROP_TUBO_EXECUTE,
++     .allocation=0xd38, .model_offset=0x438, .fall_offset=0xd10, .tail_clear_offset=0xd1f,
++     .center_height={28,76}, .tail_flags=SST_PROP_NATIVE_CALC_TASKS},
++    {.profile=SST_PROP_BIG_PROFILE, .vtable=SST_PROP_BIG_VTABLE, .execute=SST_PROP_BIG_EXECUTE,
++     .allocation=0xd28, .model_offset=0x438, .fall_offset=0xd0c,
++     .center_height={70,160}, .tail_flags=SST_PROP_NATIVE_CALC_TASKS|SST_PROP_NATIVE_COPY_SCALE},
++    {.profile=SST_PROP_BARREL_PROFILE, .vtable=SST_PROP_BARREL_VTABLE, .execute=SST_PROP_BARREL_EXECUTE,
++     .allocation=0x1378, .model_offset=0x438, .fall_offset=0x1334,
++     .center_height={51,122}, .tail_flags=SST_PROP_NATIVE_COPY_SCALE},
++};
++static inline const SstPropNativeDescriptor *sst_prop_native_descriptor(uint16_t profile) {
++    for (unsigned i = 0; i < SST_PROP_NATIVE_ADAPTERS; i++)
++        if (sst_prop_native_descriptors[i].profile == profile) return &sst_prop_native_descriptors[i];
++    return NULL;
++}
++
+ typedef struct {
+     float pos[3];
+     int16_t rot[3];
+     float matrix[12];
+ } SstPropNativePose;
+ 
+-// Profile/vtable and allocation size are pinned to the native Tubo constructor.
++// Profiles/vtables and allocation sizes are pinned to their native constructors.
+ // The caller also proves unique membership in the current bounded actor tree.
+-// Params are identity data; they do not determine eligibility here.
++// Native barrel heap0x71789C..8B8 maps low nibbleF to Normal0, stored at+1367.
++// Exclude all nonnormal and NPC quest modes through both params and actual type.
++static inline const SstPropNativeDescriptor *sst_prop_native_actor_descriptor(uint64_t a) {
++    if (!ptr(a, 0x180)) return NULL;
++    const SstPropNativeDescriptor *d = sst_prop_native_descriptor(r16(a + 0x10));
++    if (!d || !ptr(a, d->allocation) || r64(a) != d->vtable || r8(a + 0x12) != 1 ||
++        r8(a + 0x13) || r8(a + 0x14) || r16(a + 0x136) == 0xffff ||
++        !sst_prop_profile_allowed(d->profile, r32(a + 0xc)) ||
++        (d->profile == SST_PROP_BARREL_PROFILE && r8(a + 0x1367) != 0)) return NULL;
++    return d;
++}
++// Name retained for bridge compatibility; eligibility is exactly the reviewed table.
+ static inline bool sst_prop_native_vase(uint64_t a) {
+-    return ptr(a, 0xd38) && r64(a) == SST_PROP_TUBO_VTABLE &&
+-           r16(a + 0x10) == SST_PROP_TUBO_PROFILE && r8(a + 0x12) == 1 &&
+-           !r8(a + 0x13) && !r8(a + 0x14) && r16(a + 0x136) != 0xffff;
++    return sst_prop_native_actor_descriptor(a) != NULL;
+ }
+ 
+ static inline bool sst_prop_native_player(uint64_t player) {
+@@ -36,6 +79,9 @@ static inline bool sst_prop_native_player(uint64_t player) {
+ 
+ // Getter 0x7000adc6d4 is exactly a read of player+0x1b90 and a return.
+ // Both native direction references must agree before reporting local possession.
++// All three classes use the common dLinkage base. Big execute9BB950/970 and
++// barrel Grab713584/5FC read the same state+358/type+2E4; both call B67468 to
++// update the same base linkage. No derived class field is treated as a reference.
+ static inline bool sst_prop_native_held(uint64_t a, uint64_t player) {
+     if (!sst_prop_native_vase(a) || !sst_prop_native_player(player) ||
+         r64(player + 0x1b90) != a || r32(a + 0x358) != 1 ||
+@@ -60,11 +106,12 @@ static inline bool sst_prop_native_pose_valid(const SstPropNativePose *pose) {
+     return true;
+ }
+ 
+-// The native vase's smdl wrapper stores its inner model at actor+0x438. Check
++// Each reviewed smdl wrapper's inner pointer is explicit in its descriptor. Check
+ // exact targets, never merely that a packet-selected or native value is executable.
+ static inline uint64_t sst_prop_native_model(uint64_t a) {
+-    if (!sst_prop_native_vase(a)) return 0;
+-    uint64_t model = r64(a + 0x438);
++    const SstPropNativeDescriptor *d = sst_prop_native_actor_descriptor(a);
++    if (!d) return 0;
++    uint64_t model = r64(a + d->model_offset);
+     if (!ptr(model, 0x1a0) || r64(model) != SST_PROP_MODEL_VTABLE ||
+         !ptr(SST_PROP_MODEL_VTABLE, 0x40) ||
+         r64(SST_PROP_MODEL_VTABLE + 8) != SST_PROP_MODEL_PROCESS ||
+@@ -93,29 +140,41 @@ static inline bool sst_prop_native_present(Cpu *c, uint64_t a,
+     if (!c || !sst_prop_native_pose_valid(pose) || !sst_prop_native_vase(a) ||
+         r32(a + 0x358) == 1)
+         return false;
++    const SstPropNativeDescriptor *d = sst_prop_native_actor_descriptor(a);
+     uint64_t model = sst_prop_native_model(a);
+-    if (!model) return false;
++    if (!d || !model) return false;
++    float scale[3];
++    if (d->tail_flags & SST_PROP_NATIVE_COPY_SCALE) {
++        memcpy(scale, (void *)(uintptr_t)(a + 0x150), sizeof scale);
++        for (unsigned i = 0; i < 3; i++)
++            if (!isfinite(scale[i]) || scale[i] <= 0 || scale[i] > 16) return false;
++    }
+ 
+     memcpy((void *)(uintptr_t)(a + 0x144), pose->pos, sizeof pose->pos);
+     memcpy((void *)(uintptr_t)(a + 0x13c), pose->rot, sizeof pose->rot);
+     memcpy((void *)(uintptr_t)(a + 0x1f4), pose->matrix, sizeof pose->matrix);
+     w32(model + 0xd8, r32(model + 0xd8) & UINT32_C(0x7fffffff));
+     memcpy((void *)(uintptr_t)(model + 0x18), pose->matrix, sizeof pose->matrix);
+-
+-    // Preserve every register, vector, flag, PC and caller LR across native calls.
+-    Cpu saved = *c;
+-    c->x[0] = model; c->x[1] = 2; c->x[2] = 0;
+-    guest_call(c, SST_PROP_MODEL_OPTIONS); *c = saved;
+-    c->x[0] = model; c->x[1] = 1; c->x[2] = 0; c->x[3] = 0;
+-    guest_call(c, SST_PROP_MODEL_PROCESS); *c = saved;
+-    c->x[0] = model; c->x[1] = 2; c->x[2] = 1;
+-    guest_call(c, SST_PROP_MODEL_OPTIONS); *c = saved;
+-
+-    float center[3] = {pose->pos[0], pose->pos[1] + 28.0f, pose->pos[2]};
++    if (d->tail_flags & SST_PROP_NATIVE_COPY_SCALE)
++        memcpy((void *)(uintptr_t)(model + 0xec), scale, sizeof scale);
++
++    // Big/ordinary pots have explicit calc(false) tasks. Barrel's native tail
++    // leaves model processing to drawModel; do not invent extra virtual calls.
++    if (d->tail_flags & SST_PROP_NATIVE_CALC_TASKS) {
++        Cpu saved = *c;
++        c->x[0] = model; c->x[1] = 2; c->x[2] = 0;
++        guest_call(c, SST_PROP_MODEL_OPTIONS); *c = saved;
++        c->x[0] = model; c->x[1] = 1; c->x[2] = 0; c->x[3] = 0;
++        guest_call(c, SST_PROP_MODEL_PROCESS); *c = saved;
++        c->x[0] = model; c->x[1] = 2; c->x[2] = 1;
++        guest_call(c, SST_PROP_MODEL_OPTIONS); *c = saved;
++    }
++
++    float center[3] = {pose->pos[0], pose->pos[1] + d->center_height[0], pose->pos[2]};
+     memcpy((void *)(uintptr_t)(a + 0x1bc), center, sizeof center);
+-    center[1] += 48.0f;
++    center[1] = pose->pos[1] + d->center_height[1];
+     memcpy((void *)(uintptr_t)(a + 0x1c8), center, sizeof center);
+-    *(uint8_t *)(uintptr_t)(a + 0xd1f) = 0;
++    if (d->tail_clear_offset) *(uint8_t *)(uintptr_t)(a + d->tail_clear_offset) = 0;
+     return true;
+ }
+ 
+@@ -125,10 +184,12 @@ static inline bool sst_prop_native_present(Cpu *c, uint64_t a,
+ // must match the applied final position so remote motion cannot become a fall.
+ static inline bool sst_prop_native_release_velocity(uint64_t a) {
+     if (!sst_prop_native_model(a) || r32(a + 0x358) == 1) return false;
++    const SstPropNativeDescriptor *d = sst_prop_native_actor_descriptor(a);
++    if (!d) return false;
+     memcpy((void *)(uintptr_t)(a + 0x1b0), (void *)(uintptr_t)(a + 0x144), 12);
+     w32(a + 0x1dc, 0);
+     w32(a + 0x1e8, 0); w32(a + 0x1ec, 0); w32(a + 0x1f0, 0);
+-    w32(a + 0xd10, 0);
++    w32(a + d->fall_offset, 0);
+     return true;
+ }
+ 
+diff --git a/runtime/hle/sst_world.c b/runtime/hle/sst_world.c
+index 1d16434..fa00420 100644
+--- a/runtime/hle/sst_world.c
++++ b/runtime/hle/sst_world.c
+@@ -477,6 +477,8 @@ static void protect_chest_flags(void) {
+         uint64_t a = chest_actors[i]; unsigned bit = chest_scene_flag(a);
+         if (bit < 128) sst_world_protect_scene(&world, table * 128 + bit);
+         if (r16(a + 0x10) == 0x281) {
++            uint16_t item=chest_item(a);
++            if((item==162 || item==174) && r32(a+0x1250)>1)continue;
+             SstChestReward r = {.index = sst_chest_index(true, table, bit), .item = chest_item(a)};
+             sst_chest_remember_pickup(&chests, &r);
+         }
+@@ -1939,10 +1941,13 @@ static void recover(Cpu *c, SstLocal l, uint64_t fm, bool boss, bool paused, boo
+         else notify("This area cannot be reloaded safely", false);
+     }
+ }
++#include "sst_pickup_bridge.h"
++
+ void sst_world_game_tick(Cpu *c) {
+     if (in_tick || pthread_mutex_trylock(&tick_mu)) return;
+     in_tick = true; uint64_t now = sst_now_ms();
+     recovery_test_input();
++    pickup_debug_test_input(c);
+     // Fault injection is confined to isolated debug-data runs and the local test mailbox.
+     // Align it before observation: native frame writeback can otherwise erase an external
+     // saved-only injection before the input hook gets a chance to see it.
+@@ -2018,6 +2023,7 @@ void sst_world_game_tick(Cpu *c) {
+     bool progress, enemy; sst_world_options(&progress, &enemy);
+     if (sst_net_status(NULL, 0) != SST_ONLINE) {
+         prop_tick((SstLocal){0}, 0, false, false);
++        pickup_tick(c,(SstLocal){0},0,false);
+         sst_world_rewards_set((SstRewardStatus){.pause = SST_REWARDS_OFFLINE});
+         recovery = 0; scene_primed = false; memset(&enemy_inbox, 0, sizeof enemy_inbox);
+         recovery_load_action = SST_RECOVER_NONE;
+@@ -2028,6 +2034,7 @@ void sst_world_game_tick(Cpu *c) {
+     if (!l.valid || !l.pose.max_health || !ptr(fm, 52488) || !ptr(pl, 0x470) ||
+         r16(pl + 0x10) != 0xc8 || r8(pl + 0x12) != 1 || now < paused_until) {
+         prop_tick((SstLocal){0}, 0, false, false);
++        pickup_tick(c,(SstLocal){0},0,false);
+         sst_world_rewards_set((SstRewardStatus){.pause = SST_REWARDS_LOADING});
+         scene_primed = false; memset(&enemy_inbox, 0, sizeof enemy_inbox); sst_net_poll_enemies(discard_enemy, NULL);
+         memset(&motion, 0, sizeof motion); sst_net_poll_motion(NULL, NULL); goto done;
+@@ -2048,6 +2055,7 @@ void sst_world_game_tick(Cpu *c) {
+     sst_world_status_set(boss, applied, enemy_updates, NULL);
+     bool apply = progress && !boss && !trial && !event && !paused && safe_action(l.pose.action);
+     uint32_t load = r32(pl + 8);
++    pickup_tick(c,l,fm,!boss && !trial && !event && !paused && safe_action(l.pose.action));
+     prop_tick(l, load, !boss && !trial && !event && !paused, !boss && !trial && (event || paused));
+     if (load != loaded_player || !sst_world_same_area(&loaded_scene, &l.scene)) {
+         debug_enemy_delay=debug_enemy_zero=debug_enemy_hold=false;
+diff --git a/runtime/ui/multiplayer_tab.mm b/runtime/ui/multiplayer_tab.mm
+index 08df715..1c0e9bf 100644
+--- a/runtime/ui/multiplayer_tab.mm
++++ b/runtime/ui/multiplayer_tab.mm
+@@ -84,7 +84,9 @@ void tab_multiplayer(float scale) {
+     else ImGui::TextWrapped("Host a four-player game, or enter your friend's address and join.");
+     if (ImGui::Checkbox("Show player names", &g_sst.show_names)) settings_save();
+     if (ImGui::Checkbox("Show remote characters", &g_sst.show_avatars)) settings_save();
+-    if (ImGui::Checkbox("Share carried vases", &g_sst.sync_props)) settings_save();
++    if (ImGui::Checkbox("Share carried pots and barrels", &g_sst.sync_props)) settings_save();
++    if (ImGui::Checkbox("Sync collected pickups", &g_sst.sync_pickups)) settings_save();
++    ImGui::TextWrapped("Rupees and consumables go to the collector; collected pickups disappear for teammates.");
+     if (ImGui::Checkbox("Share story and permanent world progress", &g_sst.sync_progress)) settings_save();
+     if (ImGui::Checkbox("Share regular enemy damage and defeats", &g_sst.sync_enemies)) settings_save();
+     if (ImGui::IsItemHovered()) ImGui::SetTooltip("Damage waits while your game map or dialogue is open. Turning sharing back on refreshes enemy health from teammates.");
+-- 
+2.56.0
+

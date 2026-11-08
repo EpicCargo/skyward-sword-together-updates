@@ -1,0 +1,251 @@
+From 842f016d44abe77f9399fb00bf467657690e8253 Mon Sep 17 00:00:00 2001
+From: SST development <sst-development@localhost>
+Date: Tue, 3 Nov 2026 01:06:12 -0500
+Subject: [PATCH] Pin private source batches through GPU retirement and observe
+ model construction
+
+---
+ runtime/hle/sst_dev.c              |  2 +-
+ runtime/hle/sst_source_lifecycle.c | 70 ++++++++++++++++++++++++++++++
+ runtime/nvn/source_policy.h        |  3 ++
+ runtime/nvn/vulkan/exec.c          | 59 ++++++++++++++++++++++++-
+ 4 files changed, 132 insertions(+), 2 deletions(-)
+
+diff --git a/runtime/hle/sst_dev.c b/runtime/hle/sst_dev.c
+index defc6e9..e202811 100644
+--- a/runtime/hle/sst_dev.c
++++ b/runtime/hle/sst_dev.c
+@@ -518,7 +518,7 @@ static void vis73_gate(unsigned reason) {
+ }
+ static void vis73_finish_queue_(Cpu *c);
+ static void vis73_finish_queue(Cpu *c) {
+-    if(!sst_source_lifecycle_ready() || !sst_origin_replay_requested() || sst_origin_unsupported() || atomic_load(&vis73_failed) || !vis73_queue.active || vis73_queue.seen || vis73_scene_dispatch_depth || !vis72_registered || !vis72_entry_original)return;
++    if(!sst_source_lifecycle_ready() || !sst_origin_gpu_guard_ready() || !sst_origin_replay_requested() || sst_origin_unsupported() || atomic_load(&vis73_failed) || !vis73_queue.active || vis73_queue.seen || vis73_scene_dispatch_depth || !vis72_registered || !vis72_entry_original)return;
+     const char *switch_path=getenv("SST_VIS73_QUEUE_SWITCH");int enabled=0;FILE *switch_file=switch_path?fopen(switch_path,"r"):NULL;
+     if(switch_file){if(fscanf(switch_file,"%d",&enabled)!=1)enabled=0;fclose(switch_file);}if(enabled!=1)return;
+     if(!sst_origin_source_enter())return;
+diff --git a/runtime/hle/sst_source_lifecycle.c b/runtime/hle/sst_source_lifecycle.c
+index 1a9b72e..15fb3d1 100644
+--- a/runtime/hle/sst_source_lifecycle.c
++++ b/runtime/hle/sst_source_lifecycle.c
+@@ -5,12 +5,81 @@
+ #include <stdatomic.h>
+ #include <string.h>
+ 
++// Observation only. A successful init-return event plus a coherent four-role tuple
++// is recorded independently of pointer changes; it NEVER reopens admission or
++// authorizes a model allocation epoch. No stale actor/global read on teardown.
++static pthread_mutex_t birth78_mu=PTHREAD_MUTEX_INITIALIZER;
++struct {uint64_t returns,false_returns,bad_actor,bad_roles,complete,overflow,serial,busy;
++    uint64_t actor,instance,result,family,objects[4],resources[4];} sst_source78_birth_stats;
++_Static_assert(sizeof(sst_source78_birth_stats)==160,"bounded birth census");
++struct {uint64_t actor,result,reason,table,self,profile,lifecycle,instance;} sst_source78_header_stats;
++static bool birth78_span(uint64_t p,size_t size){return p>=GUEST_LO && p<GUEST_HI && size<=GUEST_HI-p;}
++static uint64_t birth78_u64(uint64_t p){uint64_t v;memcpy(&v,(void *)(uintptr_t)p,8);return v;}
++static uint32_t birth78_u32(uint64_t p){uint32_t v;memcpy(&v,(void *)(uintptr_t)p,4);return v;}
++static uint16_t birth78_u16(uint64_t p){uint16_t v;memcpy(&v,(void *)(uintptr_t)p,2);return v;}
++static uint8_t birth78_u8(uint64_t p){uint8_t v;memcpy(&v,(void *)(uintptr_t)p,1);return v;}
++static void birth78_observe(uint64_t actor,uint64_t result) {
++    const char *path=getenv("SST_TEST_MODEL_BIRTH_LOG");
++    if(!path || !getenv("LARECOMP_DEBUG_DATA"))return;
++    pthread_mutex_lock(&birth78_mu);sst_source78_birth_stats.returns++;
++    if(!(result&1)){sst_source78_birth_stats.false_returns++;pthread_mutex_unlock(&birth78_mu);return;}
++    if(!sst_origin_observation_enter()){sst_source78_birth_stats.busy++;pthread_mutex_unlock(&birth78_mu);return;}
++    uint64_t table=0,self=0;uint16_t profile=0;uint8_t lifecycle=255;uint32_t instance=0;uint64_t reason=0;
++    if(!birth78_span(actor,0x6b00))reason=1;
++    else {
++        table=birth78_u64(actor);self=birth78_u64(actor+0x38);profile=birth78_u16(actor+0x10);
++        lifecycle=birth78_u8(actor+0x12);instance=birth78_u32(actor+8);
++        if(table!=UINT64_C(0x7001637d28))reason|=2;
++        if(profile!=0xc8)reason|=4;
++        // Native postCreate EC5EF8 sets ACTIVE1 AFTER init1/heap/init_models.
++        // This is a constructor-time observation, not steady actor eligibility.
++        if(lifecycle>1)reason|=8;
++        if(self!=actor)reason|=16;
++    }
++    sst_source78_header_stats=(__typeof__(sst_source78_header_stats)){actor,result,reason,table,self,profile,lifecycle,instance};
++    if(reason) {
++        sst_source78_birth_stats.bad_actor++;sst_origin_observation_leave();pthread_mutex_unlock(&birth78_mu);return;
++    }
++    const uint32_t wrappers[4]={0x540,0x5f8,0x648,0x7e0};
++    const uint64_t tables[4]={UINT64_C(0x7001674288),UINT64_C(0x7001688940),UINT64_C(0x7001688ad8),UINT64_C(0x7001688ad8)};
++    uint64_t objects[4],resources[4];bool valid=true;
++    for(unsigned i=0;i<4;i++) {
++        objects[i]=birth78_u64(actor+wrappers[i]+0x20);
++        if(birth78_u64(actor+wrappers[i])!=tables[i] || !birth78_span(objects[i],0x190)){valid=false;break;}
++        uint64_t vt=birth78_u64(objects[i]);
++        if(vt!=UINT64_C(0x7001698d50) && vt!=UINT64_C(0x7001698de8)){valid=false;break;}
++        resources[i]=birth78_u64(objects[i]+0xf8);char magic[4];
++        if(!birth78_span(resources[i],4)){valid=false;break;}
++        memcpy(magic,(void *)(uintptr_t)resources[i],4);if(memcmp(magic,"MDL0",4)){valid=false;break;}
++        for(unsigned j=0;j<i;j++)if(objects[j]==objects[i])valid=false;
++        if(!valid)break;
++    }
++    if(!valid){sst_source78_birth_stats.bad_roles++;sst_origin_observation_leave();pthread_mutex_unlock(&birth78_mu);return;}
++    uint8_t family=birth78_u8(actor+0x1a2b);
++    sst_origin_observation_leave(); // all later work uses host scalar copies only
++    if(sst_source78_birth_stats.serial==UINT64_MAX){sst_source78_birth_stats.overflow++;pthread_mutex_unlock(&birth78_mu);return;}
++    sst_source78_birth_stats.serial++;sst_source78_birth_stats.complete++;
++    sst_source78_birth_stats.actor=actor;sst_source78_birth_stats.instance=instance;
++    sst_source78_birth_stats.result=result;sst_source78_birth_stats.family=family;
++    memcpy(sst_source78_birth_stats.objects,objects,sizeof objects);memcpy(sst_source78_birth_stats.resources,resources,sizeof resources);
++    static FILE *output;static unsigned rows;
++    if(!output){output=fopen(path,"w");if(output)fprintf(output,"serial,actor,instance,result,family,lifecycle,body,head,face,hands,body_resource,head_resource,face_resource,hands_resource\n");}
++    if(output && rows<256) {
++        fprintf(output,"%llu,%llu,%llu,%llu,%llu,%u",(unsigned long long)sst_source78_birth_stats.serial,(unsigned long long)actor,(unsigned long long)sst_source78_birth_stats.instance,(unsigned long long)result,(unsigned long long)sst_source78_birth_stats.family,lifecycle);
++        for(unsigned i=0;i<4;i++)fprintf(output,",%llu",(unsigned long long)objects[i]);
++        for(unsigned i=0;i<4;i++)fprintf(output,",%llu",(unsigned long long)resources[i]);
++        fputc('\n',output);fflush(output);rows++;
++    }
++    pthread_mutex_unlock(&birth78_mu);
++}
++
+ static GuestFn source76_original[3];
+ static _Atomic bool source76_ready;
+ struct { _Atomic uint64_t entries[3],revoked[3]; } sst_source76_lifecycle_stats;
+ static const uint64_t source76_addresses[3]={
+     UINT64_C(0x7000ab1334),UINT64_C(0x7000ab3c08),UINT64_C(0x7000ab6dfc)};
+ static void source76_lifecycle(Cpu *c,unsigned kind) {
++    uint64_t incoming_actor=c->x[0]; // save this before native bool return replaces x0
+     atomic_fetch_add(&sst_source76_lifecycle_stats.entries[kind],1);
+     // No guest reads or live actor/health/global/membership eligibility. Arm watch
+     // before registration, not after publication. Even an unarmed original is
+@@ -18,6 +87,7 @@ static void source76_lifecycle(Cpu *c,unsigned kind) {
+     sst_origin_lifecycle_begin();
+     if(sst_origin_unsupported())atomic_fetch_add(&sst_source76_lifecycle_stats.revoked[kind],1);
+     source76_original[kind](c); // exactly once, unchanged full input/output Cpu
++    if(kind==0)birth78_observe(incoming_actor,c->x[0]); // still inside known mutator bracket
+     sst_origin_lifecycle_end(); // no native reads; all locks released before original
+ }
+ static void source76_init_models(Cpu *c){source76_lifecycle(c,0);}
+diff --git a/runtime/nvn/source_policy.h b/runtime/nvn/source_policy.h
+index f36110e..6ddb169 100644
+--- a/runtime/nvn/source_policy.h
++++ b/runtime/nvn/source_policy.h
+@@ -9,6 +9,9 @@ static inline bool nvn_source_command_allowed(const CmdRec *record,SstOriginMark
+     SstOriginMarker intrinsic;memcpy(intrinsic.bytes,record->source_origin,sizeof intrinsic.bytes);
+     *effective=sst_origin_combine(intrinsic,invocation);
+     if(!sst_origin_is_forced(*effective))return true;
++    // A late revoked source must not rebind freed buffers/pools for later draws.
++    // Keep only host command-memory continuation/termination; no source payload is decoded.
++    if(sst_origin_unsupported() && record->op!=CMD_JUMP && record->op!=CMD_END)return false;
+     switch(record->op) {
+     case CMD_CALL:
+     case CMD_CLEAR_COLOR: case CMD_CLEAR_DEPTH_STENCIL: case CMD_CLEAR_TEXTURE: case CMD_CLEAR_BUFFER:
+diff --git a/runtime/nvn/vulkan/exec.c b/runtime/nvn/vulkan/exec.c
+index 412bfa4..56e8d9d 100644
+--- a/runtime/nvn/vulkan/exec.c
++++ b/runtime/nvn/vulkan/exec.c
+@@ -62,6 +62,19 @@ static uint64_t op_counts[CMD_COUNT];
+ bool g_debug_frame;
+ static char stats_text[2048];
+ void vk_collect_dead(void);
++static _Thread_local bool source78_in_backend,source78_batch_pinned,source78_batch_forced;
++static _Thread_local uint64_t source78_batch_required;
++struct {uint64_t entered,finished,forced_batches,last_required,last_submitted,last_completed,strict_waits,failures;} sst_source78_gpu_stats;
++static pthread_once_t source78_enable_once=PTHREAD_ONCE_INIT;
++static bool source78_enable_value;
++static void source78_enable_init(void){source78_enable_value=getenv("LARECOMP_DEBUG_DATA") && getenv("SST_TEST_SOURCE_GPU_DRAIN");}
++static bool source78_gpu_enabled(void) {
++    pthread_once(&source78_enable_once,source78_enable_init);
++    return g_is_skyward && source78_enable_value;
++}
++static void source78_note_seq(uint64_t seq) {
++    if(source78_batch_pinned && source78_batch_forced && seq>source78_batch_required)source78_batch_required=seq;
++}
+ 
+ // ================================================================== submissions
+ // A submission = optional upload command buffer + the main one, signalling the timeline with its number.
+@@ -314,6 +327,9 @@ static Sub *sub(void) {
+     if (s->seq != submit_seq + 1) {  // slot reused: its previous submission must be done
+         wait_why = "ring slot";
+         vk_wait_seq(s->seq);
++        if(source78_gpu_enabled() && s->seq && vk_completed_seq()<s->seq) {
++            sst_source78_gpu_stats.failures++;FATAL("private source GPU slot is still pending after wait\n");
++        }
+         depth77_collect((unsigned)cur_sub); // actual timeline completion before reading/resetting queries
+         cq_resolve_done(s->seq);
+         if (s->ts) {  // (profiling) GPU time of that submission
+@@ -345,6 +361,7 @@ static void begin_cb(VkCommandBuffer *cb, bool *begun) {
+ static void gp_mark(VkCommandBuffer cb, const char *fmt, ...);
+ VkCommandBuffer vk_cmd(void) {
+     Sub *s = sub();
++    source78_note_seq(s->seq);
+     if (!s->main_begun) {
+         begin_cb(&s->main, &s->main_begun);
+         depth77_reset(s->main,(unsigned)cur_sub,s->seq);
+@@ -374,6 +391,7 @@ VkCommandBuffer vk_cmd(void) {
+ 
+ VkCommandBuffer vk_upload_cmd(void) {
+     Sub *s = sub();
++    source78_note_seq(s->seq);
+     if (!s->upload_begun) {
+         begin_cb(&s->upload, &s->upload_begun);
+         // after everything submitted before it: a submission's commands may start while the previous one's still run,
+@@ -2732,7 +2750,8 @@ static void draw(CmdRec *r, bool indexed,SstOriginMarker invocation) {
+     SstOriginMarker recorded;memcpy(recorded.bytes,r->source_origin,16);
+     SstOriginMarker effective=sst_origin_combine(recorded,invocation);
+     bool forced=sst_origin_is_forced(effective);
+-    if(forced && !sst_origin_replay_enter()) {
++    if(forced && (!source78_batch_pinned || !sst_origin_replay_enter())) {
++        if(!sst_origin_unsupported())sst_origin_latch_unsupported();
+         // Before proof/native/model/program/payload reads. Old immutable FORCE
+         // still hides native pixels and cannot become a natural teaching draw.
+         sst_source74_render_stats.forced_draws++;
+@@ -2741,6 +2760,7 @@ static void draw(CmdRec *r, bool indexed,SstOriginMarker invocation) {
+         if(source75_in_delayed && sst_origin_unsupported())sst_source76_delay_stats.rejected_before_reads++;
+         return;
+     }
++    if(forced)source78_batch_forced=true;
+     draw_(r,indexed,effective);
+     if(forced)sst_origin_replay_leave(); // also covers every draw_ early return
+     PROF_ADD(prof_draw);
+@@ -4180,6 +4200,20 @@ static void exec_list(uint64_t handle, int depth,SstOriginMarker invocation) {
+ }
+ 
+ void backend_execute(uint64_t handle) {
++    bool source78_enabled=source78_gpu_enabled();
++    if(source78_enabled) {
++        // The existing Vulkan state is single-owner. Reject another owner BEFORE
++        // touching it; never try to submit/wait from a lifecycle/foreign thread.
++        static pthread_mutex_t owner_mu=PTHREAD_MUTEX_INITIALIZER;
++        static pthread_t owner;static bool have_owner;
++        pthread_mutex_lock(&owner_mu);bool wrong=have_owner && !pthread_equal(owner,pthread_self());
++        if(!have_owner){owner=pthread_self();have_owner=true;}pthread_mutex_unlock(&owner_mu);
++        if(wrong || source78_in_backend)FATAL("private source GPU backend owner/reentry mismatch\n");
++        source78_in_backend=true;source78_batch_pinned=sst_origin_batch_enter();
++        source78_batch_forced=false;source78_batch_required=0;
++        if(source78_batch_pinned)sst_source78_gpu_stats.entered++;
++        sst_origin_set_gpu_guard_ready(source78_batch_pinned);
++    } else sst_origin_set_gpu_guard_ready(false);
+     depth77_control();
+     const char *avatar_request=getenv("SST_TEST_AVATAR_REQUEST");
+     if(avatar_request && getenv("LARECOMP_DEBUG_DATA")){FILE *f=fopen(avatar_request,"r");if(f){int value=-1;if(fscanf(f,"%d",&value)==1 && (value==0 || value==1))g_sst.show_avatars=value;fclose(f);remove(avatar_request);}}
+@@ -4228,4 +4262,27 @@ void backend_execute(uint64_t handle) {
+     if (sync_submit < 0) sync_submit = getenv("LARECOMP_SYNC_SUBMIT") ? 1 : 0;
+     if (sync_submit) renderer_flush();
+     else renderer_submit();
++    if(source78_batch_pinned) {
++        // Deliberately conservative PRIVATE stall probe. Keep the batch pin
++        // through vc_flush, every intermediate submit, and actual GPU completion.
++        // STOP becoming true mid-batch must never bypass this retirement.
++        if(source78_batch_forced) {
++            uint64_t target;
++            pthread_mutex_lock(&seq_lock);target=submit_seq;pthread_mutex_unlock(&seq_lock);
++            if(target<source78_batch_required){sst_source78_gpu_stats.failures++;FATAL("private source GPU batch has unsubmitted work\n");}
++            VkSemaphoreWaitInfo wait={.sType=VK_STRUCTURE_TYPE_SEMAPHORE_WAIT_INFO,.semaphoreCount=1,.pSemaphores=&g_vk.timeline,.pValues=&target};
++            if(target && vkWaitSemaphores(g_vk.dev,&wait,UINT64_C(10000000000))!=VK_SUCCESS) {
++                sst_source78_gpu_stats.failures++;FATAL("private source GPU retirement failed or timed out\n");
++            }
++            uint64_t completed=0;
++            if(vkGetSemaphoreCounterValue(g_vk.dev,g_vk.timeline,&completed)!=VK_SUCCESS || completed<target) {
++                sst_source78_gpu_stats.failures++;FATAL("private source GPU completion not acknowledged\n");
++            }
++            sst_source78_gpu_stats.forced_batches++;sst_source78_gpu_stats.strict_waits++;
++            sst_source78_gpu_stats.last_required=source78_batch_required;
++            sst_source78_gpu_stats.last_submitted=target;sst_source78_gpu_stats.last_completed=completed;
++        }
++        sst_origin_batch_leave();sst_source78_gpu_stats.finished++;
++    }
++    source78_batch_pinned=source78_batch_forced=source78_in_backend=false;
+ }

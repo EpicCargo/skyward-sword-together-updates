@@ -1,0 +1,713 @@
+From f87e25594f791783e4eadaa44dab26981ae397d6 Mon Sep 17 00:00:00 2001
+From: SST development <sst-development@localhost>
+Date: Mon, 2 Nov 2026 03:28:31 -0500
+Subject: [PATCH] Add session-only Skyward developer travel and movement tools
+
+---
+ runtime/dispatch.c            |   2 +
+ runtime/hle/input.c           |  12 ++
+ runtime/hle/sst_dev.c         | 330 ++++++++++++++++++++++++++++++++++
+ runtime/hle/sst_dev.h         |   6 +
+ runtime/ui/developer_tab.mm   | 164 ++++++++++++++++-
+ runtime/ui/menu.h             |   2 +
+ runtime/ui/menu.mm            |   4 +
+ runtime/ui/multiplayer_tab.mm |  19 +-
+ 8 files changed, 533 insertions(+), 6 deletions(-)
+ create mode 100644 runtime/hle/sst_dev.c
+ create mode 100644 runtime/hle/sst_dev.h
+
+diff --git a/runtime/dispatch.c b/runtime/dispatch.c
+index dfd0429..17b55c3 100644
+--- a/runtime/dispatch.c
++++ b/runtime/dispatch.c
+@@ -114,6 +114,8 @@ void dispatch_init(void) {  // (after gamelib_load)
+     tables[1] = (FnTable){g->sdk_addrs, g->sdk_fns, ns, ns ? g->sdk_addrs[0] : 0, ns ? g->sdk_addrs[ns - 1] : 0};
+     if (n0) tables[2] = (FnTable){g->subsdk0_addrs, g->subsdk0_fns, n0, g->subsdk0_addrs[0], g->subsdk0_addrs[n0 - 1]};
+     if (n1) tables[3] = (FnTable){g->subsdk1_addrs, g->subsdk1_fns, n1, g->subsdk1_addrs[0], g->subsdk1_addrs[n1 - 1]};
++    extern void sst_dev_dispatch_init(void);
++    sst_dev_dispatch_init();
+     extern void sst_prop_dispatch_init(void);
+     sst_prop_dispatch_init();
+     extern void sst_pickup_dispatch_init(void);
+diff --git a/runtime/hle/input.c b/runtime/hle/input.c
+index 1a368c3..1b09e42 100644
+--- a/runtime/hle/input.c
++++ b/runtime/hle/input.c
+@@ -620,6 +620,8 @@ static void fill_state(Cpu *c) {
+     if (id != 0) return;
+ 
+     if (g_is_skyward) {
++        extern void sst_dev_game_tick(Cpu *c);
++        sst_dev_game_tick(c);
+         extern void sst_world_game_tick(Cpu *c);
+         sst_world_game_tick(c);
+     }
+@@ -702,7 +704,17 @@ static void fill_state(Cpu *c) {
+         b = pets_menu_input(b, st);
+         lx = st[0], ly = st[1], rx = st[2], ry = st[3];
+     }
++    uint64_t developer_buttons = b; // physical/script buttons before free-camera translation
+     b = free_camera_input(b, &rx, &ry, now, menu || mouse_sword);
++    if (g_is_skyward) {
++        extern void sst_dev_input(uint64_t, uint64_t *, int32_t *, int32_t *, int32_t *, int32_t *, bool);
++        sst_dev_input(developer_buttons, &b, &lx, &ly, &rx, &ry, menu);
++        b &= ~(0xfull << 16);
++        if (lx < -16000) b |= 1ull << 16;
++        if (ly > 16000) b |= 1ull << 17;
++        if (lx > 16000) b |= 1ull << 18;
++        if (ly < -16000) b |= 1ull << 19;
++    }
+     b &= ~(0xfull << 20);
+     if (rx < -16000) b |= 1ull << 20;
+     if (ry > 16000) b |= 1ull << 21;
+diff --git a/runtime/hle/sst_dev.c b/runtime/hle/sst_dev.c
+new file mode 100644
+index 0000000..9d4ae3a
+--- /dev/null
++++ b/runtime/hle/sst_dev.c
+@@ -0,0 +1,330 @@
++// SSHD developer tools: queued UI intent, executed only on the game thread.
++#include "../hle.h"
++#include "sst_dev.h"
++#include "../ui/menu.h"
++#include "../sst/sst_game.h"
++#include "../sst/sst_dev_tools.h"
++#include "../sst/sst_destinations.h"
++#include "../sst/sst_teleport.h"
++#include <math.h>
++#include <pthread.h>
++extern bool menu_input_captured(void);
++#include <stdatomic.h>
++#include <stdio.h>
++#include <string.h>
++
++#define PLAYER UINT64_C(0x7002bf9940)
++#define RELOADER UINT64_C(0x7002bf9930)
++#define EVENT UINT64_C(0x700182ded8)
++#define PLAYER_VT UINT64_C(0x7001637d28)
++#define PLAYER_UPDATE UINT64_C(0x7000ab7cf4)
++#define SET_POS_ROT UINT64_C(0x7000adb964)
++#define ENTRANCE UINT64_C(0x7000df4fdc)
++#define CRR_POS UINT64_C(0x7000facfe4)
++#define START_SMALL_JUMP UINT64_C(0x7000a90be4)
++#define ACCH 0x3ca8u
++#define BIT(n) (UINT64_C(1)<<(n))
++static uint64_t read64(uint64_t p){uint64_t v;memcpy(&v,(void *)(uintptr_t)p,8);return v;}
++static uint32_t read32(uint64_t p){uint32_t v;memcpy(&v,(void *)(uintptr_t)p,4);return v;}
++static uint16_t read16(uint64_t p){uint16_t v;memcpy(&v,(void *)(uintptr_t)p,2);return v;}
++static void write32(uint64_t p,uint32_t v){memcpy((void *)(uintptr_t)p,&v,4);}
++static void write_float(uint64_t p,float v){memcpy((void *)(uintptr_t)p,&v,4);}
++static bool ptr(uint64_t p,size_t size){return p>=GUEST_LO && p<GUEST_HI && size<=GUEST_HI-p;}
++static GuestFn original_update;
++static bool registered,bindings;
++static atomic_bool noclip_capable, input_allowed;
++static _Thread_local bool in_dev, in_update;
++typedef struct {uint64_t buttons,at;int32_t x,y;bool captured;} DevInput;
++static DevInput input;
++static pthread_mutex_t input_mutex=PTHREAD_MUTEX_INITIALIZER;
++static SstDevRequest pending;
++static SstTeleport teleport;
++static uint64_t pending_since,scratch,tracked_actor;
++static uint32_t tracked_instance;
++static SstScene tracked_scene;
++static bool destination_loading;
++static uint32_t before_destination_load;
++static SstScene destination_scene;
++static uint64_t last_flight_ms;
++static float flight_pos[3];
++static bool was_flying;
++
++// Bounded scalar counters for native verification. No palettes/guest pointers retained.
++struct {uint64_t updates,moon_writes,noclip_scopes,noclip_restores,placements,loads,flight_steps,rejections;
++        uint32_t flags_before,flags_after;float last_position[3];uint32_t moon_launches;} sst_dev_native_stats;
++
++static bool actor_same(uint64_t player,uint32_t instance) {
++    return ptr(player,0x6b00) && read64(PLAYER)==player && read64(player)==PLAYER_VT &&
++        read32(player+8)==instance && read16(player+0x10)==0xc8 &&
++        *(uint8_t *)(uintptr_t)(player+0x12)==1 && read64(player+0x38)==player;
++}
++static bool acch_owned(uint64_t player) {
++    uint64_t a=player+ACCH;
++    return ptr(a,0xf8) && read64(a+0x68)==player+0x144 && read64(a+0x70)==player+0x1b0 &&
++        read64(a+0x88)==player+0x1e8 && read64(a+0xe0)==player;
++}
++static bool loader_idle(void) {uint64_t p=read64(RELOADER);return ptr(p,0x352)&&read16(p+0x350)==703;}
++static bool ordinary_game(SstLocal *out) {
++    if(!g_is_skyward || ENV("SST_NO_PLAYER_READ"))return false;
++    SstLocal l=sst_game_read_local(&SST_LAYOUT_SSHD_100,0);
++    if(!l.valid || !l.pose.health || !l.pose.max_health || !actor_same(l.player_address,l.player_instance))return false;
++    if(out)*out=l; // preserve valid identity/area while temporarily paused or loading
++    uint64_t e=read64(EVENT);
++    if(!ptr(e,0x24c)||read32(e+0x248)||read32(UINT64_C(0x7001827370))||
++       read32(UINT64_C(0x7001827374))||read32(UINT64_C(0x7001827378))||!loader_idle())return false;
++    return true;
++}
++static bool same_scene(const SstScene *a,const SstScene *b) {
++    return !strcmp(a->stage,b->stage) && a->room==b->room && a->layer==b->layer && a->entrance==b->entrance;
++}
++static bool foot_action(uint16_t action) {return action<=22;}
++static bool travel_action(uint16_t action) {return action==0 || action==2 || action==3;}
++static bool catalogue_scene(const SstScene *s) {
++    return s && sst_destination_valid(s->stage,s->room,s->layer,s->entrance);
++}
++// Native normal SmallJump initializer: this, yaw pointer, type0, NULL actor.
++// Its own state/animation setup releases the grounded FSM; raw VY alone does not.
++static bool launch_moon(Cpu *c,const SstLocal *local) {
++    if(!actor_same(local->player_address,local->player_instance) || !ptr(c->sp-128,128) ||
++       read32(START_SMALL_JUMP)!=0xfc1b0fe8 || read32(START_SMALL_JUMP+0x24)!=0x52800201 ||
++       read32(START_SMALL_JUMP+0x40)!=0x97fe1487 || !dispatch_lookup(START_SMALL_JUMP))return false;
++    if(!scratch)scratch=(uint64_t)(uintptr_t)hle_alloc(64);
++    uint16_t yaw=(uint16_t)local->pose.rot[1];memcpy((void *)(uintptr_t)(scratch+48),&yaw,2);
++    float forward;memcpy(&forward,(void *)(uintptr_t)(local->player_address+0x1dc),4);
++    if(!isfinite(forward) || fabsf(forward)>1000)return false;
++    Cpu saved=*c;c->x[0]=local->player_address;c->x[1]=scratch+48;c->x[2]=0;c->x[3]=0;
++    c->x[4]=c->x[5]=c->x[6]=c->x[7]=0;guest_call(c,START_SMALL_JUMP);*c=saved;
++    if(!actor_same(local->player_address,local->player_instance) || read32(local->player_address+0x468)!=16)return false;
++    // Keep the existing movement intent instead of the initializer's forward boost.
++    write_float(local->player_address+0x1dc,forward);sst_dev_native_stats.moon_launches++;
++    return true;
++}
++static void zero_velocity(uint64_t player) {
++    write_float(player+0x1dc,0);write_float(player+0x1e8,0);write_float(player+0x1ec,0);write_float(player+0x1f0,0);
++}
++static bool place(Cpu *c,SstLocal local,const float pos[3],const int16_t rot[3]) {
++    if(!bindings || !actor_same(local.player_address,local.player_instance) || !ptr(c->sp-128,128))return false;
++    for(unsigned i=0;i<3;i++)if(!isfinite(pos[i])||fabsf(pos[i])>1e6f)return false;
++    if(!scratch)scratch=(uint64_t)(uintptr_t)hle_alloc(64);
++    memcpy((void *)(uintptr_t)(scratch+16),pos,12);memcpy((void *)(uintptr_t)(scratch+32),rot,6);
++    Cpu saved=*c;c->x[0]=local.player_address;c->x[1]=scratch+16;c->x[2]=scratch+32;
++    c->x[3]=1;c->x[4]=0;c->x[5]=0;c->x[6]=0;c->x[7]=0;
++    guest_call(c,SET_POS_ROT);*c=saved;
++    if(!actor_same(local.player_address,local.player_instance))return false;
++    float actual[3];memcpy(actual,(void *)(uintptr_t)(local.player_address+0x144),12);
++    for(unsigned i=0;i<3;i++)if(!isfinite(actual[i])||fabsf(actual[i]-pos[i])>.05f)return false;
++    zero_velocity(local.player_address);sst_dev_native_stats.placements++;
++    memcpy(sst_dev_native_stats.last_position,pos,12);return true;
++}
++static bool load_area(Cpu *c,const SstScene *scene) {
++    if(!bindings || !catalogue_scene(scene)||!loader_idle()||!ptr(c->sp-64,64))return false;
++    if(!scratch)scratch=(uint64_t)(uintptr_t)hle_alloc(64);
++    memset((void *)(uintptr_t)scratch,0,16);memcpy((void *)(uintptr_t)scratch,scene->stage,strnlen(scene->stage,8));
++    Cpu saved=*c;c->sp-=64;memset((void *)(uintptr_t)c->sp,0,32);
++    uint16_t option=15;memcpy((void *)(uintptr_t)c->sp,&option,2);write32(c->sp+16,0xff);
++    c->x[0]=read64(RELOADER);c->x[1]=scratch;c->x[2]=scene->room;c->x[3]=scene->layer;c->x[4]=scene->entrance;
++    c->x[5]=2;c->x[6]=2;c->x[7]=0;guest_call(c,ENTRANCE);*c=saved;sst_dev_native_stats.loads++;
++    return true;
++}
++// A player's SCENE entrance can be the old entry after walking between rooms.
++// Load another real arrival in the SAME stage/room/layer, then wait for a fresh
++// peer pose. Never substitute another room/layer or copy progress to force one.
++static bool peer_arrival(const SstScene *target,SstScene *out) {
++    const SstDestination *d=sst_destination_find(target->stage,target->room,target->layer,target->entrance);
++    if(d && !(d->flags&SST_DEST_EVENT_OR_TITLE)){*out=*target;return true;}
++    for(size_t i=0;i<sst_destination_count();i++) {
++        d=sst_destination_at(i);
++        if(!(d->flags&SST_DEST_EVENT_OR_TITLE) && !strcmp(d->stage,target->stage) && d->room==target->room && d->layer==target->layer) {
++            *out=*target;out->entrance=d->entrance;return true;
++        }
++    }
++    return false;
++}
++static void clear_motion(void) {
++    SstDevControls v=sst_dev_controls();v.noclip=v.moon_jump=false;sst_dev_set_controls(v);was_flying=false;last_flight_ms=0;
++}
++static void finish(bool ok,const char *text) {
++    pending=(SstDevRequest){0};destination_loading=false;sst_teleport_reset(&teleport);
++    if(!ok)sst_dev_native_stats.rejections++;sst_dev_finish(ok,text);
++}
++static void test_input(void) {
++    if(!ENV("LARECOMP_DEBUG_DATA"))return;
++    const char *path=ENV("SST_DEV_REQUEST_FILE");if(!path)return;
++    FILE *f=fopen(path,"r");if(!f)return;
++    char command[32]={0};unsigned number=0;float speed=600;
++    int n=fscanf(f,"%31s %u %f",command,&number,&speed);fclose(f);remove(path);
++    if(n>=2 && !strcmp(command,"warp"))sst_dev_queue_destination(number);
++    else if(n>=2 && !strcmp(command,"peer") && number<=65535)sst_dev_queue_peer((uint16_t)number);
++    else if(n>=2 && (!strcmp(command,"moon")||!strcmp(command,"noclip"))) {
++        SstDevControls v=sst_dev_controls();if(!strcmp(command,"moon"))v.moon_jump=number!=0;else v.noclip=number!=0;sst_dev_set_controls(v);
++    } else if(n>=3 && !strcmp(command,"speed")){SstDevControls v=sst_dev_controls();v.flight_speed=speed;sst_dev_set_controls(v);}
++}
++static void dev_update(Cpu *c) {
++    if(!g_is_skyward || in_dev)return;
++    in_dev=true;test_input();uint64_t now=sst_now_ms();SstLocal local={0};bool ready=bindings && ordinary_game(&local);
++    if(ready && tracked_actor && (local.player_address!=tracked_actor||local.player_instance!=tracked_instance||!same_scene(&local.scene,&tracked_scene)))clear_motion();
++    if(ready){tracked_actor=local.player_address;tracked_instance=local.player_instance;tracked_scene=local.scene;}
++    SstDevRequest request;
++    if(!pending.kind && sst_dev_take_request(&request)) {
++        pending=request;pending_since=request.queued_ms;clear_motion();
++        if(now<pending_since || now-pending_since>SST_TELEPORT_WAIT_TIMEOUT_MS){finish(false,"Teleport request expired");in_dev=false;return;}
++        if(!bindings){finish(false,"Developer tools require the supported SSHD 1.0.0 build");in_dev=false;return;}
++        if(request.kind==SST_DEV_PEER) {
++            SstPlayer peers[SST_MAX_PLAYERS];int n=sst_net_players(peers,SST_MAX_PLAYERS);bool begun=false;
++            if(sst_net_status(NULL,0)==SST_ONLINE && sst_net_generation()==request.connection_generation)
++                for(int i=0;i<n;i++)if(peers[i].id==request.peer && peers[i].presence_generation==request.presence_generation &&
++                    !strcmp(peers[i].scene.stage,request.peer_scene.stage) && peers[i].scene.room==request.peer_scene.room &&
++                    peers[i].scene.layer==request.peer_scene.layer &&
++                    (!request.peer_scene_generation || !peers[i].udp_scene || request.peer_scene_generation==peers[i].udp_scene))
++                    begun=sst_teleport_begin(&teleport,&peers[i],request.connection_generation,now);
++            if(!begun)finish(false,"Player is no longer available");
++        }
++    }
++    bool travel_ready=ready && travel_action(local.pose.action) && !menu_input_captured();
++    if(pending.kind==SST_DEV_DESTINATION) {
++        const SstDestination *d=sst_destination_at(pending.destination);
++        if(!d || (d->flags&SST_DEST_EVENT_OR_TITLE)){finish(false,"This entry is not a playable arrival");}
++        else if(now<pending_since || now-pending_since>45000){finish(false,"Teleport timed out while waiting for gameplay");}
++        else if(destination_loading) {
++            if(travel_ready && local.player_instance!=before_destination_load) {
++                bool match=!strcmp(local.scene.stage,destination_scene.stage)&&local.scene.room==destination_scene.room;
++                char message[192];
++                if(match && (local.scene.layer!=destination_scene.layer || local.scene.entrance!=destination_scene.entrance))
++                    snprintf(message,sizeof message,"Destination loaded; game selected story layer %u, arrival %u",local.scene.layer,local.scene.entrance);
++                else snprintf(message,sizeof message,"%s",match?"Destination loaded":"Game loaded another area; arrival cancelled");
++                finish(match,message);
++            }
++        } else if(travel_ready) {
++            destination_scene=(SstScene){.room=d->room,.layer=d->layer,.entrance=d->entrance};
++            snprintf(destination_scene.stage,sizeof destination_scene.stage,"%s",d->stage);
++            if(load_area(c,&destination_scene)){before_destination_load=local.player_instance;destination_loading=true;}
++        }
++    } else if(pending.kind==SST_DEV_PEER) {
++        SstPlayer peers[SST_MAX_PLAYERS],*peer=NULL;int n=sst_net_players(peers,SST_MAX_PLAYERS);
++        for(int i=0;i<n;i++)if(peers[i].id==pending.peer)peer=&peers[i];
++        uint32_t gen=sst_net_status(NULL,0)==SST_ONLINE?sst_net_generation():UINT32_MAX;
++        SstTeleportDecision d=sst_teleport_step(&teleport,peer,gen,&local.scene,travel_ready,local.player_instance,now);
++        if(d.action==SST_TELEPORT_LOAD_AREA) {
++            SstScene arrival;
++            if(!peer_arrival(&d.scene,&arrival))finish(false,"No verified arrival exists for the player's area");
++            else if(load_area(c,&arrival))sst_teleport_load_accepted(&teleport,d.nonce,local.player_instance);
++        } else if(d.action==SST_TELEPORT_PLACE) {
++            if(place(c,local,d.pose.pos,d.pose.rot)) {sst_teleport_complete(&teleport,d.nonce);finish(true,"Teleported to player; no progress snapshot requested");}
++        } else if(d.action==SST_TELEPORT_CANCEL)finish(false,sst_teleport_reason_text(d.reason));
++        else if(d.action==SST_TELEPORT_WAIT)sst_dev_report(ready,true,sst_teleport_reason_text(d.reason));
++    }
++    sst_dev_report(ready,pending.kind!=SST_DEV_NONE,NULL);in_dev=false;
++}
++
++// SDK input may be polled more than once: it only queues test intent. All guest
++// writes/native calls are performed by the identity-checked player update below.
++void sst_dev_game_tick(Cpu *c) {
++    (void)c;if(!g_is_skyward || in_dev)return;
++    test_input();
++    // Input continues on title/loading screens even when the player update does
++    // not. Invalidate cached readiness there without writing guest memory or
++    // touching the game-thread-only movement anchor.
++    SstLocal local={0};
++    if(!bindings || !ordinary_game(&local)) {
++        atomic_store(&input_allowed,false);atomic_store(&noclip_capable,false);
++        SstDevControls value=sst_dev_controls();value.moon_jump=value.noclip=false;sst_dev_set_controls(value);
++        SstDevStatus status=sst_dev_status();sst_dev_report(false,status.busy,NULL);
++    }
++}
++
++void sst_dev_input(uint64_t raw,uint64_t *buttons,int32_t *lx,int32_t *ly,int32_t *rx,int32_t *ry,bool captured) {
++    DevInput value={.buttons=raw,.x=*lx,.y=*ly,.at=sst_now_ms(),.captured=captured};
++    pthread_mutex_lock(&input_mutex);input=value;pthread_mutex_unlock(&input_mutex);
++    if(captured || !atomic_load(&input_allowed))return;
++    SstDevControls v=sst_dev_controls();
++    if(v.moon_jump && !v.noclip && (raw&BIT(6)) && (raw&BIT(0))) *buttons&=~BIT(0); // hold L+A; do not interact
++    if(v.noclip && atomic_load(&noclip_capable)) {
++        *lx=*ly=0;
++        // Keep right-stick camera look; suppress movement/actions that fight free flight.
++        *buttons=(*buttons&(BIT(10)|BIT(11)|(UINT64_C(0xf)<<20)))|BIT(6);
++    }
++    (void)rx;(void)ry;
++}
++static void player_update(Cpu *c) {
++    if(!original_update)return;
++    if(!g_is_skyward || ENV("SST_NO_PLAYER_READ") || in_update){original_update(c);return;}
++    if(!ptr(c->x[0],0x6b00) || c->x[0]!=read64(PLAYER) || read64(c->x[0])!=PLAYER_VT){original_update(c);return;}
++    in_update=true;sst_dev_native_stats.updates++;
++    if(ptr(c->x[0],0x6b00) && c->x[0]==read64(PLAYER) && read64(c->x[0])==PLAYER_VT)dev_update(c);
++    DevInput held;pthread_mutex_lock(&input_mutex);held=input;pthread_mutex_unlock(&input_mutex);
++    SstLocal before={0};bool ready=ordinary_game(&before) && c->x[0]==before.player_address && foot_action(before.pose.action);
++    atomic_store(&input_allowed,ready);
++    SstDevControls controls=sst_dev_controls();uint64_t player=before.player_address;uint32_t instance=before.player_instance;
++    bool owned=ready && bindings && acch_owned(player);
++    uint64_t flight_now=sst_now_ms();
++    double flight_dt=last_flight_ms && flight_now>=last_flight_ms?(flight_now-last_flight_ms)/1000.0:0;
++    if(flight_dt>.05)flight_dt=.05;
++    bool live_input=!held.captured && flight_now>=held.at && flight_now-held.at<250;
++    SstCamera camera;float view[12],flight_delta[3]={0};
++    bool camera_ok=ready && sst_game_read_camera(&SST_LAYOUT_SSHD_100,16,9,&camera);
++    if(camera_ok){
++        // read_camera stores a scaled view basis; recover the same affine view
++        // used by renderer replay without reading mutable native camera twice.
++        for(unsigned row=0;row<3;row++) {
++            float norm=0;for(unsigned col=0;col<3;col++)norm+=camera.view_proj[row*4+col]*camera.view_proj[row*4+col];
++            float scale=sqrtf(norm)*(row==2?-1:1);
++            if(!isfinite(scale)||fabsf(scale)<.0001f){camera_ok=false;break;}
++            for(unsigned col=0;col<4;col++)view[row*4+col]=camera.view_proj[row*4+col]/scale;
++        }
++        if(camera_ok)camera_ok=sst_dev_flight_delta(view,live_input?held.x:0,live_input?held.y:0,
++        live_input&&(held.buttons&BIT(0)),live_input&&(held.buttons&BIT(1)),live_input&&(held.buttons&BIT(7)),
++        controls.flight_speed,flight_dt,flight_delta);}
++    atomic_store(&noclip_capable,owned && camera_ok);
++    // Validate the entire movement step BEFORE any collision/velocity mutation.
++    bool flying=owned && camera_ok && controls.noclip && !pending.kind;
++    if(ready && controls.noclip && !camera_ok){clear_motion();controls.noclip=controls.moon_jump=false;}
++    bool moon=ready && controls.moon_jump && !controls.noclip && !held.captured &&
++        sst_now_ms()>=held.at && sst_now_ms()-held.at<250 && (held.buttons&BIT(6))&&(held.buttons&BIT(0));
++    uint32_t flags=0;
++    if(flying) {
++        if(!was_flying)memcpy(flight_pos,before.pose.pos,12);
++        flags=read32(player+ACCH+0x64);write32(player+ACCH+0x64,flags|1);
++        sst_dev_native_stats.flags_before=flags;sst_dev_native_stats.noclip_scopes++;
++        zero_velocity(player);
++    } else {was_flying=false;last_flight_ms=0;}
++    if(moon && before.pose.action<=8 && owned && (read32(player+ACCH+0x64)&(1u<<5))) {
++        if(!launch_moon(c,&before)){clear_motion();moon=false;sst_dev_report(true,false,"Moon jump stopped: native jump could not start");}
++    }
++    if(moon){write_float(player+0x1ec,20);sst_dev_native_stats.moon_writes++;}
++    original_update(c); // always preserve native animation, model and action updates
++    if(flying && actor_same(player,instance) && acch_owned(player)) {
++        uint32_t now_flags=read32(player+ACCH+0x64);
++        write32(player+ACCH+0x64,(now_flags&~1u)|(flags&1u));sst_dev_native_stats.flags_after=read32(player+ACCH+0x64);
++        sst_dev_native_stats.noclip_restores++;
++    }
++    SstLocal after={0};bool still=ready && ordinary_game(&after) && after.player_address==player && after.player_instance==instance && same_scene(&before.scene,&after.scene);
++    if(ready && !still)clear_motion();
++    if(still && moon){write_float(player+0x1ec,20);sst_dev_native_stats.moon_writes++;}
++    if(still && flying) {
++        for(unsigned i=0;i<3;i++)flight_pos[i]=fmaxf(-999999,fminf(999999,flight_pos[i]+flight_delta[i]));
++        if(place(c,after,flight_pos,after.pose.rot)) {
++            was_flying=true;last_flight_ms=flight_now;sst_dev_native_stats.flight_steps++;
++        } else {
++            clear_motion();sst_dev_report(true,false,"Noclip stopped: native position move was not accepted");
++        }
++    } else if(!still)was_flying=false;
++    atomic_store(&input_allowed,still && foot_action(after.pose.action));
++    if(!still)atomic_store(&noclip_capable,false);
++    in_update=false;
++}
++bool sst_dev_noclip_supported(void){return atomic_load(&noclip_capable);}
++void sst_dev_dispatch_init(void) {
++    original_update=dispatch_lookup(PLAYER_UPDATE);
++    bindings=g_is_skyward && original_update && read32(PLAYER_UPDATE)==0x6db63bef &&
++        read32(PLAYER_UPDATE+4)==0x6d0133ed && read32(CRR_POS)==0xfc180fea && read32(CRR_POS+4)==0x6d0123e9 &&
++        read32(CRR_POS+0x2c)==0xb8464f48 && read32(CRR_POS+0x30)==0x3700c0e8 &&
++        read32(SET_POS_ROT)==0xd0006a88 && read32(SET_POS_ROT+4)==0xf9476d08 &&
++        read32(SET_POS_ROT+0x1c)==0x36002ae3 &&
++        read32(ENTRANCE)==0xd10203ff && dispatch_lookup(SET_POS_ROT);
++    if(bindings && !registered){hle_override(PLAYER_UPDATE,player_update,"SST local developer movement");registered=true;}
++}
++RT_ON_RESET(sst_dev_reset_runtime) {
++    sst_dev_reset();sst_teleport_reset(&teleport);pending=(SstDevRequest){0};scratch=tracked_actor=0;tracked_instance=0;
++    pending_since=0;memset(&tracked_scene,0,sizeof tracked_scene);destination_loading=false;was_flying=false;last_flight_ms=0;memset(&input,0,sizeof input);
++    memset(&sst_dev_native_stats,0,sizeof sst_dev_native_stats);atomic_store(&noclip_capable,false);atomic_store(&input_allowed,false);
++}
+diff --git a/runtime/hle/sst_dev.h b/runtime/hle/sst_dev.h
+new file mode 100644
+index 0000000..015f935
+--- /dev/null
++++ b/runtime/hle/sst_dev.h
+@@ -0,0 +1,6 @@
++#pragma once
++#include "../rt.h"
++void sst_dev_dispatch_init(void);
++void sst_dev_game_tick(Cpu *cpu);
++void sst_dev_input(uint64_t raw_buttons,uint64_t *buttons,int32_t *lx,int32_t *ly,int32_t *rx,int32_t *ry,bool captured);
++bool sst_dev_noclip_supported(void);
+diff --git a/runtime/ui/developer_tab.mm b/runtime/ui/developer_tab.mm
+index b9f1cb3..179c8b1 100644
+--- a/runtime/ui/developer_tab.mm
++++ b/runtime/ui/developer_tab.mm
+@@ -1,7 +1,9 @@
+-// Skyward Sword Together diagnostics. Render-thread snapshots only: no guest writes or network actions.
++// Skyward Sword Together developer tools. UI queues intent; guest changes stay on the game thread.
+ #include <stdarg.h>
+ #include <stdio.h>
+ #include <string.h>
++#include <vector>
++#include <algorithm>
+ 
+ #include "imgui.h"
+ #include "../sst/sst_animation.h"
+@@ -10,6 +12,11 @@
+ #include "../sst/sst_host.h"
+ #include "../sst/sst_census.h"
+ #include "../sst/sst_debug.h"
++#include "../sst/sst_dev_tools.h"
++#include "../sst/sst_destinations.h"
++#include "osk.h"
++#include "menu.h"
++extern "C" bool sst_dev_noclip_supported(void);
+ extern "C" {
+ #include "../settings.h"
+ }
+@@ -184,10 +191,155 @@ void build_report(const Diagnostics &d, Report &r) {
+         "Replay decisions are separate rendering totals. Static idle fallback holds an observed idle pose.\n"
+         "Player names, host addresses, session room/team names, saves and assets are omitted.\n");
+ }
++// Immutable catalogue data, cached search indices and clipped lists keep the full
++// destination inventory inexpensive while the developer page is open.
++struct TravelBrowser {
++    bool initialized=false, dirty=true, queue_failed=false;
++    int region=0, zone=-1;
++    size_t selected=SIZE_MAX;
++    char query[SST_DESTINATION_QUERY_MAX+1]={};
++    std::vector<const char *> regions;
++    std::vector<size_t> zones, search, matches;
++};
++static TravelBrowser travel;
++static bool destination_playable(const SstDestination *d) {
++    return d && (d->flags&SST_DEST_VERIFIED) && !(d->flags&(SST_DEST_EVENT_OR_TITLE|SST_DEST_NO_SPAWN));
++}
++static bool region_matches(const char *region) {
++    return travel.region==0 || (travel.region>0 && (size_t)travel.region<=travel.regions.size() &&
++        !strcmp(region,travel.regions[(size_t)travel.region-1]));
++}
++static void initialize_travel(void) {
++    if(travel.initialized)return;
++    size_t count=sst_destination_room_zone_count();
++    for(size_t i=0;i<count;i++) {
++        const SstDestinationZone *z=sst_destination_room_zone_at(i);
++        if(!z || !z->region)continue;
++        bool found=false;
++        for(const char *name:travel.regions)if(!strcmp(name,z->region)){found=true;break;}
++        if(!found)travel.regions.push_back(z->region);
++    }
++    travel.initialized=true;
++}
++static void rebuild_travel(void) {
++    travel.zones.clear();travel.matches.clear();
++    for(size_t i=0;i<sst_destination_room_zone_count();i++) {
++        const SstDestinationZone *z=sst_destination_room_zone_at(i);
++        if(z && region_matches(z->region))travel.zones.push_back(i);
++    }
++    size_t count=sst_destination_count();
++    if(count>SST_DESTINATION_LIMIT) {travel.dirty=false;travel.selected=SIZE_MAX;return;}
++    travel.search.resize(count);
++    size_t found=sst_destination_search(travel.query,0,0,travel.search.data(),travel.search.size());
++    if(found>count)found=0;
++    const SstDestinationZone *zone=travel.zone>=0?sst_destination_room_zone_at((size_t)travel.zone):nullptr;
++    for(size_t i=0;i<found;i++) {
++        size_t index=travel.search[i];const SstDestination *d=sst_destination_at(index);
++        if(!d || !region_matches(d->region))continue;
++        if(zone && (strcmp(zone->stage,d->stage) || zone->room!=d->room))continue;
++        travel.matches.push_back(index);
++    }
++    if(std::find(travel.matches.begin(),travel.matches.end(),travel.selected)==travel.matches.end())travel.selected=SIZE_MAX;
++    travel.dirty=false;
++}
++static void current_area_filter(void) {
++    SstLocal local=sst_game_local();if(!local.valid)return;
++    for(size_t i=0;i<sst_destination_room_zone_count();i++) {
++        const SstDestinationZone *z=sst_destination_room_zone_at(i);
++        if(!z || strcmp(z->stage,local.scene.stage) || z->room!=local.scene.room)continue;
++        travel.region=0;
++        for(size_t j=0;j<travel.regions.size();j++)if(!strcmp(z->region,travel.regions[j])){travel.region=(int)j+1;break;}
++        travel.zone=(int)i;travel.query[0]=0;travel.selected=SIZE_MAX;travel.dirty=true;break;
++    }
++}
++static void draw_movement_tools(float scale) {
++    if(!ImGui::CollapsingHeader("Movement tools",ImGuiTreeNodeFlags_DefaultOpen))return;
++    SstDevStatus status=sst_dev_status();SstDevControls controls=sst_dev_controls();bool changed=false;
++    bool available=status.available && !status.busy;
++    ImGui::BeginDisabled(!available && !controls.moon_jump);
++    changed|=ImGui::Checkbox("Moon jump",&controls.moon_jump);
++    ImGui::EndDisabled();
++    ImGui::SameLine();ImGui::TextDisabled("Hold L + A to rise");
++    bool noclip_supported=sst_dev_noclip_supported();
++    ImGui::BeginDisabled((!available || !noclip_supported) && !controls.noclip);
++    changed|=ImGui::Checkbox("Noclip / free flight",&controls.noclip);
++    ImGui::EndDisabled();
++    if(!noclip_supported)ImGui::TextDisabled("Noclip is unavailable until the supported game is loaded.");
++    ImGui::TextWrapped("Noclip: Left Stick moves, A rises, B lowers, R boosts; Right Stick looks around.");
++    ImGui::SetNextItemWidth(320*scale);
++    changed|=ImGui::SliderFloat("Flight speed",&controls.flight_speed,50,3000,"%.0f units/s",ImGuiSliderFlags_AlwaysClamp);
++    if(changed)sst_dev_set_controls(controls); // ephemeral: never settings_save()
++    ImGui::TextDisabled("Modes turn off after teleport, reload or restart.");
++}
++static void draw_destination_tools(float scale) {
++    if(!ImGui::CollapsingHeader("Teleport anywhere",ImGuiTreeNodeFlags_DefaultOpen))return;
++    initialize_travel();
++    const char *preview=travel.region>0 && (size_t)travel.region<=travel.regions.size()?travel.regions[(size_t)travel.region-1]:"All regions";
++    ImGui::SetNextItemWidth(310*scale);
++    if(ImGui::BeginCombo("Region",preview)) {
++        if(ImGui::Selectable("All regions",travel.region==0)){travel.region=0;travel.zone=-1;travel.dirty=true;}
++        for(size_t i=0;i<travel.regions.size();i++)if(ImGui::Selectable(travel.regions[i],travel.region==(int)i+1)) {
++            travel.region=(int)i+1;travel.zone=-1;travel.dirty=true;
++        }
++        ImGui::EndCombo();
++    }
++    ImGui::SameLine();ImGui::BeginDisabled(!sst_game_local().valid);
++    if(ImGui::Button("Current area"))current_area_filter();
++    ImGui::EndDisabled();
++    ImGui::SetNextItemWidth(-1);
++    if(ui_input_text("##sst_dev_place_query",travel.query,sizeof travel.query,0,"Search regions, zones, stage or arrival...","Find a place"))travel.dirty=true;
++    if(travel.dirty)rebuild_travel();
++    ImGui::TextDisabled("Zones");
++    if(ImGui::BeginChild("##sst_dev_zones",ImVec2(0,ImGui::GetTextLineHeightWithSpacing()*5.5f),ImGuiChildFlags_Borders)) {
++        if(ImGui::Selectable("All zones",travel.zone<0)){travel.zone=-1;travel.dirty=true;}
++        ImGuiListClipper clip;clip.Begin((int)travel.zones.size());
++        while(clip.Step())for(int row=clip.DisplayStart;row<clip.DisplayEnd;row++) {
++            size_t index=travel.zones[(size_t)row];const SstDestinationZone *z=sst_destination_room_zone_at(index);
++            if(!z)continue;
++            bool disabled=!z->count || (z->flags&(SST_DEST_NO_SPAWN|SST_DEST_EVENT_OR_TITLE));
++            char label[256];snprintf(label,sizeof label,"%s | %s / room %u%s##zone%zu",z->zone,z->stage,z->room,
++                !z->count?" (no native spawn)":(z->flags&SST_DEST_EVENT_OR_TITLE)?" (event/title)":"",index);
++            ImGui::BeginDisabled(disabled);
++            if(ImGui::Selectable(label,travel.zone==(int)index)){travel.zone=(int)index;travel.dirty=true;}
++            ImGui::EndDisabled();
++        }
++    }
++    ImGui::EndChild();
++    if(travel.dirty)rebuild_travel();
++    ImGui::Text("Arrivals (%zu)",travel.matches.size());
++    if(ImGui::BeginChild("##sst_dev_arrivals",ImVec2(0,ImGui::GetTextLineHeightWithSpacing()*6.5f),ImGuiChildFlags_Borders)) {
++        ImGuiListClipper clip;clip.Begin((int)travel.matches.size());
++        while(clip.Step())for(int row=clip.DisplayStart;row<clip.DisplayEnd;row++) {
++            size_t index=travel.matches[(size_t)row];const SstDestination *d=sst_destination_at(index);if(!d)continue;
++            char label[448];snprintf(label,sizeof label,"%s | %s / room %u / layer %u / entry %u%s##arrival%zu",d->label,
++                d->stage,d->room,d->layer,d->entrance,(d->flags&SST_DEST_EVENT_OR_TITLE)?" (event/title)":"",index);
++            ImGui::BeginDisabled(!destination_playable(d));
++            if(ImGui::Selectable(label,travel.selected==index)){travel.selected=index;travel.queue_failed=false;}
++            ImGui::EndDisabled();
++        }
++    }
++    ImGui::EndChild();
++    const SstDestination *selected=sst_destination_at(travel.selected);
++    if(selected) {
++        ImGui::TextWrapped("%s / %s",selected->region,selected->zone);
++        ImGui::TextDisabled("%s / room %u / layer %u / entrance %u",selected->stage,selected->room,selected->layer,selected->entrance);
++        if(selected->flags&SST_DEST_BOSS_ARENA)ImGui::TextDisabled("Boss arena; boss synchronization remains off.");
++    }
++    SstDevStatus status=sst_dev_status();SstLocal local=sst_game_local();
++    ImGui::BeginDisabled(!status.available || status.busy || !local.valid || !destination_playable(selected));
++    if(ImGui::Button("Teleport to selected arrival")) {
++        travel.queue_failed=!sst_dev_queue_destination(travel.selected);
++        if(!travel.queue_failed)menu_request_close();
++    }
++    ImGui::EndDisabled();
++    if(travel.queue_failed)ImGui::TextWrapped("Teleport could not be queued; check the current status.");
++    ImGui::TextDisabled("Arrival metadata is verified; not every spawn has been playtested.");
++    ImGui::TextWrapped("Zones without a native spawn and event/title scenes are listed but unavailable. Arrival behavior can depend on your story progress.");
++}
++
+ }  // namespace
+ 
+ void tab_developer(float scale) {
+-    (void)scale;
+     static Diagnostics d;
+     static bool initialized, frozen, copy_error;
+     uint64_t now = sst_now_ms();
+@@ -196,7 +348,13 @@ void tab_developer(float scale) {
+         initialized = true;
+     }
+ 
+-    ImGui::TextUnformatted("Skyward Sword Together diagnostics");
++    ImGui::TextUnformatted("Developer tools");
++    draw_movement_tools(scale);
++    draw_destination_tools(scale);
++    SstDevStatus tool_status=sst_dev_status();
++    if(tool_status.message[0])ImGui::TextWrapped("%s",tool_status.message);
++    ImGui::Separator();
++    ImGui::TextUnformatted("Diagnostics");
+     ImGui::TextDisabled("Read-only snapshot; refreshes up to four times per second.");
+     if (ImGui::Checkbox("Freeze snapshot", &frozen) && !frozen) capture(d);
+     ImGui::SameLine();
+diff --git a/runtime/ui/menu.h b/runtime/ui/menu.h
+index 897d0e2..e88f068 100644
+--- a/runtime/ui/menu.h
++++ b/runtime/ui/menu.h
+@@ -16,6 +16,8 @@ typedef union SDL_Event SDL_Event;
+ // Main (UI) thread: returns true if the event was consumed by the menu (the game must not see it).
+ bool menu_handle_event(const SDL_Event *e);
+ bool menu_is_open(void);
++// Any thread: close through the render thread on its next menu frame.
++void menu_request_close(void);
+ // Main thread: apply window requests (fullscreen) made from the menu.
+ void menu_apply_window_requests(void *sdl_window);
+ 
+diff --git a/runtime/ui/menu.mm b/runtime/ui/menu.mm
+index 9859614..251c7e9 100644
+--- a/runtime/ui/menu.mm
++++ b/runtime/ui/menu.mm
+@@ -44,6 +44,8 @@ void controls_bindings_draw(float scale);  // controls_ui.mm
+ 
+ // ------------------------------------------------------------------ state shared with the main thread
+ static std::atomic<bool> g_open{false};
++static std::atomic<bool> g_want_menu_close{false};
++extern "C" void menu_request_close(void) { g_want_menu_close.store(true); }
+ static std::atomic<bool> g_text_busy{false};  // a text field / the on-screen keyboard has the keys (render thread: ui_text_busy)
+ static std::atomic<bool> g_want_fullscreen_apply{false};
+ 
+@@ -713,6 +715,7 @@ extern "C" void inventory_overlay_draw(ImVec2 display, ImFont *font);
+ 
+ // Reboot (runtime/main.c): the game is gone - menu and name dialog close; the ImGui context stays.
+ RT_ON_RESET(menu_reset) {
++    g_want_menu_close.store(false);
+     set_open(false);
+     g_kbd = 0;
+     osk_cancel();
+@@ -905,6 +908,7 @@ void menu_render(id<MTLDevice> dev, id<MTLCommandBuffer> cb, id<MTLTexture> targ
+ void menu_render(void *cmd, uint32_t target_w, uint32_t target_h) {
+     const double tw = target_w, th = target_h;
+ #endif
++    if (g_want_menu_close.exchange(false)) set_open(false);
+     bool open = g_open.load();
+     bool inv = !open && inventory_overlay_wanted();
+     bool trk = !open && tracker_overlay_wanted();
+diff --git a/runtime/ui/multiplayer_tab.mm b/runtime/ui/multiplayer_tab.mm
+index 3539730..a0f2dce 100644
+--- a/runtime/ui/multiplayer_tab.mm
++++ b/runtime/ui/multiplayer_tab.mm
+@@ -11,6 +11,8 @@ extern "C" {
+ #include "../sst/sst_net.h"
+ #include "../sst/sst_host.h"
+ #include "../sst/sst_world.h"
++#include "../sst/sst_dev_tools.h"
++#include "menu.h"
+ 
+ 
+ static void field(const char *label, const char *id, char *buf, size_t cap, const char *hint, float w) {
+@@ -148,13 +150,15 @@ void tab_multiplayer(float scale) {
+ 
+     SstPlayer ps[SST_MAX_PLAYERS];
+     int n = sst_net_players(ps, SST_MAX_PLAYERS);
++    ImGui::TextWrapped("Teleport to player moves only your position. It does not request their progress; normal story sharing still follows your settings.");
++    SstDevStatus travel_status=sst_dev_status();
+     ImGui::Text("Players (%d / %d)", n + (st == SST_ONLINE), SST_COOP_PLAYERS);
+     if (ImGui::BeginTable("##sst_players", 5, ImGuiTableFlags_RowBg | ImGuiTableFlags_BordersInnerH)) {
+         ImGui::TableSetupColumn("Name");
+         ImGui::TableSetupColumn("Team");
+         ImGui::TableSetupColumn("Area");
+         ImGui::TableSetupColumn("Health");
+-        ImGui::TableSetupColumn("Recovery");
++        ImGui::TableSetupColumn("Travel / recovery");
+         ImGui::TableHeadersRow();
+         for (int i = 0; i < n; i++) {
+             ImGui::TableNextRow();
+@@ -170,17 +174,26 @@ void tab_multiplayer(float scale) {
+             SstCatchupStatus availability = sst_world_catchup_status(&ps[i], sst_game_team(), sst_now_ms());
+             if (availability != SST_CATCHUP_READY) {
+                 ImGui::PushStyleColor(ImGuiCol_Text, ImGui::GetStyleColorVec4(ImGuiCol_TextDisabled));
+-                ImGui::TextWrapped("%s", sst_world_catchup_text(availability));
++                ImGui::TextWrapped("Sync: %s", sst_world_catchup_text(availability));
+                 ImGui::PopStyleColor();
+             }
+             ImGui::PushID(ps[i].id);
++            bool known_area=ps[i].scene.stage[0] && memchr(ps[i].scene.stage,0,sizeof ps[i].scene.stage);
++            ImGui::BeginDisabled(st!=SST_ONLINE || !local.valid || travel_status.busy ||
++                !ps[i].active || !ps[i].id || ps[i].id==sst_net_my_id() || !known_area);
++            if(ImGui::SmallButton("Teleport to player") && sst_dev_queue_peer(ps[i].id))menu_request_close();
++            ImGui::EndDisabled();
++            if(ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled))ImGui::SetTooltip("Move to this player's fresh position, loading their area first if needed. No progress snapshot is requested.");
+             ImGui::BeginDisabled(boss || !local.valid || !sst_net_can_request_catchup(&ps[i]));
+-            if (ImGui::SmallButton("Catch up")) sst_world_request(SST_RECOVER_PEER, ps[i].id);
++            if (ImGui::SmallButton("Sync and catch up")) sst_world_request(SST_RECOVER_PEER, ps[i].id);
+             ImGui::EndDisabled();
++            if(ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled))ImGui::SetTooltip("Request shared progress, then load this player's area entrance. Use Teleport to player for position-only travel.");
+             ImGui::PopID();
+         }
+         ImGui::EndTable();
+     }
++    SstDevStatus result=sst_dev_status();
++    if(result.message[0])ImGui::TextWrapped("%s",result.message);
+ }
+ 
+ // Drawing backend for sst_overlay.c: ImGui's foreground list, so labels sit above the game image.
+-- 
+2.56.0
+

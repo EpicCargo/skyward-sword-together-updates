@@ -1,0 +1,43 @@
+Windows test-package third-party components
+
+SkyRecomp v1.0.6 support DLLs, lasgen helper and font are selected
+from the project's official Windows release (not its game code or textures):
+https://github.com/Apolinario-coder/SkyRecomp/releases/tag/v1.0.6
+The modified runtime sources are reproducible from the included co-op-source.zip
+patch series and its pinned engine-patches/base.txt upstream commit.
+Runtime: MIT, including the separate LASRecomp notice. ImGui, SMAA and xxHash
+notices and the Baloo font OFL are included beside the executable.
+
+SDL3: zlib license; https://github.com/libsdl-org/SDL
+FFmpeg: LGPL-2.1-or-later shared libraries, built with the pinned minimal
+configuration in SkyRecomp tools/build_deps_windows.sh (no GPL codec DLLs).
+Corresponding pinned source:
+https://ffmpeg.org/releases/ffmpeg-9.0.2.tar.xz
+SHA256 8c3850283eb25fa026482078a04051e0be17347b09ef81a0849bec15a96e002e
+FFmpeg runtime configuration/version is recorded in build verification.
+These shared libraries may be replaced by compatible builds.
+
+shaderc / glslang / SPIRV-Tools: Apache-2.0 and their included notices;
+https://github.com/google/shaderc
+libiconv: LGPL-2.1-or-later; https://www.gnu.org/software/libiconv/
+GCC runtime: GPL-3.0 with GCC Runtime Library Exception;
+https://gcc.gnu.org/onlinedocs/libstdc++/manual/license.html
+LLVM-MinGW libc++, libunwind and winpthreads: their notices are in licenses/.
+https://github.com/mstorsjo/llvm-mingw/releases/tag/20261020
+
+lasgen bundles Python (PSF), PyInstaller bootloader (GPL with bootloader
+exception), capstone (BSD), unicorn (GPL-2.0), and lz4 (BSD). Library and wheel
+notices are retained inside lasgen/_internal; additional notices are in licenses/.
+https://github.com/python/cpython
+https://github.com/pyinstaller/pyinstaller
+https://github.com/capstone-engine/capstone
+https://github.com/unicorn-engine/unicorn
+https://github.com/python-lz4/python-lz4
+
+The native Windows setup compiler uses LLVM-MinGW release 20261020, with its LLVM
+license and MinGW runtime notices retained. The package includes only the x64
+C compiler/linker, public headers and runtime libraries.
+https://github.com/mstorsjo/llvm-mingw/releases/tag/20261020
+
+No ReShade binary or texture pack is included. The system Vulkan loader is
+supplied by the Windows GPU driver and is not included.

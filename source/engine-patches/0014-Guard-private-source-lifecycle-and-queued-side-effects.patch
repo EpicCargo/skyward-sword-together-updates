@@ -1,0 +1,181 @@
+From 74ebd7e0200f8667e2a7705be7b90e63d9ea6fcb Mon Sep 17 00:00:00 2001
+From: SST development <sst-development@localhost>
+Date: Mon, 2 Nov 2026 23:12:15 -0500
+Subject: [PATCH] Guard queued source side effects and private first-person
+ lifecycle
+
+---
+ runtime/hle/sst_dev.c       | 20 +++++++++++++++++++-
+ runtime/nvn/source_policy.h | 24 ++++++++++++++++++++++++
+ runtime/nvn/vulkan/exec.c   | 37 ++++++++++++++++++++++++++++++++++---
+ 3 files changed, 77 insertions(+), 4 deletions(-)
+ create mode 100644 runtime/nvn/source_policy.h
+
+diff --git a/runtime/hle/sst_dev.c b/runtime/hle/sst_dev.c
+index f03120c..c560b37 100644
+--- a/runtime/hle/sst_dev.c
++++ b/runtime/hle/sst_dev.c
+@@ -246,10 +246,12 @@ void sst_dev_input(uint64_t raw,uint64_t *buttons,int32_t *lx,int32_t *ly,int32_
+     }
+     (void)rx;(void)ry;
+ }
++static void source75_before_actor_update(uint64_t player);
+ static void player_update(Cpu *c) {
+     if(!original_update)return;
+     if(!g_is_skyward || ENV("SST_NO_PLAYER_READ") || in_update){original_update(c);return;}
+     if(!ptr(c->x[0],0x6b00) || c->x[0]!=read64(PLAYER) || read64(c->x[0])!=PLAYER_VT){original_update(c);return;}
++    source75_before_actor_update(c->x[0]); // before native prefix/direct model builders
+     in_update=true;sst_dev_native_stats.updates++;
+     if(ptr(c->x[0],0x6b00) && c->x[0]==read64(PLAYER) && read64(c->x[0])==PLAYER_VT)dev_update(c);
+     DevInput held;pthread_mutex_lock(&input_mutex);held=input;pthread_mutex_unlock(&input_mutex);
+@@ -401,6 +403,22 @@ static pthread_mutex_t source74_mu=PTHREAD_MUTEX_INITIALIZER;
+ static struct {bool forced;uint64_t root;SstOriginIdentity id;} source74_members[4];
+ static _Atomic uint64_t source74_generation=1;
+ struct {uint64_t forced_scopes,unowned_scopes,published,failed,detached,natural_entries;} sst_source74_native_stats;
++uint64_t sst_source75_rebuild_stops;
++static void source75_before_actor_update(uint64_t player) {
++    // These pending bits enter verified same-actor allocation/rebuild paths.
++    // Do not touch the actor's bits or infer complete coverage of other paths.
++    if(ENV("SST_NO_PLAYER_READ") || !ptr(player,0x6b00))return;
++    uint32_t instance=read32(player+8);if(!actor_same(player,instance) || !(read32(player+0x448)&(0x20u|0x80u|0x10000u)))return;
++    bool known=false;
++    pthread_mutex_lock(&source74_mu);
++    for(unsigned role=0;role<4;role++)if(source74_members[role].id.actor_address==player && source74_members[role].id.actor_instance==instance && source74_members[role].id.model_registration_generation)known=true;
++    pthread_mutex_unlock(&source74_mu);
++    if(known && sst_origin_stats().published && !sst_origin_unsupported()) {
++        sst_origin_reset(); // discard optional replay authority, not historical FORCE markers
++        sst_origin_latch_unsupported();sst_source75_rebuild_stops++;
++    }
++}
++
+ static void source74_membership(const Vis72Owner *owner,bool forced) {
+     uint64_t resource=read64(owner->object+0xf8),root=read64(owner->object+8);
+     if(!ptr(resource,4) || memcmp((void *)(uintptr_t)resource,"MDL0",4) || !ptr(root,0x100))return;
+@@ -498,7 +516,7 @@ static void vis73_gate(unsigned reason) {
+     pthread_mutex_unlock(&mu);
+ }
+ static void vis73_finish_queue(Cpu *c) {
+-    if(sst_origin_unsupported() || atomic_load(&vis73_failed) || !vis73_queue.active || vis73_queue.seen || vis73_scene_dispatch_depth || !vis72_registered || !vis72_entry_original)return;
++    if(!sst_origin_replay_requested() || sst_origin_unsupported() || atomic_load(&vis73_failed) || !vis73_queue.active || vis73_queue.seen || vis73_scene_dispatch_depth || !vis72_registered || !vis72_entry_original)return;
+     const char *switch_path=getenv("SST_VIS73_QUEUE_SWITCH");int enabled=0;FILE *switch_file=switch_path?fopen(switch_path,"r"):NULL;
+     if(switch_file){if(fscanf(switch_file,"%d",&enabled)!=1)enabled=0;fclose(switch_file);}if(enabled!=1)return;
+     bool correct_thread;
+diff --git a/runtime/nvn/source_policy.h b/runtime/nvn/source_policy.h
+new file mode 100644
+index 0000000..f36110e
+--- /dev/null
++++ b/runtime/nvn/source_policy.h
+@@ -0,0 +1,24 @@
++// Consumer guard for the bounded direct-draw source experiment.
++#pragma once
++#include <string.h>
++#include "nvn.h"
++#include "../sst/sst_origin.h"
++// Runs before command payload/child-handle dereference. Forced calls are not
++// supported yet: do not traverse them and hope descendant draws alone are safe.
++static inline bool nvn_source_command_allowed(const CmdRec *record,SstOriginMarker invocation,SstOriginMarker *effective) {
++    SstOriginMarker intrinsic;memcpy(intrinsic.bytes,record->source_origin,sizeof intrinsic.bytes);
++    *effective=sst_origin_combine(intrinsic,invocation);
++    if(!sst_origin_is_forced(*effective))return true;
++    switch(record->op) {
++    case CMD_CALL:
++    case CMD_CLEAR_COLOR: case CMD_CLEAR_DEPTH_STENCIL: case CMD_CLEAR_TEXTURE: case CMD_CLEAR_BUFFER:
++    case CMD_DISPATCH: case CMD_DISPATCH_INDIRECT:
++    case CMD_COPY_BUFFER_TO_BUFFER: case CMD_COPY_BUFFER_TO_TEXTURE: case CMD_COPY_TEXTURE_TO_BUFFER:
++    case CMD_COPY_TEXTURE_TO_TEXTURE: case CMD_DOWNSAMPLE: case CMD_UPDATE_UNIFORM_BUFFER:
++    case CMD_FENCE_SYNC: case CMD_WAIT_SYNC: case CMD_SIGNAL_EVENT: case CMD_WAIT_EVENT:
++    case CMD_REPORT_COUNTER: case CMD_DISCARD_COLOR: case CMD_DISCARD_DEPTH_STENCIL: case CMD_RESOLVE_DEPTH:
++    case CMD_DRAW_ARRAYS_INDIRECT: case CMD_DRAW_ELEMENTS_INDIRECT: case CMD_DRAW_TEXTURE:
++        sst_origin_latch_unsupported();return false;
++    default:return true; // state binds and direct draws use their normal guarded paths
++    }
++}
+diff --git a/runtime/nvn/vulkan/exec.c b/runtime/nvn/vulkan/exec.c
+index e394258..1b1781b 100644
+--- a/runtime/nvn/vulkan/exec.c
++++ b/runtime/nvn/vulkan/exec.c
+@@ -17,6 +17,7 @@
+ #include "shaders.h"
+ #include "vk.h"
+ #include "../renderer.h"
++#include "../source_policy.h"
+ #include "../../settings.h"
+ #include "../../frame_rate.h"
+ #include "../../sst/sst_game.h"
+@@ -25,6 +26,7 @@
+ #include "../../sst/sst_animation.h"
+ #include "../../sst/sst_census.h"
+ #include "../../sst/sst_origin.h"
++#include "../../sst/sst_hand.h"
+ 
+ // Only the replay's descriptors use transformed copies. Guest memory and the local draw stay intact.
+ static const float *sst_replay_transform;
+@@ -2659,6 +2661,9 @@ static bool source74_resolve(SstOriginMarker marker,SstOriginProof *proof,SstLoc
+     SstOriginProof verified;
+     return sst_origin_peek(marker,id,sst_now_ms(),&verified);
+ }
++static CmdRec source75_delayed_record;
++static bool source75_delayed_ready,source75_in_delayed;
++struct {uint64_t captured,executed_after_exit,proof_valid_after_exit,no_palette_teaching,no_hand_teaching,no_native_or_peer_pixels;} sst_source75_delay_stats;
+ static bool source74_hide_enabled(void) {
+     const char *path=getenv("SST_SOURCE74_HIDE_SWITCH");int enabled=0;FILE *f=path?fopen(path,"r"):NULL;
+     if(f){if(fscanf(f,"%d",&enabled)!=1)enabled=0;fclose(f);}return enabled==1;
+@@ -2677,8 +2682,15 @@ static void draw_(CmdRec *r, bool indexed,SstOriginMarker origin) {
+     if(forced) {
+         sst_source74_render_stats.forced_draws++;
+         if(!source74_resolve(origin,&source_proof,&forced_local)){sst_source74_render_stats.forced_invalid++;sst_source74_render_stats.native_suppressed++;return;}
++        const char *request=getenv("SST_TEST_DELAY_SOURCE_REQUEST");
++        if(!source75_in_delayed && request && getenv("LARECOMP_DEBUG_DATA")) {
++            FILE *f=fopen(request,"r");if(f){fclose(f);remove(request);memcpy(&source75_delayed_record,r,sizeof(CmdRec));source75_delayed_record.op=indexed?CMD_DRAW_ELEMENTS:CMD_DRAW_ARRAYS;source75_delayed_ready=true;sst_source75_delay_stats.captured++;}
++        }
+         sst_animation_source_frame(&forced_local.scene,&forced_local.pose,renderer_present_count(),false);
+-        if(forced_local.pose.action!=104){sst_source74_render_stats.forced_invalid++;sst_source74_render_stats.native_suppressed++;return;}
++        if(forced_local.pose.action!=104){
++            if(source75_in_delayed && forced_local.pose.action==0)sst_source75_delay_stats.proof_valid_after_exit++;
++            sst_source74_render_stats.forced_invalid++;sst_source74_render_stats.native_suppressed++;return;
++        }
+         hide_native=source74_hide_enabled();
+         if(hide_native)sst_source74_render_stats.native_suppressed++;else sst_source74_render_stats.native_census++;
+     } else sst_source74_render_stats.natural_draws++;
+@@ -3843,9 +3855,9 @@ static void exec_list(uint64_t handle, int depth,SstOriginMarker invocation) {
+     uint64_t p = handle;
+     for (int guard = 0; guard < 10000000; guard++) {
+         CmdRec *r = (CmdRec *)(uintptr_t)p;
++        SstOriginMarker effective_origin;
++        if(!nvn_source_command_allowed(r,invocation,&effective_origin)){p+=r->size;continue;}
+         void *x = r->extra;
+-        SstOriginMarker record_origin;memcpy(record_origin.bytes,r->source_origin,16);
+-        SstOriginMarker effective_origin=sst_origin_combine(record_origin,invocation);
+         if (r->op < CMD_COUNT) op_counts[r->op]++;
+         switch (r->op) {
+         case CMD_END: return;
+@@ -4086,10 +4098,29 @@ static void exec_list(uint64_t handle, int depth,SstOriginMarker invocation) {
+ }
+ 
+ void backend_execute(uint64_t handle) {
++    const char *avatar_request=getenv("SST_TEST_AVATAR_REQUEST");
++    if(avatar_request && getenv("LARECOMP_DEBUG_DATA")){FILE *f=fopen(avatar_request,"r");if(f){int value=-1;if(fscanf(f,"%d",&value)==1 && (value==0 || value==1))g_sst.show_avatars=value;fclose(f);remove(avatar_request);}}
+     if (g_is_skyward) {
+         SstLocal local=sst_game_local();
+         sst_remote_frame(local.valid && local.pose.max_health ? &local.scene : NULL,
+                          renderer_present_count());
++        sst_origin_set_replay_requested(local.valid && local.pose.max_health && g_sst.show_avatars && sst_net_status(NULL,0)==SST_ONLINE);
++    }
++    const char *delay_run=getenv("SST_TEST_DELAY_SOURCE_EXECUTE");
++    if(source75_delayed_ready && delay_run && getenv("LARECOMP_DEBUG_DATA")) {
++        SstLocal published=sst_game_local(),fresh=sst_game_read_render_local(&SST_LAYOUT_SSHD_100,&published,sst_game_pose_tick());
++        if(fresh.valid && fresh.pose.action==0){FILE *f=fopen(delay_run,"r");if(f){
++            fclose(f);remove(delay_run);source75_in_delayed=true;
++            SstAnimationStats old_palette=sst_animation_stats();
++            uint64_t old_palette_hash=sst_animation_teaching_hash(),old_hand_hash=sst_hand_teaching_hash();
++            uint64_t old_suppressed=sst_source74_render_stats.native_suppressed,old_peer=sst_source74_render_stats.remote_draws,old_census=sst_source74_render_stats.native_census;
++            draw(&source75_delayed_record,source75_delayed_record.op==CMD_DRAW_ELEMENTS,sst_origin_none());
++            SstAnimationStats new_palette=sst_animation_stats();
++            if(old_palette_hash==sst_animation_teaching_hash() && old_palette.bytes==new_palette.bytes && old_palette.samples==new_palette.samples && old_palette.captures==new_palette.captures && old_palette.attachments==new_palette.attachments)sst_source75_delay_stats.no_palette_teaching++;
++            if(old_hand_hash==sst_hand_teaching_hash())sst_source75_delay_stats.no_hand_teaching++;
++            if(sst_source74_render_stats.native_suppressed==old_suppressed+1 && sst_source74_render_stats.remote_draws==old_peer && sst_source74_render_stats.native_census==old_census)sst_source75_delay_stats.no_native_or_peer_pixels++;
++            source75_in_delayed=false;source75_delayed_ready=false;sst_source75_delay_stats.executed_after_exit++;
++        }}
+     }
+     PROF_T0();
+     exec_list(handle,0,sst_origin_none());

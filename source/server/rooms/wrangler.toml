@@ -1,0 +1,34 @@
+name = "sst-opaque-rooms"
+main = "worker.mjs"
+compatibility_date = "2026-10-29"
+workers_dev = false
+
+[vars]
+ROOMS_ENABLED = "false"
+
+[observability]
+enabled = false
+
+[[durable_objects.bindings]]
+name = "ROOMS"
+class_name = "RoomRelay"
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["RoomRelay"]
+
+# Account-unique namespace IDs must be reviewed before deployment. Limits are approximate/per-colo.
+[[ratelimits]]
+name = "CREATE_LIMITER"
+namespace_id = "5930001"
+simple = { limit = 5, period = 60 }
+
+[[ratelimits]]
+name = "CREATE_GLOBAL_LIMITER"
+namespace_id = "5930002"
+simple = { limit = 60, period = 60 }
+
+[[ratelimits]]
+name = "CONNECT_LIMITER"
+namespace_id = "5930003"
+simple = { limit = 30, period = 60 }

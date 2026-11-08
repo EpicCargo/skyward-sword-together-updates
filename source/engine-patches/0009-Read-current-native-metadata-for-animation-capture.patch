@@ -1,0 +1,27 @@
+From e21dd6ea2f4a7422f26cc6904067769aa584f337 Mon Sep 17 00:00:00 2001
+From: SST build <sst-build@localhost>
+Date: Sun, 1 Nov 2026 21:00:11 -0500
+Subject: [PATCH] Read current native metadata when capturing remote animation
+ poses
+
+---
+ runtime/nvn/vulkan/exec.c | 3 ++-
+ 1 file changed, 2 insertions(+), 1 deletion(-)
+
+diff --git a/runtime/nvn/vulkan/exec.c b/runtime/nvn/vulkan/exec.c
+index 486b59d..dde8e3a 100644
+--- a/runtime/nvn/vulkan/exec.c
++++ b/runtime/nvn/vulkan/exec.c
+@@ -3108,7 +3108,8 @@ static void draw_(CmdRec *r, bool indexed) {
+         st.ubuf[0][0].addr && st.viewport[0][0] == 0 && st.viewport[0][1] == 0 &&
+         (avatar_mesh = sst_avatar_mesh_id((const void *)(uintptr_t)st.vbuf[0].addr, st.vbuf[0].size))) {
+         const float *uniform = (const float *)(uintptr_t)st.ubuf[0][0].addr;
+-        SstLocal local = sst_game_local();
++        SstLocal published = sst_game_local();
++        SstLocal local = sst_game_read_render_local(&SST_LAYOUT_SSHD_100, &published, sst_game_pose_tick());
+         SstCamera camera;
+         if (local.valid && local.pose.max_health && uniform[14] == -1 && uniform[15] == 0 &&
+             sst_game_read_camera(&SST_LAYOUT_SSHD_100, 16, 9, &camera)) {
+-- 
+2.56.0
+

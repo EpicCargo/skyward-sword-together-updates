@@ -1,0 +1,9 @@
+{
+  "release": "v2.0.2",
+  "cache": ".deps/windows-upstream-v202",
+  "support": ".deps/windows-upstream-v202/support",
+  "prefix": ".deps/windows-runtime-v202",
+  "url": "https://github.com/Apolinario-coder/SkyRecomp/releases/download/v2.0.2/SkyRecomp-v2.0.2-Windows.zip",
+  "archive_size": 1881203900,
+  "asset_digest": "sha256:5d8dd9158d44b005759a0c6d061febcc148ff29b820e6eb85a4ac5ead3898e0f"
+}

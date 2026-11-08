@@ -1,0 +1,405 @@
+id	description
+3	Goddess Sword acquired
+8	LMF rising Cutscene
+16	Water Dragon teaches SotH part (Faron Woods, Deep Woods layer 5 / Inside Great Tree layer 3 / Lake Floria layer 3 / Water Dragon's Lair layer 3 / Behind The Temple layer 7)
+17	Triforce Completed
+18	All Tadtones collected
+19	Fire Dragon Text after SotH part Cutscene (Eldin Volcano, Digging Mitts Cave, Volcano Summit Waterfall layer 4)
+20	Set when learning 3rd SotH part (Groosenator to Lanayru ready)
+21	Thunder Dragon teaches SotH part (Lanayru Caves layer 4 / Lanayru Mines layer 4)
+22	Place Stone of Trials in Statue / Sky Keep appears (requires personal Hylia completion and Stone ownership)
+23	Meeting Zelda Cutscene
+25	Zelda joins you before rescuing Loftwing
+27	Loftwing rescued (Unlocks Loftwing) (Skyloft layer 3 / Sky layer 3)
+28	Set After Training Sword Textbox (allows the sheikah stone cutscene to play)
+29	Meeting Groose Cutscene (Skyloft layer 10)
+30	Adventure Pouch unlocked
+33	Finish Talking with Pipit and Fledge near Sparring Hall
+35	Get Potion Lady Bottle
+37	Horwell Z-target tutorial
+38	Cutscene after acquiring Goddess Sword
+40	Set after landing in the circle after getting sailcloth
+46	Faron light pillar
+47	Eldin light pillar
+49	Talk to Headmaster to learn about Windmills
+50	Machi saved from bokoblins
+51	Bonk 2nd mushroom during Machi Chase
+52	Machi located (Kikwi Elder appears) (also sets after Skyview)
+53	Oolo located
+54	Lopsa located
+56	Kikwi Elder located (Kikwi Dowsing)
+57	Talk to Kikwi Elder after locating every Kikwi (slingshot appears)
+58	B-Wheel unlocked (not slingshot)
+59	Machi scared to see Link after bokoblin fight
+60	Cutscene on top of Great Tree
+61	Talking to Yerbal again after hearing him out about the Lake Floria Gates
+63	Talking to Kikwi Ermit Yerbal
+64	Set when Water Dragon asks for Sacred Water (Sacred Water dowsing)
+65	Set when healing Water Dragon (Skyview Spring layer 4)
+66	Set after Water Dragon dispells Waterfall
+68	Sets in Faron Woods map, probably Great Tree
+69	Machi Cutscene after Skyview
+70	Light Fruit cutscene
+71	Learn Farore's Courage (Faron Woods layer 3 / Deep Woods layer 3)
+72	Learn Nayru's Wisdom
+73	Learn Din's Power
+74	Talk to Parella near Great Tree Bottom
+75	Talk to Parella near machi chase start
+76	Set after talking to Parella near Kikwi Elder before colecting all Tadtones
+77	Talk to Parella near Faron Woods Entry statue
+78	Talk to Parella near Boulder with tadtone in it
+79	Talk to Parella near In The Woods statue
+80	Water Dragon Cutscene in Flooded Faron Woods starting Tadtones watched + tadtones appear (Flooded Great Tree layer 2)
+81	Tadtone Dowsing
+85	Set when healing Water Dragon
+86	Set going back to the sky
+87	Faron Woods introductory cutscene (Behind The Temple layer 2)
+88	Lake Floria Introductory Cutscene
+89	Skyview Introductory cutscene
+90	Sets after the Robot upgrades your Beetle
+91	Deep Woods Introductory cutscene
+92	Lanayru Desert Introductory Cutscene
+102	Treasure Dowsing
+104	Crystal Dowsing
+105	Rupee Dowsing
+106	Key Piece dowsing
+107	Generator Dowsing in Lanayru
+108	Heart Dowsing
+109	Sets in Lanayru Desert
+110	Goddess Cube Dowsing
+111	Breaking first Barricade in Lake Floria
+112	CS after blowing up big boulder to continue
+113	Cutscene after Spin-Jumping over first ledge in Lake Floria
+114	Defeat Cranioc in Lake Floria
+115	New map part in Lake Floria discovered
+116	Finished following Parella
+117	Cranioc Cutscene in Lake Floria
+120	Colecting all key pieces
+127	untriggers one Item Seller object
+129	Sets when Robot \"fixes\" your Map of Lanayru Desert
+130	Meeting Impa cutscene
+137	Sealed Grounds Introductory cutscene (or Fire Sanctuary outside cutscene) (Trigger for Faron Statue Selection Screen) (Faron Woods, Deep Woods, Inside Great Tree layer 1)
+140	Groose lands in Faron after Harp (Sealed Temple layer 2)
+141	Ballad of the Goddess played with Impa (Sealed Grounds layer 2)
+147	Panning cutscene showing beacon
+155	Ancient Cistern Introductory Cutscene (lilypad outside AC appears) (Outside AC layer 2)
+156	Sandship Introductory Cutscene
+157	Ancient Harbour Introductory Cutscene
+159	Sky Keep Introductory Cutscene
+170	Fire Dragon teaches SotH part Cutscene (Fire Dragon's Lair layer 2)
+173	Fire Sanctuary Introductory Cutscene
+179	(Fire Sanctuary A layer 1)
+183	Earth Temple Introductory Cutscene
+184	Impa Cutscene at Bridge in Eldin
+187	Big Frog Watered
+188	Asking Fi about the Water Basin after finding the Big Flames in fromt of FS
+190	Lanayru Mines Introductory Cutscene (Lanayru Desert layer 1)
+194	Thunderhead opened (needs scene flag 2x20 to trigger cutscene)
+195	Fi Text after Opening the Thunderhead
+196	Fledge stops you after talking to him after Zelda
+197	Box Cutscene during Remlit Quest
+199	Sword Instructor talks to Link before he attempts to leave the Sparring Hall
+203	Cutscene showing Fi in Academy Staircase
+204	Skyloft Introductory Cutscene
+227	First Goddess Cube (Unlocks ability to skyward strike Goddess Cubes)
+228	Goddess Cube near Skyview Entrance
+229	Goddess Cube near Volcano Entry Statue
+230	Goddess Cube in Sand Oasis in Lanayru
+231	Goddess Cube near clawshot target in Faron Woods
+234	Goddess Cube near Digging Mitts Cave entrance
+235	Goddess Cube in Lanayru Mines behind Tower
+237	Goddess Cube near Eldin Temple Entrance
+238	Goddess Cube in Skipper's Retreat
+239	Goddess Cube near Life Tree in Lanayru Gorge
+240	Goddess Cube inside Volcano Summit
+241	Goddess Cube on Branch in Faron
+242	Goddess Cube on Sand Slide
+243	Goddess Cube in Pirate Stronghold
+244	Goddess Cube on top of Skyview Temple
+245	Goddess Cube behind boulder near Eldin Temple Entrance
+246	Goddess Cube on clawshot target ledge in Lanayru Desert
+247	Goddess Cube near Hook Beetle cage
+248	Goddess Cube near Fire Sanctuary Entrance
+249	Goddess Cube outside Ancient Cistern
+250	Goddess Cube in Skyview Spring
+251	Goddess Cube in Waterfall Area in Volcano Summit
+252	Goddess Cube in ToT area Minekart Ride in Lanayru
+254	Goddess Cube in Lake Floria
+255	Goddess Cube inside Digging Mitts Cave
+256	Goddess Cube in Ancient Harbour
+259	Talking to the confined robots after activateing both Generators in Sandship
+262	Set when saveing the confined robots in Sandship
+263	Set when talking to the confined robots after activateing one Generator
+265	Shipyard Introductory Cutscene (Sand Sea layer 4)
+266	Skipper's Retreat Introductory Cutscene
+267	Outside Pirate Stronghold Introductory Cutscene
+268	Skipper's Quest (to the Pirate Stronghold) in the Sand Sea
+269	Sea Chart in Skipper's Retreat obtained
+271	Ship Dowsing (activates invisable Ship)
+272	Sandship made visible (Sand Sea layer 5)
+273	Skipper takes you onto his boat after talking to him in habour
+275	Set at Fi text for Ship Dowsing
+276	Sets in Cs in Ancient Habour
+278	Finish Talking to Skipper in Skipper's Retreat (name on map appears)
+279	Shipyard related (name on map appears)
+280	Pirate Stronghold related (name on map appears)
+289	Owlan's wooden shield
+290	set after breaking chandelier in Lumpy pumkin
+291	Set after taking first Quest from Pumm (deliver hot pumpkin soup)
+292	Set after delivering hot pumpkin soup
+293	Set after 2nd Quest from Pumm (harvest Pumkins)
+294	Finish carrying pumpkins for Kina
+296	Finished last Quest for Pumm
+299	Wryna asks Link for help
+300	Set when talking to Strich
+301	Kukiel screams
+303	Wryna asks Link to find Kukiel (allows Kukiel to scream to unlock Batreaux's door)
+304	Start Batreaux quest (enables Gratitude crystals)
+321	Talk to Gondo to repair Scrapper but not giveing him a Ancient Flower
+322	Learn about Scrapper near Village Windmill
+323	Scrapper Repaired
+324	Windmill Propeller picked up
+325	Village Windmill reparation cutscene
+326	Wyrna's 5 gratitude crystals collected (not the crystals themselves)
+327	Talk to the Headmaster to learn more about the Song of the Hero (he doesn't know anything)
+329	Sleeping after starting Batreaux quest
+343	should set after obtaining the BotG, but because of a coding error doesn't
+349	Past Impa Text before Zelda
+350	True Master Sword Cutscene
+360	Batreaux turns human
+361	Set after collecting 5 gratitude crystal from Pipit's Mom (allows Pipit scolding his mom)
+363	Prof Owlan explains Spiral Charge on Skyloft
+364	Spiral Charge Ability
+367	conected to a disapearence of a npc in lumpy pumpkin
+368	Pumpkin Soup delivered on Rainbow Island
+369	Learn Song of the Hero (Waterfall Cave layer 1)
+370	Talking to past Impa after meeting Batreaux or Meeting Batreaux after talking to past Impa  (Bazaar layer 2)
+371	Accepting the Fortune Teller Crystal Sidequest
+372	Sets after Sprapper picked the Crystal Ball up
+373	Sets before the Fortune Teller gives his Crystals
+374	Sets when talking to the Fortune Teller in the Bazzar after 8x08 (Fortunes only cost half)
+375	Set after Sleeping after the Fortune Teller crystals (Bazaar layer 3)
+376	Set after Sleeping after Groose cs in BtT
+377	Set when accepting to clean Pipit House
+378	Break stuffs in item sellers house
+380	Parrow gives his Crystal Sidequest (to find Orielle)
+381	Orielle gives her Sidequest (to go back to Parrow)
+382	Parrow gives his final crystal Sidequest (heal Orielle's bird)
+383	Heal Orielle's bird
+384	Talk to Parrow after healing Orielle's bird
+387	Talk to Bertie after getting Rattle (for 5 crystals)
+389	Give Fledge 1st stamina potion
+391	Set after Fledge sees the second Stamina Potion
+392	Give Fledge the second Stamina Potion
+394	Fledge's 5 crystals collected
+395	set when Parrow attempts to give you his bottle with a full Pouch
+396	Search for Party Wheel Crystal Quest started
+397	Set after Scrapper picks up Party Wheel
+398	Set before Fun Fun Owner gives his Crystals
+399	Sets after you get a free try at Diveing game
+420	Exhausting Goddess Wall in Skykeep
+431	Reveal Goddess Wall in Sealed Grounds
+433	Reveal Goddess Wall in Skyview 2
+434	Reveal Goddess Wall in FS (bottom of central stairway)
+442	Reveal Goddess Wall in AC (in Basement)
+443	Reveal Goddess Wall in AC (near Whirlpool)
+445	Reveal Goddess Wall In Sandship (B1)
+446	Reveal Goddess Wall in Sandship on Deck
+448	Reveal Goddess Wall In FS (1F)
+449	Reveal Goddess Wall in FS (after you jumped into Mouth)
+450	Reveal Goddess Wall in Skykeep (Skyview Room)
+461	Panning Camera Cutscene in Lanayru Caves showing crawlspace to Lanayru Gorge
+462	Set when Thunder Dragon teaches SotH part
+463	Cutscene of Guld getting picked up
+465	Sets if Lanayru SotH is your last SotH part
+467	Goron Text near Big Frog
+468	Goron Text after Watering 1st Frog
+469	Goron Text after Watering 2nd frog
+470	Kina's Crystal Quest started
+472	Kina's Crystal Quest related
+473	Kina's Crystal Quest related
+475	Ask Strich about Beedle's Horned Collossus Beetle at Bug Heaven
+476	Beedle's Insect Cage collected
+477	Set after giving Beedle the cage
+478	Talking to Beedle again after giveing him the cage
+479	Owlans Crystal Sidequest started
+481	Oolo picked up with Scrapper
+482	Owlan's 5 crystals collected
+484	Goddess Statue falling onto the Sealed Grounds Cutscene
+492	Statues activated in Sealed Grounds
+493	Set after talking to Skyview 2 Mogma after revealing Goddess Wall or going past him (unlocks Goddess Walls)
+494	Gate to Faron Woods Opened
+496	Talk to Skipper after Sea Chart in Skipper's Retreat
+498	Talking to Skipper after getting Ship Dowsing
+499	First Quest from Skipper given in the Sand Sea (to Skipper's Retreat)
+511	Sets after getting HP from Thunder dragon
+512	Sets after getting Hylian Shield from Thunder dragon
+519	Ancient Sea Chart activates
+520	Skipper's Text in Sand Sea after Shipyard
+521	Skipper's Text in Sand Sea after Pirate Stronghold
+525	Sets when giveing Golo Rupees for his diging
+526	Lanayru Gorge Introductory Cutscene
+527	Flooded Faron Woods Introductory Cutscene
+545	Cutscene of Ghost asking for Help
+546	Set after trying to open the Door to Ghost in Bathroom
+547	Obtain Cawlin's Letter
+548	Set when giving Cawlin's Letter to the toilet ghost
+551	Set when giving Cawlin's Letter to toilet ghost
+552	Set when giving Cawlin's Letter to toilet ghost
+553	Toilet Hand 5 crystals collected
+554	Cawlin runs away crying after giving letter to toilet ghost/Set by Pipit giving 5 crystals
+555	Giving Cawlin's Letter to Karane
+556	Talking to Pipit about Cawlin's Letter
+557	Set before Pipit gives his Crystals
+558	Pipit 5 crystals collected
+559	Set after talking to Pipit about Cawlin's Letter
+560	Set by Pipit's 5 crystals
+561	Set by Pipit's 5 crystals
+562	Volcano Summit Introductory Cutscene
+574	Set when accepting to clean Pipit House
+575	5 gratitude crystal from Pipit's Mom collected (not the crystals)
+576	Set after pipit taks to link after scolding his mom
+577	Sets at the end of pipit scolding his mom
+578	Set after pipit taks to link after scolding his mom
+579	Talk to Pipit after telling him you saw him scolding his mom
+580	Talk to Marrella after you saw her getting scold by pipit
+581	Set after collecting 20 rupees from Pipit's Mom?
+583	obtaining the Goddess White Sword (Unlocks 4 new dowsing slots)
+633	Start Peater's Quest to protect Peatrice
+636	5 crystals from Peatrice collected
+637	Talking to Peatrice in Bazaar after getting her crystals
+639	5 crystals from Peater collected
+641	Spiral Charge Training Introductory Cutscene
+642	Spiral Charge Training Complete
+647	Pirate Stronghold Camera panning cutscene before Ship Dowsing
+649	At least one goddess cube (triggers Fi text about goddess chests in the sky?)
+661	Village Windmill Repaired (Required to start Scrapper-related sidequests)
+662	Light Tower Raised
+663	Set when giving Cawlin's Letter to toilet ghost/Set after Pipit gives 5 crystals
+664	Talk to Cawlin after giveing the letter to Karane
+668	Propeller Dowsing
+669	Water Basin Dowsing
+672	Goddess Statue Opened
+673	Set when Scrapper picks up Oolo
+674	set when repairing
+676	Talk to Mogma for hint in Waterfall area of Volcano Summit
+677	Water Basin Collected (Eldin Volcano, Digging Mitts Cave, FS Entrance, Volcano Summit Waterfall layer 3)
+684	Starting the Bug Wrangler game at Bug island
+687	Set after Scrapper picks up Guld
+688	Reloading somehow after Finishing Pumm's 3rd Quest (play harp with Kina) (activates the new chandelier CS)
+694	Sets when beeing in AC Room in Skykeep
+695	Sets when beeing in ET Room in Skykeep
+696	Sets when beeing in FS Room in Skykeep
+697	Sets when beeing in Sandship Room in Skykeep
+698	Sets when beeing in LMF Room in Skykeep
+699	Sets when beeing in Skyview Room in Skykeep
+701	Sets when beeing in the Entrance Room in Skykeep
+702	Set by cs in Sandship
+706	Minecart Escort done (Lanayru Gorge layer 2)
+710	Sets after Treasure dowsing
+712	Item Check Girl Peatrice's House entered (name on map appears)
+713	Piper's House entered (name on map appears)
+714	Kukiel's House entered (name on map appears)
+715	Orielle and Parrow's House entered (name on map appears)
+716	Gear Peddler Rupin's House entered (name on map appears)
+717	Pipit's House entered (name on map appears)
+718	Fortune Teller Sparrot's House entered (name on map appears)
+719	Scrap Shop Owner Gondo's House entered (name on map appears)
+720	Potion Shop Owner Bertie's House entered (name on map appears)
+727	Talking to Fi after filling Wallet
+728	Triforce of Power
+729	Triforce of Courage
+730	Triforce of Wisdom (Wisdom Room Layer 2)
+731	Trying to open Main node with only Fire or Lightning Node or Both
+732	Trying to open Main node with only Water or Fire Node or Both
+733	Trying to open Main node with only Water or Lighting Node or Both
+734	Sets when talking to Batreaux after getting Crystals (allows Crystal Dowsing?)
+735	Talking to Flegde after rescueing Kukiel at day
+736	Talk to Owlan to start Oolo sidequest
+738	Set after Fi text after Sea Chart in Skipper's house
+739	Set after Fi text after Sea Chart in Skipper's house
+740	Fi text about bugs on top of Skipper's house after sitting on chair
+742	Sets when sitting down near Golo
+743	set after scrappers text at start of Water Basin Escord
+744	Scrapper text at start of scrapper escort
+745	Multiple beacons cutscene in Lanayru Desert
+746	Talking to Beedle again after giveing him his cage & loadingzone Tmp flag 8x04
+747	Talking to Beedle again after giveing him his cage & loadingzone Tmp flag 8x08
+750	Robot text after digging up Life Tree Seedling in Lanayru Gorge
+770	Start Remlit quest
+771	Set when Cawlin runs away crying after giving the letter to toilet ghost
+792	Door to sealed temple unlocking cutscene
+794	Cutscene showing off that Life Tree has grown + jingle
+798	Talking to Groose after Zelda get captured
+800	Check Faron Woods Entry Statue
+801	Check In The Woods Statue
+802	Check Viewing Platform Statue
+803	Check Great Tree Statue
+804	Check Volcano Entry Statue
+805	Check Volcano East Statue
+806	Check Volcano Ascent
+807	Check Temple Entrance Statue
+809	item Seller related
+810	Talk to Stich after Learing the Song of the Hero
+811	Talking to Parrow after Stich finds Bug Heaven, but before giving the beetle to Beedle
+817	if set different text for cupboards
+819	Sets after mogma talks about Hidden room in FS
+820	Sets after mogma disapears and other mogma apears in FS
+821	Sets while chaseing Mogma
+822	Sets after catching Mogma
+823	Goron Text about Lanayru SotH
+824	Groose talks about his groosenator and how he can fling you everywere
+825	Old man on Lumpy Pumkin talks about Batreaux
+826	Fi Text near Bazaar Goddess Chest
+828	Goron Text about Lanayru SotH
+829	Goron Text about Lanayru SotH
+831	Goron Text about Thunder Dragon
+833	sets before skyview
+834	Talking to Old man in the Bazzar after the Fortune Teller disapears
+835	Talk to bug Kid after going to Beedle's Airshop
+837	Sets when going into Shed
+838	CS of Parrow asking were his Sister is
+840	UI Mode. Valid Options: 0, 1, 2)
+842	Set when starting a new game
+844	Asking Fi about Spiders with targeting them
+845	Asking Fi again about Spiders with targeting them
+846	Saved Disp00 Tab - Not in Spreadsheet
+849	Bug Net Purchased
+851	Sets when reaching Closed gate in long lava path in ET
+1075	Getting text from Potion lady about Air Potion
+1076	Sets when reaching Boko Camp near Thrill Digger (layer 1 only)
+1077	Set when reaching the Room with the Key Piece after the Sand Slide (layer 1 only)
+1078	Set when beeing near Bridge to VS on ET side (layer 1 only)
+1079	Set when beeing near Bridge to VS on VS side (layer 1 only)
+1082	Healing Orielle's bird
+1083	sets in Room 10 in Sandship
+1084	Sets near Desert intro cs
+1085	Sets in ToT area  when near Exit to Sand Oasis
+1087	Goddess Chest Count
+1089	Talking to Beedle in his shop
+1091	Talking to Batreaux after he truns human
+1092	talking to some mogma at some point
+1094	Talking to Oolo after Flooded Faron
+1095	Goddess shield text
+1098	Set in a CS in the Skykeep Entrance Room (Courage Lever Room Layer 2)
+1099	Sets {when going past Gate / when beeing near Chest} in first Left Room of LMF
+1100	Set when beeing were the bombs are for lowering the lava to the Mogma Turf
+1101	Set when going into the Sink Sand labyrinth from the beginning of the LMF Main room
+1108	Fi text about that you need to get the propeller
+1109	set by CS in ET
+1110	Failing to land once after getting the Sailcloth
+1111	Sets when activating the mogma talking in right room of skyview
+1112	Sets when talking to mogma in left room of skyview
+1113	Set when beeing past the Tree in the ToT Area (towards ToT)
+1114	Bow text
+1115	extra bomb bag text
+1116	Talk to kukiel after Betreaux turns Human
+1120	Sets in a Area in the FS Room in Skykeep
+1121	Sets at end of Sink Sand that you would normaly go trough after Hoook Beetle
+1155	Set from Fi after talking to Erla
+1169	beeing were you blow up the boxes in Main Room
+1192	Sets in a Area near Waterfall in AC
+1195	Stone Tablet in AC giveing the Sword Lock Puzzle hint
+1196	Sets were West Desert Statue is
+1197	Beeing near Minecart track to ToT when comeing from North Desert Entry
+1200	sleeping after Batreaux truns Human

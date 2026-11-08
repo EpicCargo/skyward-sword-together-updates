@@ -1,0 +1,74 @@
+From 5b664554ad2ab13150c7e48eb5a76055a3a44886 Mon Sep 17 00:00:00 2001
+From: SST development <sst-development@localhost>
+Date: Tue, 3 Nov 2026 19:48:49 -0500
+Subject: [PATCH] Distinguish carrying fallback in diagnostics
+
+---
+ runtime/nvn/vulkan/exec.c   | 10 ++++++----
+ runtime/ui/developer_tab.mm | 16 ++++++++--------
+ 2 files changed, 14 insertions(+), 12 deletions(-)
+
+diff --git a/runtime/nvn/vulkan/exec.c b/runtime/nvn/vulkan/exec.c
+index 113d8cb..a7420e0 100644
+--- a/runtime/nvn/vulkan/exec.c
++++ b/runtime/nvn/vulkan/exec.c
+@@ -3345,14 +3345,16 @@ static void draw_(CmdRec *r, bool indexed,SstOriginMarker origin) {
+                             (unsigned long long)a.resumes, (unsigned long long)a.attachments, (unsigned long long)a.attachment_hits,
+                             (unsigned long long)a.rigid_skips, (unsigned long long)a.skinned_hits, (unsigned long long)a.skinned_misses);
+                         SstAnimationReplayStats replay_stats = sst_animation_replay_stats();
+-                        LOG("[sst-replay] exact=%llu neutral=%llu unavailable=%llu suppressed=%llu neutral_parts=%zu\n",
++                        LOG("[sst-replay] exact=%llu neutral=%llu carry=%llu unavailable=%llu suppressed=%llu neutral_parts=%zu carry_parts=%zu\n",
+                             (unsigned long long)replay_stats.exact_frames, (unsigned long long)replay_stats.neutral_frames,
+-                            (unsigned long long)replay_stats.unavailable_frames, (unsigned long long)replay_stats.suppressed_parts,
+-                            replay_stats.neutral_parts);
++                            (unsigned long long)replay_stats.carry_frames, (unsigned long long)replay_stats.unavailable_frames,
++                            (unsigned long long)replay_stats.suppressed_parts, replay_stats.neutral_parts, replay_stats.carry_parts);
+                         for (int peer = 0; peer < nremote; peer++)
+                             LOG("[sst-replay] peer=%u source=%u/%u phase=%.2f mode=%s playback=%u/%u phase=%.2f cohort=%llu\n",
+                                 remote[peer].id, remote[peer].pose.anim_id, remote[peer].pose.action, remote[peer].pose.anim_frame,
+-                                !replay[peer].ready ? "unavailable" : replay[peer].cohort ? "neutral" : "exact",
++                                !replay[peer].ready ? "unavailable" : !replay[peer].cohort ? "exact" :
++                                    (replay[peer].pose.equip_flags & SST_POSE_IDENTITY_MASK)==SST_POSE_CONTEXT_SMALL_CARRY ?
++                                        "carry-idle" : "ordinary-neutral",
+                                 replay[peer].pose.anim_id, replay[peer].pose.action, replay[peer].pose.anim_frame,
+                                 (unsigned long long)replay[peer].cohort);
+                         trace_frame = frame;
+diff --git a/runtime/ui/developer_tab.mm b/runtime/ui/developer_tab.mm
+index 179c8b1..21a9ce3 100644
+--- a/runtime/ui/developer_tab.mm
++++ b/runtime/ui/developer_tab.mm
+@@ -172,10 +172,10 @@ void build_report(const Diagnostics &d, Report &r) {
+         if (pose_age(d, p, &age)) r.add("pose age %llu ms\n", (unsigned long long)age);
+         else r.add("pose age unavailable\n");
+     }
+-    r.add("Replay decisions (cumulative peer frames):\nExact animation: %llu\nStatic idle fallback: %llu\nUnavailable: %llu\nSuppressed replay parts (total): %llu\nCached static-idle parts: %zu\n",
++    r.add("Replay decisions (cumulative peer frames):\nExact animation: %llu\nOrdinary idle fallback: %llu\nCarrying idle fallback: %llu\nUnavailable: %llu\nSuppressed replay parts (total): %llu\nCached ordinary-idle parts: %zu\nCached carrying-idle parts: %zu\n",
+         (unsigned long long)d.replay.exact_frames, (unsigned long long)d.replay.neutral_frames,
+-        (unsigned long long)d.replay.unavailable_frames, (unsigned long long)d.replay.suppressed_parts,
+-        d.replay.neutral_parts);
++        (unsigned long long)d.replay.carry_frames, (unsigned long long)d.replay.unavailable_frames,
++        (unsigned long long)d.replay.suppressed_parts, d.replay.neutral_parts, d.replay.carry_parts);
+     const SstAnimationStats &a = d.animation;
+     r.add("Pose cache bytes/budget: %zu/%u\nPose cache samples: %zu\nCaptures: %llu\nReplay hits/misses: %llu/%llu\n",
+         a.bytes, SST_ANIMATION_BUDGET, a.samples, (unsigned long long)a.captures,
+@@ -440,12 +440,12 @@ void tab_developer(float scale) {
+     }
+ 
+     if (ImGui::CollapsingHeader("Avatar replay decisions", ImGuiTreeNodeFlags_DefaultOpen)) {
+-        ImGui::TextWrapped("Peer frames (total): exact animation %llu | static idle fallback %llu | unavailable %llu",
++        ImGui::TextWrapped("Peer frames (total): exact animation %llu | ordinary idle fallback %llu | carrying idle fallback %llu | unavailable %llu",
+             (unsigned long long)d.replay.exact_frames, (unsigned long long)d.replay.neutral_frames,
+-            (unsigned long long)d.replay.unavailable_frames);
+-        ImGui::TextWrapped("Suppressed replay parts (total): %llu | Cached static-idle parts: %zu",
+-            (unsigned long long)d.replay.suppressed_parts, d.replay.neutral_parts);
+-        ImGui::TextWrapped("These rendering totals are separate from the received peer clips above. Static fallback holds an observed idle pose instead of reproducing the requested action.");
++            (unsigned long long)d.replay.carry_frames, (unsigned long long)d.replay.unavailable_frames);
++        ImGui::TextWrapped("Suppressed replay parts (total): %llu | Cached ordinary-idle parts: %zu | Cached carrying-idle parts: %zu",
++            (unsigned long long)d.replay.suppressed_parts, d.replay.neutral_parts, d.replay.carry_parts);
++        ImGui::TextWrapped("These rendering totals are separate from the received peer clips above. Each fallback holds a locally observed idle pose; carrying fallback preserves its carrying posture. Unseen cold poses are not generated.");
+     }
+ 
+     if (ImGui::CollapsingHeader("Connection event history (local)")) {
+-- 
+2.56.0
+

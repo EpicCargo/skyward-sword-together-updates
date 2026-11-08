@@ -1,0 +1,475 @@
+From 6e58c377e2f8154e8097bc16c163b5c3b6ffbafb Mon Sep 17 00:00:00 2001
+From: SST Build <sst-build@localhost>
+Date: Fri, 30 Oct 2026 02:00:00 +0000
+Subject: [PATCH] Share ordinary held vase actors
+
+Observe validated SSHD 1.0.0 vase carry references and transforms, replay the matching existing actor on its native execution thread, and retain confirmed placement without assigning remote holder pointers.
+---
+ runtime/dispatch.c            |   2 +
+ runtime/hle/sst_prop_bridge.h | 250 ++++++++++++++++++++++++++++++++++
+ runtime/hle/sst_prop_native.h | 135 ++++++++++++++++++
+ runtime/hle/sst_world.c       |   5 +
+ runtime/ui/multiplayer_tab.mm |   1 +
+ 5 files changed, 393 insertions(+)
+ create mode 100644 runtime/hle/sst_prop_bridge.h
+ create mode 100644 runtime/hle/sst_prop_native.h
+
+diff --git a/runtime/dispatch.c b/runtime/dispatch.c
+index 28239b1..262b278 100644
+--- a/runtime/dispatch.c
++++ b/runtime/dispatch.c
+@@ -114,6 +114,8 @@ void dispatch_init(void) {  // (after gamelib_load)
+     tables[1] = (FnTable){g->sdk_addrs, g->sdk_fns, ns, ns ? g->sdk_addrs[0] : 0, ns ? g->sdk_addrs[ns - 1] : 0};
+     if (n0) tables[2] = (FnTable){g->subsdk0_addrs, g->subsdk0_fns, n0, g->subsdk0_addrs[0], g->subsdk0_addrs[n0 - 1]};
+     if (n1) tables[3] = (FnTable){g->subsdk1_addrs, g->subsdk1_fns, n1, g->subsdk1_addrs[0], g->subsdk1_addrs[n1 - 1]};
++    extern void sst_prop_dispatch_init(void);
++    sst_prop_dispatch_init();
+ }
+ 
+ GuestFn dispatch_lookup(uint64_t addr) {
+diff --git a/runtime/hle/sst_prop_bridge.h b/runtime/hle/sst_prop_bridge.h
+new file mode 100644
+index 0000000..881babe
+--- /dev/null
++++ b/runtime/hle/sst_prop_bridge.h
+@@ -0,0 +1,250 @@
++// Ordinary SSHD vases only. Included after the world bridge's memory helpers.
++#include "sst_prop_native.h"
++#include "../sst/sst_props.h"
++#include "../sst/sst_remote.h"
++
++typedef struct {
++    uint64_t actor, sent_at, settle_until;
++    uint32_t instance, applied_sequence, applied_generation;
++    uint16_t applied_owner;
++    SstPropKey key;
++    bool seen, local_held, local_placed, remote_held;
++} PropBinding;
++static struct {
++    pthread_mutex_t mu;
++    bool enabled;
++    uint64_t player, place_at;
++    unsigned place_cursor;
++    uint32_t load, generation, sequence;
++    SstScene scene;
++    SstPropState state;
++    PropBinding bindings[SST_PROPS];
++} props_bridge = {.mu = PTHREAD_MUTEX_INITIALIZER};
++
++static void prop_release(PropBinding *b) {
++    if (b->remote_held && sst_prop_native_vase(b->actor) && r32(b->actor + 8) == b->instance)
++        sst_prop_native_release_velocity(b->actor);
++    b->remote_held = false;
++}
++static void prop_clear(void) {
++    // Old heap bytes are not proof that a previous actor still lives. Only an
++    // executing exact actor callback may release native velocity.
++    memset(props_bridge.bindings, 0, sizeof props_bridge.bindings);
++    sst_props_reset(&props_bridge.state); props_bridge.enabled = false;
++}
++
++static PropBinding *prop_binding(uint64_t actor) {
++    for (unsigned i = 0; i < SST_PROPS; i++) {
++        PropBinding *b = &props_bridge.bindings[i];
++        if (b->seen && b->actor == actor && sst_prop_native_vase(actor) &&
++            r32(actor + 8) == b->instance && r32(actor + 0xc) == b->key.params &&
++            r16(actor + 0x136) == b->key.placed_id) return b;
++    }
++    return NULL;
++}
++
++// Rebind a bounded native tree every input tick. A packet never supplies an address.
++static bool prop_discover(uint64_t player, const SstScene *scene) {
++    uint64_t node = player + 0x18;
++    for (unsigned depth = 0;; depth++) {
++        if (depth == 64 || !ptr(node, 0x28)) return false;
++        uint64_t parent = r64(node); if (!parent) break; node = parent;
++    }
++    uint64_t stack[512], visited[512]; unsigned n = 1, count = 0;
++    stack[0] = node;
++    for (unsigned i = 0; i < SST_PROPS; i++) props_bridge.bindings[i].seen = false;
++    while (n) {
++        node = stack[--n];
++        if (!ptr(node, 0x28) || node < GUEST_LO + 0x18 || count == 512) return false;
++        for (unsigned i = 0; i < count; i++) if (visited[i] == node) return false;
++        visited[count++] = node; uint64_t actor = node - 0x18;
++        if (!ptr(actor, 0x180) || r64(node + 0x20) != actor) return false;
++        if (sst_prop_native_vase(actor) &&
++            (r8(actor + 0x17c) == scene->room || r8(actor + 0x17c) == 0xff)) {
++            PropBinding *b = NULL, *empty = NULL;
++            for (unsigned i = 0; i < SST_PROPS; i++) {
++                PropBinding *candidate = &props_bridge.bindings[i];
++                if (candidate->actor == actor && candidate->instance == r32(actor + 8)) { b = candidate; break; }
++                if (!candidate->actor && !empty) empty = candidate;
++            }
++            if (!b && empty) {
++                b = empty; memset(b, 0, sizeof *b); b->actor = actor; b->instance = r32(actor + 8);
++                b->key = (SstPropKey){.placed_id=r16(actor + 0x136), .profile=SST_PROP_PROFILE,
++                    .params=r32(actor + 0xc), .room=scene->room, .layer=scene->layer};
++            }
++            if (b) b->seen = true;
++        }
++        uint64_t child = r64(node + 8), next = r64(node + 0x18);
++        if (child) { if (n == 512) return false; stack[n++] = child; }
++        if (next) { if (n == 512) return false; stack[n++] = next; }
++    }
++    // Duplicate placement identities are ambiguous; neither actor can be modified.
++    for (unsigned i = 0; i < SST_PROPS; i++) {
++        PropBinding *b = &props_bridge.bindings[i];
++        if (!b->seen) { memset(b, 0, sizeof *b); continue; }
++        for (unsigned j = i + 1; j < SST_PROPS; j++)
++            if (props_bridge.bindings[j].seen && sst_prop_key_equal(&b->key, &props_bridge.bindings[j].key))
++                return false;
++    }
++    return true;
++}
++
++static void prop_incoming(const SstProp *p, void *unused) {
++    (void)unused;
++    if (!props_bridge.enabled || !sst_props_update(&props_bridge.state, p->from,
++            p->presence_generation, p, sst_now_ms())) return;
++    for (unsigned i = 0; i < SST_PROPS; i++) {
++        PropBinding *b = &props_bridge.bindings[i];
++        if (sst_prop_key_equal(&b->key, &p->key)) b->local_placed = false;
++    }
++}
++
++static void prop_tick(SstLocal l, uint32_t load, bool allowed, bool pause) {
++    pthread_mutex_lock(&props_bridge.mu);
++    uint32_t gen = sst_net_generation();
++    if ((!allowed && !pause) || !g_sst.sync_props || sst_net_status(NULL, 0) != SST_ONLINE) {
++        prop_clear(); sst_net_poll_props(NULL, NULL); goto done;
++    }
++    if (props_bridge.load != load || props_bridge.generation != gen ||
++        !sst_world_same_area(&props_bridge.scene, &l.scene)) {
++        prop_clear(); props_bridge.scene = l.scene; props_bridge.load = load;
++        props_bridge.generation = gen;
++    }
++    if (pause) { props_bridge.enabled = false; sst_net_poll_props(NULL, NULL); goto done; }
++    props_bridge.player = l.player_address;
++    props_bridge.enabled = true;
++    sst_props_begin(&props_bridge.state, &l.scene, load);
++    if (!prop_discover(l.player_address, &l.scene)) { prop_clear(); goto done; }
++    SstPlayer players[SST_MAX_PLAYERS]; int count = sst_net_players(players, SST_MAX_PLAYERS);
++    for (unsigned i = 0; i < SST_MAX_PLAYERS; i++) {
++        SstPropPeer *peer = &props_bridge.state.peers[i];
++        if (!peer->used || !peer->active || peer->id == sst_net_my_id()) continue;
++        bool found = false;
++        for (int j = 0; j < count; j++)
++            if (players[j].active && players[j].id == peer->id &&
++                players[j].presence_generation == peer->generation &&
++                sst_world_same_area(&players[j].scene, &l.scene)) found = true;
++        if (!found) sst_props_forget(&props_bridge.state, peer->id, peer->generation);
++    }
++    sst_net_poll_props(prop_incoming, NULL);
++done:
++    pthread_mutex_unlock(&props_bridge.mu);
++}
++
++static void prop_send(PropBinding *b, bool held, uint64_t now) {
++    if (held) { b->remote_held = false; b->local_held = true; b->local_placed = false; b->settle_until = now + 1000; }
++    else if (b->local_held) { b->local_held = false; b->local_placed = true; }
++    if (!held && !b->local_placed) return;
++    if (now - b->sent_at < (held || now < b->settle_until ? 33u : 500u)) return;
++    // Fair, bounded final-placement announcements across all 32 bindings. The
++    // aggregate stays below the transport's separate sixteen-per-second budget.
++    if (!held) {
++        if (now - props_bridge.place_at < 85) return;
++        PropBinding *next = NULL;
++        for (unsigned i = 0; i < SST_PROPS; i++) {
++            unsigned j = (props_bridge.place_cursor + i) % SST_PROPS;
++            PropBinding *candidate = &props_bridge.bindings[j];
++            if (candidate->seen && candidate->local_placed && now - candidate->sent_at >= 500) {
++                next = candidate; break;
++            }
++        }
++        if (next && next != b) return;
++        props_bridge.place_cursor = (unsigned)(b - props_bridge.bindings + 1) % SST_PROPS;
++    }
++    SstPropNativePose native; SstLocal local = sst_game_read_local(&SST_LAYOUT_SSHD_100, sst_game_pose_tick());
++    if (!local.valid || !sst_world_same_area(&local.scene, &props_bridge.scene) ||
++        !sst_prop_native_sample(b->actor, &native)) return;
++    SstProp p = {.scene=local.scene, .key=b->key, .sequence=++props_bridge.sequence,
++        .pose_tick=local.pose.tick, .phase=held ? SST_PROP_CARRY : SST_PROP_PLACE,
++        .yaw=local.pose.rot[1]};
++    memcpy(p.origin, local.pose.pos, sizeof p.origin);
++    memcpy(p.pos, native.pos, sizeof p.pos); memcpy(p.rot, native.rot, sizeof p.rot);
++    memcpy(p.matrix, native.matrix, sizeof p.matrix);
++    if (!sst_prop_valid(&p)) return;
++    b->sent_at = now;
++    // Local observations participate in the same bounded ownership/replay policy.
++    if (!sst_props_update(&props_bridge.state, sst_net_my_id(), props_bridge.generation, &p, now)) return;
++    if (!held) props_bridge.place_at = now;
++    sst_net_send_prop(&p);
++    if (ENV("SST_TRACE")) LOG("[sst-prop] send id=%u phase=%u seq=%u\n", b->key.placed_id, p.phase, p.sequence);
++}
++
++static SstPropNativePose prop_display_pose(const SstProp *p) {
++    SstPropNativePose target;
++    memcpy(target.pos, p->pos, sizeof target.pos); memcpy(target.rot, p->rot, sizeof target.rot);
++    memcpy(target.matrix, p->matrix, sizeof target.matrix);
++    SstPose display;
++    if (p->phase != SST_PROP_CARRY || !sst_remote_displayed(&p->scene, p->from,
++            p->presence_generation, &display)) return target;
++    float angle = (int16_t)(display.rot[1] - p->yaw) * (6.283185307179586f / 65536.0f);
++    float co = cosf(angle), si = sinf(angle);
++    float x = p->pos[0] - p->origin[0], z = p->pos[2] - p->origin[2];
++    target.pos[0] = display.pos[0] + co*x + si*z;
++    target.pos[1] = display.pos[1] + p->pos[1] - p->origin[1];
++    target.pos[2] = display.pos[2] - si*x + co*z;
++    target.rot[1] = (int16_t)((uint16_t)p->rot[1] + (uint16_t)(display.rot[1] - p->yaw));
++    for (unsigned col = 0; col < 4; col++) {
++        x = p->matrix[col]; z = p->matrix[8+col];
++        if (col == 3) { x -= p->origin[0]; z -= p->origin[2]; }
++        target.matrix[col] = co*x + si*z;
++        target.matrix[8+col] = -si*x + co*z;
++        if (col == 3) {
++            target.matrix[col] += display.pos[0]; target.matrix[8+col] += display.pos[2];
++            target.matrix[7] = display.pos[1] + p->matrix[7] - p->origin[1];
++        }
++    }
++    return target;
++}
++
++static GuestFn prop_original;
++static void prop_execute(Cpu *c) {
++    uint64_t actor = c->x[0]; bool presented = false;
++    pthread_mutex_lock(&props_bridge.mu);
++    PropBinding *b = props_bridge.enabled && g_sst.sync_props &&
++        sst_net_status(NULL, 0) == SST_ONLINE ? prop_binding(actor) : NULL;
++    if (b && sst_prop_native_held(actor, props_bridge.player)) b->remote_held = false;
++    if (b && !sst_prop_native_held(actor, props_bridge.player)) {
++        SstProp target;
++        if (sst_props_get(&props_bridge.state, &b->key, sst_now_ms(), &target) &&
++            target.from != sst_net_my_id() && (target.phase == SST_PROP_CARRY ||
++            target.from != b->applied_owner || target.sequence != b->applied_sequence ||
++            target.presence_generation != b->applied_generation)) {
++            SstPropNativePose pose = prop_display_pose(&target);
++            presented = sst_prop_native_present(c, actor, &pose);
++            if (presented) {
++                b->applied_owner = target.from; b->applied_sequence = target.sequence;
++                b->applied_generation = target.presence_generation;
++                b->remote_held = target.phase == SST_PROP_CARRY;
++                // Also align old position during carry, so disable/disconnect
++                // can safely resume normal physics without stale-pointer writes.
++                sst_prop_native_release_velocity(actor);
++                c->x[0] = 1;
++            }
++        }
++        if (!presented) prop_release(b);
++    }
++    pthread_mutex_unlock(&props_bridge.mu);
++    if (presented) return;
++    if (prop_original) prop_original(c);
++    pthread_mutex_lock(&props_bridge.mu);
++    b = props_bridge.enabled ? prop_binding(actor) : NULL;
++    if (b) prop_send(b, sst_prop_native_held(actor, props_bridge.player), sst_now_ms());
++    pthread_mutex_unlock(&props_bridge.mu);
++}
++
++void sst_prop_dispatch_init(void) {
++    // The registry survives in-place reboot. Refresh the original game-library
++    // function each boot, but register exactly once before first guest dispatch.
++    static bool registered;
++    prop_original = dispatch_lookup(SST_PROP_TUBO_EXECUTE);
++    if (!registered && prop_original) {
++        hle_override(SST_PROP_TUBO_EXECUTE, prop_execute, "SST ordinary vase execute"); registered = true;
++    }
++}
++
++RT_ON_RESET(sst_prop_bridge_reset) {
++    // All guest threads stopped; guest memory is about to be discarded.
++    memset(props_bridge.bindings, 0, sizeof props_bridge.bindings);
++    sst_props_reset(&props_bridge.state); props_bridge.enabled = false;
++    props_bridge.player = 0; props_bridge.load = props_bridge.generation = 0;
++}
+diff --git a/runtime/hle/sst_prop_native.h b/runtime/hle/sst_prop_native.h
+new file mode 100644
+index 0000000..ef5bbaa
+--- /dev/null
++++ b/runtime/hle/sst_prop_native.h
+@@ -0,0 +1,135 @@
++// SSHD 1.0.0 ordinary-vase bridge. Include after sst_world.c's memory helpers.
++// Call only on the native guest thread, after exact live-tree/key/instance binding.
++// This header owns no network authority and never changes native carry references.
++#ifndef SST_PROP_NATIVE_H
++#define SST_PROP_NATIVE_H
++
++#include <math.h>
++
++#define SST_PROP_TUBO_PROFILE 0x1f0u
++#define SST_PROP_TUBO_VTABLE UINT64_C(0x700162f008)
++#define SST_PROP_TUBO_EXECUTE UINT64_C(0x70009b7988)
++#define SST_PROP_MODEL_VTABLE UINT64_C(0x7001698d50)
++#define SST_PROP_MODEL_PROCESS UINT64_C(0x7000fe8b6c)
++#define SST_PROP_MODEL_OPTIONS UINT64_C(0x7000fea658)
++#define SST_PROP_CARRIED_GETTER UINT64_C(0x7000adc6d4)
++
++typedef struct {
++    float pos[3];
++    int16_t rot[3];
++    float matrix[12];
++} SstPropNativePose;
++
++// Profile/vtable and allocation size are pinned to the native Tubo constructor.
++// The caller also proves unique membership in the current bounded actor tree.
++// Params are identity data; they do not determine eligibility here.
++static inline bool sst_prop_native_vase(uint64_t a) {
++    return ptr(a, 0xd38) && r64(a) == SST_PROP_TUBO_VTABLE &&
++           r16(a + 0x10) == SST_PROP_TUBO_PROFILE && r8(a + 0x12) == 1 &&
++           !r8(a + 0x13) && !r8(a + 0x14) && r16(a + 0x136) != 0xffff;
++}
++
++static inline bool sst_prop_native_player(uint64_t player) {
++    return ptr(player, 0x1b98) && r16(player + 0x10) == 0xc8 &&
++           r8(player + 0x12) == 1 && !r8(player + 0x13) && !r8(player + 0x14);
++}
++
++// Getter 0x7000adc6d4 is exactly a read of player+0x1b90 and a return.
++// Both native direction references must agree before reporting local possession.
++static inline bool sst_prop_native_held(uint64_t a, uint64_t player) {
++    if (!sst_prop_native_vase(a) || !sst_prop_native_player(player) ||
++        r64(player + 0x1b90) != a || r32(a + 0x358) != 1 ||
++        r32(a + 0x2e4) != 1 || r64(a + 0x2d0) != player)
++        return false;
++    uint64_t backlink = r64(a + 0x2d8);
++    return ptr(backlink, 0x18) && r64(backlink + 0x10) == a;
++}
++
++// This is only a candidate until the caller finds it exactly once in its live
++// actor tree and matches placement ID, params, room and local lifetime instance.
++static inline uint64_t sst_prop_native_carried(uint64_t player) {
++    if (!sst_prop_native_player(player)) return 0;
++    uint64_t a = r64(player + 0x1b90);
++    return sst_prop_native_held(a, player) ? a : 0;
++}
++
++static inline bool sst_prop_native_pose_valid(const SstPropNativePose *pose) {
++    if (!pose) return false;
++    for (unsigned i = 0; i < 3; i++) if (!isfinite(pose->pos[i])) return false;
++    for (unsigned i = 0; i < 12; i++) if (!isfinite(pose->matrix[i])) return false;
++    return true;
++}
++
++// The native vase's smdl wrapper stores its inner model at actor+0x438. Check
++// exact targets, never merely that a packet-selected or native value is executable.
++static inline uint64_t sst_prop_native_model(uint64_t a) {
++    if (!sst_prop_native_vase(a)) return 0;
++    uint64_t model = r64(a + 0x438);
++    if (!ptr(model, 0x1a0) || r64(model) != SST_PROP_MODEL_VTABLE ||
++        !ptr(SST_PROP_MODEL_VTABLE, 0x40) ||
++        r64(SST_PROP_MODEL_VTABLE + 8) != SST_PROP_MODEL_PROCESS ||
++        r64(SST_PROP_MODEL_VTABLE + 0x38) != SST_PROP_MODEL_OPTIONS)
++        return 0;
++    return model;
++}
++
++static inline bool sst_prop_native_sample(uint64_t a, SstPropNativePose *pose) {
++    if (!pose || !sst_prop_native_model(a)) return false;
++    SstPropNativePose sample = {0};
++    memcpy(sample.pos, (void *)(uintptr_t)(a + 0x144), sizeof sample.pos);
++    memcpy(sample.rot, (void *)(uintptr_t)(a + 0x13c), sizeof sample.rot);
++    memcpy(sample.matrix, (void *)(uintptr_t)(a + 0x1f4), sizeof sample.matrix);
++    if (!sst_prop_native_pose_valid(&sample)) return false;
++    *pose = sample;
++    return true;
++}
++
++// Reproduce the validated native actorExecute model-update tail. The caller must
++// intercept this exact actor's execute while remote authority is valid; normal
++// Wait/Grab simulation would otherwise apply gravity, collision or native Link's
++// carry action. Every genuinely attached local actor remains on its normal path.
++static inline bool sst_prop_native_present(Cpu *c, uint64_t a,
++                                           const SstPropNativePose *pose) {
++    if (!c || !sst_prop_native_pose_valid(pose) || !sst_prop_native_vase(a) ||
++        r32(a + 0x358) == 1)
++        return false;
++    uint64_t model = sst_prop_native_model(a);
++    if (!model) return false;
++
++    memcpy((void *)(uintptr_t)(a + 0x144), pose->pos, sizeof pose->pos);
++    memcpy((void *)(uintptr_t)(a + 0x13c), pose->rot, sizeof pose->rot);
++    memcpy((void *)(uintptr_t)(a + 0x1f4), pose->matrix, sizeof pose->matrix);
++    w32(model + 0xd8, r32(model + 0xd8) & UINT32_C(0x7fffffff));
++    memcpy((void *)(uintptr_t)(model + 0x18), pose->matrix, sizeof pose->matrix);
++
++    // Preserve every register, vector, flag, PC and caller LR across native calls.
++    Cpu saved = *c;
++    c->x[0] = model; c->x[1] = 2; c->x[2] = 0;
++    guest_call(c, SST_PROP_MODEL_OPTIONS); *c = saved;
++    c->x[0] = model; c->x[1] = 1; c->x[2] = 0; c->x[3] = 0;
++    guest_call(c, SST_PROP_MODEL_PROCESS); *c = saved;
++    c->x[0] = model; c->x[1] = 2; c->x[2] = 1;
++    guest_call(c, SST_PROP_MODEL_OPTIONS); *c = saved;
++
++    float center[3] = {pose->pos[0], pose->pos[1] + 28.0f, pose->pos[2]};
++    memcpy((void *)(uintptr_t)(a + 0x1bc), center, sizeof center);
++    center[1] += 48.0f;
++    memcpy((void *)(uintptr_t)(a + 0x1c8), center, sizeof center);
++    *(uint8_t *)(uintptr_t)(a + 0xd1f) = 0;
++    return true;
++}
++
++// Call once when a confirmed putdown resumes this unheld local actor at the
++// source's final transform. Leave all native state/collider/room data untouched.
++// Zero fields have exact native carry-init/put-finalize evidence; old position
++// must match the applied final position so remote motion cannot become a fall.
++static inline bool sst_prop_native_release_velocity(uint64_t a) {
++    if (!sst_prop_native_model(a) || r32(a + 0x358) == 1) return false;
++    memcpy((void *)(uintptr_t)(a + 0x1b0), (void *)(uintptr_t)(a + 0x144), 12);
++    w32(a + 0x1dc, 0);
++    w32(a + 0x1e8, 0); w32(a + 0x1ec, 0); w32(a + 0x1f0, 0);
++    w32(a + 0xd10, 0);
++    return true;
++}
++
++#endif
+diff --git a/runtime/hle/sst_world.c b/runtime/hle/sst_world.c
+index 6b78fe3..1d16434 100644
+--- a/runtime/hle/sst_world.c
++++ b/runtime/hle/sst_world.c
+@@ -36,6 +36,8 @@ static void w32(uint64_t a, uint32_t v) { memcpy((void *)(uintptr_t)a, &v, 4); }
+ static bool ptr(uint64_t a, size_t n) { return a >= GUEST_LO && a < GUEST_HI && n <= GUEST_HI - a; }
+ static bool code(uint64_t a) { return a >= MAIN_BASE && a < MAIN_BASE + 0x1200000 && !(a & 3); }
+ 
++#include "sst_prop_bridge.h"
++
+ static SstWorld world;
+ static SstSceneHistory scene_history;
+ static bool history_loaded, history_disabled, history_announce_pending;
+@@ -2015,6 +2017,7 @@ void sst_world_game_tick(Cpu *c) {
+     }
+     bool progress, enemy; sst_world_options(&progress, &enemy);
+     if (sst_net_status(NULL, 0) != SST_ONLINE) {
++        prop_tick((SstLocal){0}, 0, false, false);
+         sst_world_rewards_set((SstRewardStatus){.pause = SST_REWARDS_OFFLINE});
+         recovery = 0; scene_primed = false; memset(&enemy_inbox, 0, sizeof enemy_inbox);
+         recovery_load_action = SST_RECOVER_NONE;
+@@ -2024,6 +2027,7 @@ void sst_world_game_tick(Cpu *c) {
+     uint64_t fm = r64(FILE_MGR), pl = r64(PLAYER);
+     if (!l.valid || !l.pose.max_health || !ptr(fm, 52488) || !ptr(pl, 0x470) ||
+         r16(pl + 0x10) != 0xc8 || r8(pl + 0x12) != 1 || now < paused_until) {
++        prop_tick((SstLocal){0}, 0, false, false);
+         sst_world_rewards_set((SstRewardStatus){.pause = SST_REWARDS_LOADING});
+         scene_primed = false; memset(&enemy_inbox, 0, sizeof enemy_inbox); sst_net_poll_enemies(discard_enemy, NULL);
+         memset(&motion, 0, sizeof motion); sst_net_poll_motion(NULL, NULL); goto done;
+@@ -2044,6 +2048,7 @@ void sst_world_game_tick(Cpu *c) {
+     sst_world_status_set(boss, applied, enemy_updates, NULL);
+     bool apply = progress && !boss && !trial && !event && !paused && safe_action(l.pose.action);
+     uint32_t load = r32(pl + 8);
++    prop_tick(l, load, !boss && !trial && !event && !paused, !boss && !trial && (event || paused));
+     if (load != loaded_player || !sst_world_same_area(&loaded_scene, &l.scene)) {
+         debug_enemy_delay=debug_enemy_zero=debug_enemy_hold=false;
+         loaded_player = load; loaded_scene = l.scene; scene_primed = false;
+diff --git a/runtime/ui/multiplayer_tab.mm b/runtime/ui/multiplayer_tab.mm
+index 4d6fe39..08df715 100644
+--- a/runtime/ui/multiplayer_tab.mm
++++ b/runtime/ui/multiplayer_tab.mm
+@@ -84,6 +84,7 @@ void tab_multiplayer(float scale) {
+     else ImGui::TextWrapped("Host a four-player game, or enter your friend's address and join.");
+     if (ImGui::Checkbox("Show player names", &g_sst.show_names)) settings_save();
+     if (ImGui::Checkbox("Show remote characters", &g_sst.show_avatars)) settings_save();
++    if (ImGui::Checkbox("Share carried vases", &g_sst.sync_props)) settings_save();
+     if (ImGui::Checkbox("Share story and permanent world progress", &g_sst.sync_progress)) settings_save();
+     if (ImGui::Checkbox("Share regular enemy damage and defeats", &g_sst.sync_enemies)) settings_save();
+     if (ImGui::IsItemHovered()) ImGui::SetTooltip("Damage waits while your game map or dialogue is open. Turning sharing back on refreshes enemy health from teammates.");

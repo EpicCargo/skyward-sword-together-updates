@@ -1,0 +1,21 @@
+{
+  "passed": true,
+  "engine_patches_replayed": 28,
+  "engine_tree": "8e0368f43c1bba58897a379167f8f90db927b558",
+  "native_source_files_verified": 253,
+  "focused_python_tests": [
+    8,
+    2,
+    2,
+    5
+  ],
+  "focused_python_tests_total": 17,
+  "worker_tests": {
+    "tests": 31,
+    "pass": 31,
+    "fail": 0,
+    "skipped": 0
+  },
+  "compiler_launched": false,
+  "game_launched": false
+}

@@ -1,0 +1,130 @@
+From 1cd9263a522c576be2a221269e1c8bc577180e6d Mon Sep 17 00:00:00 2001
+From: SST development <sst-development@localhost>
+Date: Tue, 3 Nov 2026 16:59:04 -0500
+Subject: [PATCH] Retire submitted source GPU tickets only at known model
+ mutation
+
+---
+ runtime/hle/sst_source_lifecycle.c |  6 +++++
+ runtime/nvn/vulkan/exec.c          | 43 ++++++++++++++++++++++++------
+ 2 files changed, 41 insertions(+), 8 deletions(-)
+
+diff --git a/runtime/hle/sst_source_lifecycle.c b/runtime/hle/sst_source_lifecycle.c
+index 3e3558c..fb0b87a 100644
+--- a/runtime/hle/sst_source_lifecycle.c
++++ b/runtime/hle/sst_source_lifecycle.c
+@@ -188,6 +188,7 @@ static void birth78_observe(uint64_t actor,uint64_t result,const Source79Receipt
+     pthread_mutex_unlock(&birth78_mu);
+ }
+ 
++struct {uint64_t checks,last_pending,last_completed,failures;} sst_source81_mutation_stats;
+ static GuestFn source76_original[3];
+ static _Atomic bool source76_ready;
+ struct { _Atomic uint64_t entries[3],revoked[3]; } sst_source76_lifecycle_stats;
+@@ -202,6 +203,11 @@ static void source76_lifecycle(Cpu *c,unsigned kind) {
+     // bracketed so concurrent first admission cannot pass through its mutation.
+     if(sst_origin_recovery_enabled())sst_origin_model_begin(kind,incoming_actor,&receipt.model);else sst_origin_lifecycle_begin();
+     if(sst_origin_unsupported())atomic_fetch_add(&sst_source76_lifecycle_stats.revoked[kind],1);
++    if(sst_origin_recovery_enabled()) {
++        SstOriginGpuRetireStats retired=sst_origin_gpu_retirement_status();
++        if(retired.domain){sst_source81_mutation_stats.checks++;sst_source81_mutation_stats.last_pending=retired.pending;sst_source81_mutation_stats.last_completed=retired.completed;
++            if(retired.pending>retired.completed){sst_source81_mutation_stats.failures++;FATAL("private model mutation entered before submitted source GPU completion\n");}}
++    }
+     source79_bind_pre(&receipt,kind);
+     source76_original[kind](c); // exactly once, unchanged full input/output Cpu
+     if(kind==0)birth78_observe(incoming_actor,c->x[0],&receipt); // still inside known mutator bracket
+diff --git a/runtime/nvn/vulkan/exec.c b/runtime/nvn/vulkan/exec.c
+index 7c03d3d..301edee 100644
+--- a/runtime/nvn/vulkan/exec.c
++++ b/runtime/nvn/vulkan/exec.c
+@@ -69,8 +69,10 @@ static _Thread_local bool source80_stale_probe;
+ struct {uint64_t attempts,fresh_open,draw_host_denied,bind_guard_denied,bind_payload_reads,palette_unchanged,hands_unchanged,no_pixels;} sst_source80_stale_stats;
+ struct {uint64_t entered,finished,forced_batches,last_required,last_submitted,last_completed,strict_waits,failures;} sst_source78_gpu_stats;
+ static pthread_once_t source78_enable_once=PTHREAD_ONCE_INIT;
+-static bool source78_enable_value;
+-static void source78_enable_init(void){source78_enable_value=getenv("LARECOMP_DEBUG_DATA") && getenv("SST_TEST_SOURCE_GPU_DRAIN");}
++static bool source78_enable_value,source81_defer_value;
++static uint64_t source81_gpu_domain,source81_configured_domain;
++struct {uint64_t deferred_batches,wait_calls,last_target,last_completed,failures,total_wait_ns,max_wait_ns,domain;} sst_source81_gpu_stats;
++static void source78_enable_init(void){source78_enable_value=getenv("LARECOMP_DEBUG_DATA") && getenv("SST_TEST_SOURCE_GPU_DRAIN");source81_defer_value=source78_enable_value && getenv("SST_TEST_SOURCE_GPU_DEFER");}
+ static bool source78_gpu_enabled(void) {
+     pthread_once(&source78_enable_once,source78_enable_init);
+     return g_is_skyward && source78_enable_value;
+@@ -918,6 +920,7 @@ static void st_defaults(void) {
+ }
+ 
+ void vk_exec_init(void) {
++    if(source81_gpu_domain==UINT64_MAX)FATAL("private GPU domain exhausted\n");source81_gpu_domain++;
+     prof = getenv("LARECOMP_VK_PROF") != NULL;
+     if (prof) {
+         prof_up_ns = 0;
+@@ -4214,6 +4217,17 @@ static void exec_list(uint64_t handle, int depth,SstOriginMarker invocation) {
+     }
+ }
+ 
++static bool source81_wait_submitted(void *context,uint64_t target,uint64_t *completed) {
++    uint64_t expected=*(const uint64_t *)context;
++    if(!expected || expected!=source81_gpu_domain){sst_source81_gpu_stats.failures++;return false;}
++    uint64_t start=SDL_GetTicksNS();sst_source81_gpu_stats.wait_calls++;sst_source81_gpu_stats.last_target=target;
++    VkSemaphoreWaitInfo wait={.sType=VK_STRUCTURE_TYPE_SEMAPHORE_WAIT_INFO,.semaphoreCount=1,.pSemaphores=&g_vk.timeline,.pValues=&target};
++    bool ok=vkWaitSemaphores(g_vk.dev,&wait,UINT64_C(10000000000))==VK_SUCCESS &&
++        vkGetSemaphoreCounterValue(g_vk.dev,g_vk.timeline,completed)==VK_SUCCESS && *completed>=target;
++    uint64_t elapsed=SDL_GetTicksNS()-start;sst_source81_gpu_stats.total_wait_ns+=elapsed;if(elapsed>sst_source81_gpu_stats.max_wait_ns)sst_source81_gpu_stats.max_wait_ns=elapsed;
++    if(ok)sst_source81_gpu_stats.last_completed=*completed;else sst_source81_gpu_stats.failures++;
++    return ok; // no submit/flush/guest callback and no permissive/clamped wait
++}
+ void backend_execute(uint64_t handle) {
+     bool source78_enabled=source78_gpu_enabled();
+     if(source78_enabled) {
+@@ -4224,6 +4238,11 @@ void backend_execute(uint64_t handle) {
+         pthread_mutex_lock(&owner_mu);bool wrong=have_owner && !pthread_equal(owner,pthread_self());
+         if(!have_owner){owner=pthread_self();have_owner=true;}pthread_mutex_unlock(&owner_mu);
+         if(wrong || source78_in_backend)FATAL("private source GPU backend owner/reentry mismatch\n");
++        if(source81_defer_value && sst_origin_recovery_enabled()) {
++            if(!source81_configured_domain)source81_configured_domain=source81_gpu_domain;
++            if(source81_configured_domain!=source81_gpu_domain || !sst_origin_gpu_retirement_configure(source81_configured_domain,source81_wait_submitted,&source81_configured_domain))FATAL("private GPU retirement domain/config mismatch\n");
++            sst_source81_gpu_stats.domain=source81_gpu_domain;
++        }
+         source78_in_backend=true;source78_batch_pinned=sst_origin_batch_enter();
+         source78_batch_forced=false;source78_batch_required=0;
+         if(source78_batch_pinned)sst_source78_gpu_stats.entered++;
+@@ -4318,13 +4337,18 @@ void backend_execute(uint64_t handle) {
+     if (sync_submit) renderer_flush();
+     else renderer_submit();
+     if(source78_batch_pinned) {
+-        // Deliberately conservative PRIVATE stall probe. Keep the batch pin
+-        // through vc_flush, every intermediate submit, and actual GPU completion.
+-        // STOP becoming true mid-batch must never bypass this retirement.
++        // Keep CPU pin through vc_flush and every submit, then either strictly
++        // complete now or atomically transfer the obligation to the ticket ledger.
++        // STOP becoming true mid-batch must never discard already admitted work.
+         if(source78_batch_forced) {
+             uint64_t target;
+             pthread_mutex_lock(&seq_lock);target=submit_seq;pthread_mutex_unlock(&seq_lock);
+             if(target<source78_batch_required){sst_source78_gpu_stats.failures++;FATAL("private source GPU batch has unsubmitted work\n");}
++            if(source81_defer_value && sst_origin_recovery_enabled()) {
++                // Publish the actual submitted ticket and release the CPU batch
++                // in ONE origin critical section. Mutation drains this ledger.
++                sst_origin_batch_submitted(target);source78_batch_pinned=false;sst_source81_gpu_stats.deferred_batches++;
++            } else {
+             VkSemaphoreWaitInfo wait={.sType=VK_STRUCTURE_TYPE_SEMAPHORE_WAIT_INFO,.semaphoreCount=1,.pSemaphores=&g_vk.timeline,.pValues=&target};
+             if(target && vkWaitSemaphores(g_vk.dev,&wait,UINT64_C(10000000000))!=VK_SUCCESS) {
+                 sst_source78_gpu_stats.failures++;FATAL("private source GPU retirement failed or timed out\n");
+@@ -4333,11 +4357,14 @@ void backend_execute(uint64_t handle) {
+             if(vkGetSemaphoreCounterValue(g_vk.dev,g_vk.timeline,&completed)!=VK_SUCCESS || completed<target) {
+                 sst_source78_gpu_stats.failures++;FATAL("private source GPU completion not acknowledged\n");
+             }
+-            sst_source78_gpu_stats.forced_batches++;sst_source78_gpu_stats.strict_waits++;
++            }
++            sst_source78_gpu_stats.forced_batches++;if(!source81_defer_value || !sst_origin_recovery_enabled())sst_source78_gpu_stats.strict_waits++;
+             sst_source78_gpu_stats.last_required=source78_batch_required;
+-            sst_source78_gpu_stats.last_submitted=target;sst_source78_gpu_stats.last_completed=completed;
++            sst_source78_gpu_stats.last_submitted=target;
++            if(source81_defer_value && sst_origin_recovery_enabled())sst_source78_gpu_stats.last_completed=sst_origin_gpu_retirement_status().completed;
++            else {uint64_t acknowledged=0;VK_CHECK(vkGetSemaphoreCounterValue(g_vk.dev,g_vk.timeline,&acknowledged));sst_source78_gpu_stats.last_completed=acknowledged;}
+         }
+-        sst_origin_batch_leave();sst_source78_gpu_stats.finished++;
++        if(source78_batch_pinned)sst_origin_batch_leave();sst_source78_gpu_stats.finished++;
+     }
+     source78_batch_pinned=source78_batch_forced=source78_in_backend=false;
+ }

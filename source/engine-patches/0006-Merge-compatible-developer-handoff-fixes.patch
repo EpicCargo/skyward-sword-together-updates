@@ -1,0 +1,634 @@
+From d256bdabe92de1d4a9ebd6951a17ded95fd4c9b6 Mon Sep 17 00:00:00 2001
+From: SST Build <sst-build@localhost>
+Date: Fri, 30 Oct 2026 05:00:00 +0000
+Subject: [PATCH] Merge compatible developer handoff fixes
+
+Integrate verified hand and sword geometry, per-player equipment selection, bounded diagnostics and census hooks, and connection feedback. Apply smoothed regular-enemy transforms each native input frame with fresh actor-tree and session validation. Preserve coherent replay cohorts and collector-only pickup receipts. Matching client modules are distributed separately under the root client source.
+---
+ runtime/hle/sst_world.c        | 161 ++++++++++++++++++++++++++-------
+ runtime/nvn/vulkan/exec.c      | 145 ++++++++++++++++++-----------
+ runtime/ui/developer_tab.mm    |  36 ++++++++
+ runtime/ui/multiplayer_tab.mm  |  13 ++-
+ tools/test_sst_diagnostics.cpp |  12 ++-
+ 5 files changed, 277 insertions(+), 90 deletions(-)
+
+diff --git a/runtime/hle/sst_world.c b/runtime/hle/sst_world.c
+index 5c11a77..40d0fd5 100644
+--- a/runtime/hle/sst_world.c
++++ b/runtime/hle/sst_world.c
+@@ -6,6 +6,7 @@
+ #include "../sst/sst_enemy_motion.h"
+ #include "../sst/sst_scene_history.h"
+ #include <ctype.h>
++#include <math.h>
+ #include <string.h>
+ 
+ #define PLAYER 0x7002bf9940ull
+@@ -48,6 +49,12 @@ static SstMotionState motion;
+ static SstChests chests;
+ static uint32_t motion_sequence, motion_sent, motion_received, motion_applied;
+ static uint64_t motion_last_send, motion_last_trace;
++static bool motion_follow;
++static uint32_t motion_follow_generation;
++static void motion_clear(void) {
++    memset(&motion, 0, sizeof motion); motion_follow = false; motion_follow_generation = 0;
++}
++static void follow_frame(uint64_t now);
+ static uint64_t last_ms, paused_until, scratch;
+ static uint64_t area_request_at;
+ static uint32_t loaded_player;
+@@ -338,13 +345,14 @@ static void tables(uint64_t fm, bool apply, bool boss, bool announce) {
+ typedef struct { uint64_t address, key; uint32_t instance; uint16_t profile; } Actor;
+ static Actor actors[SST_ENEMIES];
+ static unsigned actor_count;
++static bool actor_overflow;
+ #define REWARD_ACTORS 256
+ static uint64_t chest_actors[REWARD_ACTORS];
+ static unsigned chest_count;
+ // fManager's search list has eight buckets. Use its connection tree instead; bound traversal and
+ // check owner backlinks so a tree under construction cannot hang the game or match a stale actor.
+ static bool find_actors(uint64_t player, uint8_t room) {
+-    actor_count = chest_count = 0;
++    actor_count = chest_count = 0; actor_overflow = false;
+     uint64_t sm = r64(SCENE_MGR);
+     unsigned scene_table = ptr(sm, 0x50) ? r16(sm + 0x4a) : 26;
+     uint64_t node = player + 0x18;
+@@ -369,9 +377,11 @@ static bool find_actors(uint64_t player, uint8_t room) {
+             }
+             if (sst_world_enemy_profile(profile) && ptr(a, 0x430) &&
+                 (r8(a + 0x17c) == room || r8(a + 0x17c) == 0xff) &&
+-                actor_count < SST_ENEMIES && r16(a + 0x136) != 0xffff &&
+-                !(debug_enemy_delay && r16(a + 0x136)==debug_enemy_id))
+-                actors[actor_count++] = (Actor){a, sst_world_enemy_key(profile, r16(a + 0x136), r32(a + 0xc)), r32(a + 8), profile};
++                r16(a + 0x136) != 0xffff &&
++                !(debug_enemy_delay && r16(a + 0x136)==debug_enemy_id)) {
++                if (actor_count == SST_ENEMIES) actor_overflow = true;
++                else actors[actor_count++] = (Actor){a, sst_world_enemy_key(profile, r16(a + 0x136), r32(a + 0xc)), r32(a + 8), profile};
++            }
+             if (profile == 0x1e8 && ptr(a, 0x19a8) && !r8(a + 0x13) && chest_count < REWARD_ACTORS)
+                 chest_actors[chest_count++] = a;
+             if (profile == 0x8b && ptr(a, 0x17d) && !r8(a + 0x13) && chest_count < REWARD_ACTORS)
+@@ -1697,41 +1707,51 @@ static void incoming_motion(const SstEnemyMotion *m, void *u) {
+     (void)u;
+     if (sst_motion_receive(&motion, m, sst_now_ms())) motion_received++;
+ }
++static bool motion_actor_live(const Actor *a, uint8_t room) {
++    return ptr(a->address, 0x430) && r16(a->address + 0x10) == a->profile &&
++        r8(a->address + 0x12) == 1 && !r8(a->address + 0x13) && !r8(a->address + 0x14) &&
++        r32(a->address + 8) == a->instance &&
++        (r8(a->address + 0x17c) == room || r8(a->address + 0x17c) == 0xff) &&
++        (int16_t)r16(a->address + 0x42e) > 0 &&
++        sst_world_enemy_key(a->profile, r16(a->address + 0x136), r32(a->address + 0xc)) == a->key;
++}
+ static void movement(const SstLocal *l, uint32_t load, uint64_t now) {
++    // Native reward callbacks earlier in this tick may have changed the tree.
++    // Refresh discovery even for source observations; a packet never supplies an address.
++    if (find_actors(l->player_address, l->scene.room) || actor_overflow) {
++        motion_clear(); sst_net_poll_motion(NULL, NULL); return;
++    }
+     uint16_t mine = sst_net_my_id();
+     uint16_t owner = sst_net_motion_owner(&l->scene, l->pose.health > 0);
+-    sst_motion_begin(&motion, &l->scene, load, owner);
++    sst_motion_begin_at(&motion, &l->scene, load, owner, now);
+     bool send = owner && owner == mine && now - motion_last_send >= 100;
+     for (unsigned i = 0; i < actor_count; i++) {
+         Actor *a = &actors[i];
+-        if (r8(a->address + 0x13) || (int16_t)r16(a->address + 0x42e) <= 0) continue;
+-        sst_motion_observe(&motion, a->key, a->instance, a->profile);
++        if (!motion_actor_live(a, l->scene.room)) continue;
++        float here[3]; int16_t facing[3];
++        memcpy(here, (void *)(uintptr_t)(a->address + 0x144), sizeof here);
++        memcpy(facing, (void *)(uintptr_t)(a->address + 0x13c), sizeof facing);
++        sst_motion_observe_at(&motion, a->key, a->instance, a->profile, here, facing);
+         if (send) {
+             SstEnemyMotion m = {.scene = l->scene, .key = a->key, .profile = a->profile,
+                                 .sequence = ++motion_sequence};
+-            memcpy(m.pos, (void *)(uintptr_t)(a->address + 0x144), 12);
+-            memcpy(m.rot, (void *)(uintptr_t)(a->address + 0x13c), 6);
+-            memcpy(m.velocity, (void *)(uintptr_t)(a->address + 0x1e8), 12);
++            memcpy(m.pos, here, sizeof m.pos); memcpy(m.rot, facing, sizeof m.rot);
++            memcpy(m.velocity, (void *)(uintptr_t)(a->address + 0x1e8), sizeof m.velocity);
+             if (sst_motion_valid(&m)) { sst_net_send_motion(&m); motion_sent++; }
+         }
+     }
+     if (send) motion_last_send = now;
+-    sst_net_poll_motion(owner && owner != mine ? incoming_motion : NULL, NULL);
+-    if (owner && owner != mine) for (unsigned i = 0; i < actor_count; i++) {
+-        Actor *a = &actors[i]; float pos[3], vel[3]; int16_t rot[3];
+-        if (r8(a->address + 0x13) || (int16_t)r16(a->address + 0x42e) <= 0 ||
+-            !sst_motion_sample(&motion, a->key, a->instance, now, pos, rot, vel)) continue;
+-        // Write only the active transform and velocity. Spawn/return-home copies, animation
+-        // state, health and script data belong to the native actor and remain untouched here.
+-        memcpy((void *)(uintptr_t)(a->address + 0x144), pos, 12);
+-        memcpy((void *)(uintptr_t)(a->address + 0x13c), rot, 6);
+-        memcpy((void *)(uintptr_t)(a->address + 0x1e8), vel, 12);
+-        motion_applied++;
+-    }
++    motion_follow = owner && owner != mine;
++    motion_follow_generation = sst_net_generation();
++    // Receive/observe/send remain on the ordinary30Hz tick. Only transform
++    // sampling/application runs on the intervening native input frames.
++    sst_net_poll_motion(motion_follow ? incoming_motion : NULL, NULL);
++    if (motion_follow) follow_frame(now);
+     if (ENV("SST_TRACE") && now - motion_last_trace >= 1000) {
+         motion_last_trace = now;
+-        LOG("[sst-motion] owner=%u mine=%u actors=%u sent=%u received=%u applied=%u\n",
+-            owner, mine, actor_count, motion_sent, motion_received, motion_applied);
++        LOG("[sst-motion] owner=%u mine=%u actors=%u sent=%u received=%u applied=%u rejected=%u owner_changes=%u\n",
++            owner, mine, actor_count, motion_sent, motion_received, motion_applied,
++            motion.rejected, motion.owner_changes);
+     }
+ }
+ static void reward_waiting(uint64_t fm, SstRewardPause pause) {
+@@ -1952,6 +1972,85 @@ static void recover(Cpu *c, SstLocal l, uint64_t fm, bool boss, bool paused, boo
+ }
+ #include "sst_pickup_bridge.h"
+ 
++static bool motion_source_live(const SstMotionTrack *track, const SstPlayer *players,
++                              int count, uint64_t now) {
++    bool previous = track->from != motion.owner;
++    if (previous && (track->from != motion.previous_owner || now < motion.owner_since_ms ||
++        now - motion.owner_since_ms > SST_MOTION_HANDOFF_MS)) return false;
++    for (int i = 0; i < count; i++) {
++        const SstPlayer *p = &players[i];
++        if (!p->active || p->id != track->from || !p->has_pose ||
++            p->presence_generation != track->presence_generation || strcmp(p->team, g_sst.team) ||
++            !sst_world_same_area(&p->scene, &motion.scene) || !p->pose.health ||
++            p->pose_time_ms > now || now - p->pose_time_ms > SST_MOTION_FRESH_MS) continue;
++        // An old owner's last in-flight sample may bridge a menu handoff, but
++        // never a departed/rejoined/dead/boss source or one with motion disabled.
++        return previous ? (p->pose.equip_flags & 0xa0) == SST_MOTION_CAPABLE :
++            sst_motion_eligible(p->pose.equip_flags, p->pose.health, p->pose_time_ms, now);
++    }
++    return false;
++}
++static void follow_frame(uint64_t now) {
++    if (!motion_follow) return;
++    now = sst_now_ms();
++    bool progress, enemy; sst_world_options(&progress, &enemy); (void)progress;
++    if (!enemy || !g_sst.sync_enemies || !g_sst.sync_enemy_motion || !sst_motion_enabled() ||
++        sst_net_status(NULL, 0) != SST_ONLINE || motion_follow_generation != sst_net_generation()) {
++        motion_clear(); return;
++    }
++    if (now < paused_until || boss_latch || event_active() || native_paused() || !reloader_idle() ||
++        r32(DELETE_REQUEST) != 0xf81e0ff3u || r32(TRIGGER_ENTRANCE) != 0xd10203ffu) return;
++    SstLocal local = sst_game_read_local(&SST_LAYOUT_SSHD_100, 0);
++    uint64_t player = local.player_address;
++    if (!local.valid || !local.pose.health || !local.pose.max_health || !ptr(player, 0x470) ||
++        player != r64(PLAYER) || r16(player + 0x10) != 0xc8 || r8(player + 0x12) != 1 ||
++        r8(player + 0x13) || r8(player + 0x14) || r32(player + 8) != motion.load ||
++        !sst_world_same_area(&local.scene, &motion.scene) ||
++        sst_world_trial_stage(local.scene.stage) || sst_world_boss_stage(local.scene.stage)) {
++        motion_clear(); return;
++    }
++    uint16_t mine = sst_net_my_id();
++    if (!mine || motion.owner == mine ||
++        sst_net_motion_owner(&local.scene, true) != motion.owner) return;
++    // Every write follows a complete fresh bounded tree traversal on this native
++    // thread. Old heap bytes, cached addresses or packet IDs never prove liveness.
++    if (find_actors(player, local.scene.room) || actor_overflow) { motion_clear(); return; }
++    SstPlayer players[SST_MAX_PLAYERS]; int count = sst_net_players(players, SST_MAX_PLAYERS);
++    for (unsigned i = 0; i < actor_count; i++) {
++        const Actor *a = &actors[i];
++        if (!motion_actor_live(a, local.scene.room)) continue;
++        bool ambiguous = false;
++        for (unsigned j = 0; j < actor_count; j++)
++            if (j != i && actors[j].key == a->key && actors[j].profile == a->profile) ambiguous = true;
++        if (ambiguous) continue;
++        const SstMotionTrack *track = NULL;
++        for (unsigned j = 0; j < SST_ENEMIES; j++) {
++            const SstMotionTrack *candidate = &motion.actors[j];
++            if (candidate->used && candidate->has_target && candidate->key == a->key &&
++                candidate->instance == a->instance && candidate->profile == a->profile) {
++                track = candidate; break;
++            }
++        }
++        float pos[3], velocity[3]; int16_t rotation[3];
++        if (!track || !motion_source_live(track, players, count, now) ||
++            !sst_motion_sample(&motion, a->key, a->instance, now, pos, rotation, velocity)) continue;
++        bool valid = true;
++        for (unsigned j = 0; j < 3; j++)
++            if (!isfinite(pos[j]) || fabsf(pos[j]) > 1e6f ||
++                !isfinite(velocity[j]) || fabsf(velocity[j]) > 1000) valid = false;
++        if (!valid) continue;
++        if (sst_net_status(NULL, 0) != SST_ONLINE || motion_follow_generation != sst_net_generation()) {
++            motion_clear(); return;
++        }
++        // Current transform only: never health, AI, animation, home/spawn copies,
++        // scripts or lifecycle. A native health0 actor can never be resurrected.
++        memcpy((void *)(uintptr_t)(a->address + 0x144), pos, sizeof pos);
++        memcpy((void *)(uintptr_t)(a->address + 0x13c), rotation, sizeof rotation);
++        memcpy((void *)(uintptr_t)(a->address + 0x1e8), velocity, sizeof velocity);
++        motion_applied++;
++    }
++}
++
+ void sst_world_game_tick(Cpu *c) {
+     if (in_tick || pthread_mutex_trylock(&tick_mu)) return;
+     in_tick = true; uint64_t now = sst_now_ms();
+@@ -2023,7 +2122,7 @@ void sst_world_game_tick(Cpu *c) {
+             if (normal_inventory(fm) && shop_item_receipt(fm, &item)) shop_item_opened(fm, &item);
+         }
+     }
+-    if (now - last_ms < 33) goto done;
++    if (now - last_ms < 33) { follow_frame(now); goto done; }
+     last_ms = now;
+     // Fail closed on different executables; verified instructions at both entry points.
+     if (r32(DELETE_REQUEST) != 0xf81e0ff3u || r32(TRIGGER_ENTRANCE) != 0xd10203ffu) {
+@@ -2036,7 +2135,7 @@ void sst_world_game_tick(Cpu *c) {
+         sst_world_rewards_set((SstRewardStatus){.pause = SST_REWARDS_OFFLINE});
+         recovery = 0; scene_primed = false; memset(&enemy_inbox, 0, sizeof enemy_inbox);
+         recovery_load_action = SST_RECOVER_NONE;
+-        memset(&motion, 0, sizeof motion); sst_net_poll_motion(NULL, NULL); goto done;
++        motion_clear(); sst_net_poll_motion(NULL, NULL); goto done;
+     }
+     SstLocal l = sst_game_read_local(&SST_LAYOUT_SSHD_100, 0);
+     uint64_t fm = r64(FILE_MGR), pl = r64(PLAYER);
+@@ -2046,7 +2145,7 @@ void sst_world_game_tick(Cpu *c) {
+         pickup_tick(c,(SstLocal){0},0,false);
+         sst_world_rewards_set((SstRewardStatus){.pause = SST_REWARDS_LOADING});
+         scene_primed = false; memset(&enemy_inbox, 0, sizeof enemy_inbox); sst_net_poll_enemies(discard_enemy, NULL);
+-        memset(&motion, 0, sizeof motion); sst_net_poll_motion(NULL, NULL); goto done;
++        motion_clear(); sst_net_poll_motion(NULL, NULL); goto done;
+     }
+     bool event = event_active(), paused = native_paused(), trial = sst_world_trial_stage(l.scene.stage);
+     sst_world_set_event(event || paused || trial);
+@@ -2087,7 +2186,7 @@ void sst_world_game_tick(Cpu *c) {
+         memset(enemies.sender, 0, sizeof enemies.sender);
+         memset(enemies.received, 0, sizeof enemies.received);
+         memset(enemies.sender_generation, 0, sizeof enemies.sender_generation);
+-        memset(&motion, 0, sizeof motion);
++        motion_clear();
+         area_request_at = now + 250;
+         notify("Connected: sharing world progress; boss sync off", boss);
+     }
+@@ -2140,7 +2239,7 @@ void sst_world_game_tick(Cpu *c) {
+         sst_net_poll_enemies(enemy && !boss && !trial ? defer_enemy : discard_enemy, NULL);
+     }
+     if (enemy && sst_motion_enabled() && !boss && !trial && !event && !paused) movement(&l, load, now);
+-    else { memset(&motion, 0, sizeof motion); sst_net_poll_motion(NULL, NULL); }
++    else { motion_clear(); sst_net_poll_motion(NULL, NULL); }
+     reward_waiting(fm, !progress ? SST_REWARDS_DISABLED : boss ? SST_REWARDS_BOSS : trial ? SST_REWARDS_TRIAL :
+         paused ? SST_REWARDS_MENU : event ? SST_REWARDS_EVENT : !safe_action(l.pose.action) ? SST_REWARDS_ACTION : SST_REWARDS_READY);
+     recover(c, l, fm, boss, paused, trial, now);
+@@ -2155,7 +2254,7 @@ RT_ON_RESET(sst_world_bridge_reset) {
+     history_path[0]=0;history_retry_at=0;
+     memset(&world, 0, sizeof world); memset(&enemies, 0, sizeof enemies);
+     memset(&enemy_inbox, 0, sizeof enemy_inbox);
+-    memset(&motion, 0, sizeof motion);
++    motion_clear();
+     memset(&chests, 0, sizeof chests);
+     memset(deferred_shop_counts, 0, sizeof deferred_shop_counts); deferred_shop_flags = 0; debug_shop_fault = debug_bug_fault = false;
+     deferred_pouch_flags = 0; debug_shield_fault = debug_ammo_fault = false;
+@@ -2168,7 +2267,7 @@ RT_ON_RESET(sst_world_bridge_reset) {
+     last_ms = paused_until = scratch = generation = applied = enemy_updates = recovery_refreshed = 0;
+     area_request_at = loaded_player = 0; memset(&loaded_scene, 0, sizeof loaded_scene);
+     previous_progress = previous_enemy = false;
+-    backed_up = scene_primed = boss_latch = false; recovery = 0; actor_count = chest_count = 0;
++    backed_up = scene_primed = boss_latch = false; recovery = 0; actor_count = chest_count = 0; actor_overflow = false;
+     recovery_loader_wait = false;
+     recovery_token = recovery_generation = 0; recovery_snapshot_wait = recovery_snapshot_reported = false;
+     recovery_load_action = SST_RECOVER_NONE; recovery_load_player = 0;
+diff --git a/runtime/nvn/vulkan/exec.c b/runtime/nvn/vulkan/exec.c
+index e1da814..486b59d 100644
+--- a/runtime/nvn/vulkan/exec.c
++++ b/runtime/nvn/vulkan/exec.c
+@@ -23,6 +23,7 @@
+ #include "../../sst/sst_remote.h"
+ #include "../../sst/sst_avatar.h"
+ #include "../../sst/sst_animation.h"
++#include "../../sst/sst_census.h"
+ 
+ // Only the replay's descriptors use transformed copies. Guest memory and the local draw stay intact.
+ static const float *sst_replay_transform;
+@@ -30,6 +31,15 @@ static const SstAnimationPose *sst_replay_animation;
+ static const SstPose *sst_replay_pose;
+ static const float *sst_replay_view;
+ static bool sst_replay_failed;
++// Exact gameplay view used by both verified replay and the opt-in census.
++static void sst_camera_view(const SstCamera *camera,float view[12]) {
++    for(int row=0;row<3;row++) {
++        float scale=0;
++        for(int col=0;col<3;col++)scale+=camera->view_proj[row*4+col]*camera->view_proj[row*4+col];
++        scale=sqrtf(scale)*(row==2?-1:1);
++        for(int col=0;col<4;col++)view[row*4+col]=camera->view_proj[row*4+col]/scale;
++    }
++}
+ 
+ static uint64_t stat_draws, stat_skipped, stat_passes, stat_dispatches, stat_wait_ns, stat_flushes, stat_feedback_copies;
+ static uint64_t stat_upload_bytes;
+@@ -3094,7 +3104,7 @@ static void draw_(CmdRec *r, bool indexed) {
+     // Verified SSHD Link geometry, in the main perspective pass. Reuse its textures and meshes;
+     // each peer gets separate model/view and skinning uniforms, including depth-tested occlusion.
+     uint16_t avatar_mesh = 0;
+-    if (g_is_skyward && g_sst.show_avatars && inst == 1 && st.ds[0] && st.ubuf[0][0].size == 864 &&
++    if (g_is_skyward && inst == 1 && st.ds[0] && st.ubuf[0][0].size == 864 &&
+         st.ubuf[0][0].addr && st.viewport[0][0] == 0 && st.viewport[0][1] == 0 &&
+         (avatar_mesh = sst_avatar_mesh_id((const void *)(uintptr_t)st.vbuf[0].addr, st.vbuf[0].size))) {
+         const float *uniform = (const float *)(uintptr_t)st.ubuf[0][0].addr;
+@@ -3116,69 +3126,94 @@ static void draw_(CmdRec *r, bool indexed) {
+                 sampled_frame = frame;
+             }
+             float view[12];
+-            for (int row = 0; row < 3; row++) {
+-                float scale = 0;
+-                for (int col = 0; col < 3; col++) scale += camera.view_proj[row*4+col]*camera.view_proj[row*4+col];
+-                scale = sqrtf(scale) * (row == 2 ? -1 : 1);
+-                for (int col = 0; col < 4; col++) view[row*4+col] = camera.view_proj[row*4+col] / scale;
+-            }
++            sst_camera_view(&camera,view);
+             Range positions = st.ubuf[0][3], normals = st.ubuf[0][4];
+             if (!(pr->vi->cbuf_mask & (1u << 6))) positions = (Range){0};
+             if (!(pr->vi->cbuf_mask & (1u << 7))) normals = (Range){0};
+             if (sst_avatar_local_skin(&local.pose, view, uniform + 16,
+                     (const void *)(uintptr_t)positions.addr, positions.size)) {
+-                uint16_t pose_mesh = sst_avatar_pose_mesh(avatar_mesh, positions.size, normals.size);
+-                sst_animation_capture(pose_mesh, &local.pose, view, uniform + 16,
+-                    (const void *)(uintptr_t)positions.addr, positions.size,
+-                    (const void *)(uintptr_t)normals.addr, normals.size);
+-                for (int peer = 0; peer < nremote; peer++) {
+-                    float transform[12];
+-                    if (!sst_avatar_transform(&local.pose, &remote[peer].pose, view, transform)) continue;
+-                    SstAnimationPose animation;
+-                    bool animated = sst_animation_replay_select(pose_mesh, &replay[peer],
+-                        positions.size, normals.size, &animation);
+-                    if (!animated) continue;
+-                    sst_replay_transform = transform;
+-                    sst_replay_animation = &animation;
+-                    sst_replay_pose = &replay[peer].pose;
+-                    sst_replay_view = view;
+-                    sst_replay_failed = false;
+-                    VkDescriptorSet puppet = stage_set(pr, pr->set_layout[0], 0, 0, pr->vi, NULL, NULL, 0, 0, 0, NULL);
+-                    sst_replay_transform = NULL;
+-                    sst_replay_animation = NULL;
+-                    sst_replay_pose = NULL;
+-                    sst_replay_view = NULL;
+-                    if (sst_replay_failed) continue;
+-                    vkCmdBindDescriptorSets(cb, VK_PIPELINE_BIND_POINT_GRAPHICS, pr->layout, 0, 1, &puppet, 0, NULL);
+-                    if (!use_index) vkCmdDraw(cb, count, 1, first, base_inst);
+-                    else vkCmdDrawIndexed(cb, icount, 1, 0, base_vertex, base_inst);
+-                }
+-                vkCmdBindDescriptorSets(cb, VK_PIPELINE_BIND_POINT_GRAPHICS, pr->layout, 0, 1, &vset, 0, NULL);
+-                static uint64_t trace_frame;
+-                if (getenv("SST_TRACE") && frame >= trace_frame + 60) {
+-                    SstAnimationStats a = sst_animation_stats();
+-                    LOG("[sst-avatar] clip=%u frame=%.2f cache=%zu/%u samples=%zu hits=%llu misses=%llu sword=%llu/%llu peers=%d resumes=%llu attachments=%llu/%llu hidden=%llu skin=%llu/%llu\n",
+-                        local.pose.anim_id, local.pose.anim_frame, a.bytes, SST_ANIMATION_BUDGET, a.samples,
+-                        (unsigned long long)a.hits, (unsigned long long)a.misses,
+-                        (unsigned long long)a.sword_captures, (unsigned long long)a.sword_hits, nremote,
+-                        (unsigned long long)a.resumes, (unsigned long long)a.attachments, (unsigned long long)a.attachment_hits,
+-                        (unsigned long long)a.rigid_skips, (unsigned long long)a.skinned_hits, (unsigned long long)a.skinned_misses);
+-                    SstAnimationReplayStats replay_stats = sst_animation_replay_stats();
+-                    LOG("[sst-replay] exact=%llu neutral=%llu unavailable=%llu suppressed=%llu neutral_parts=%zu\n",
+-                        (unsigned long long)replay_stats.exact_frames, (unsigned long long)replay_stats.neutral_frames,
+-                        (unsigned long long)replay_stats.unavailable_frames, (unsigned long long)replay_stats.suppressed_parts,
+-                        replay_stats.neutral_parts);
+-                    for (int peer = 0; peer < nremote; peer++)
+-                        LOG("[sst-replay] peer=%u source=%u/%u phase=%.2f mode=%s playback=%u/%u phase=%.2f cohort=%llu\n",
+-                            remote[peer].id, remote[peer].pose.anim_id, remote[peer].pose.action, remote[peer].pose.anim_frame,
+-                            !replay[peer].ready ? "unavailable" : replay[peer].cohort ? "neutral" : "exact",
+-                            replay[peer].pose.anim_id, replay[peer].pose.action, replay[peer].pose.anim_frame,
+-                            (unsigned long long)replay[peer].cohort);
+-                    trace_frame = frame;
++                sst_avatar_note_local(avatar_mesh,frame);
++                // Own equipment still gets reported when this viewer hides peer avatars.
++                if(g_sst.show_avatars && (!sst_avatar_equipment(avatar_mesh) || (!positions.size && !normals.size))) {
++                    uint16_t pose_mesh = sst_avatar_pose_mesh(avatar_mesh, positions.size, normals.size);
++                    if(sst_avatar_equipment(avatar_mesh))
++                        pose_mesh=sst_avatar_equipment_pose(avatar_mesh,
++                            sst_avatar_local_equipment() & SST_EQUIP_SWORD_DRAWN);
++                    sst_animation_capture(pose_mesh, &local.pose, view, uniform + 16,
++                        (const void *)(uintptr_t)positions.addr, positions.size,
++                        (const void *)(uintptr_t)normals.addr, normals.size);
++                    for (int peer = 0; peer < nremote; peer++) {
++                        float transform[12];
++                        if (!sst_avatar_transform(&local.pose, &remote[peer].pose, view, transform)) continue;
++                        SstAnimationPose animation;
++                        uint16_t peer_mesh=sst_avatar_remote_pose_mesh(avatar_mesh,pose_mesh,remote[peer].pose.equip_flags);
++                        if(!peer_mesh)continue;
++                        bool animated = sst_animation_replay_select(peer_mesh, &replay[peer],
++                            positions.size, normals.size, &animation);
++                        if (!animated) continue;
++                        sst_replay_transform = transform;
++                        sst_replay_animation = &animation;
++                        sst_replay_pose = &replay[peer].pose;
++                        sst_replay_view = view;
++                        sst_replay_failed = false;
++                        VkDescriptorSet puppet = stage_set(pr, pr->set_layout[0], 0, 0, pr->vi, NULL, NULL, 0, 0, 0, NULL);
++                        sst_replay_transform = NULL;
++                        sst_replay_animation = NULL;
++                        sst_replay_pose = NULL;
++                        sst_replay_view = NULL;
++                        if (sst_replay_failed) continue;
++                        vkCmdBindDescriptorSets(cb, VK_PIPELINE_BIND_POINT_GRAPHICS, pr->layout, 0, 1, &puppet, 0, NULL);
++                        if (!use_index) vkCmdDraw(cb, count, 1, first, base_inst);
++                        else vkCmdDrawIndexed(cb, icount, 1, 0, base_vertex, base_inst);
++                    }
++                    vkCmdBindDescriptorSets(cb, VK_PIPELINE_BIND_POINT_GRAPHICS, pr->layout, 0, 1, &vset, 0, NULL);
++                    static uint64_t trace_frame;
++                    if (getenv("SST_TRACE") && frame >= trace_frame + 60) {
++                        SstAnimationStats a = sst_animation_stats();
++                        LOG("[sst-avatar] clip=%u frame=%.2f cache=%zu/%u samples=%zu hits=%llu misses=%llu sword=%llu/%llu peers=%d resumes=%llu attachments=%llu/%llu hidden=%llu skin=%llu/%llu\n",
++                            local.pose.anim_id, local.pose.anim_frame, a.bytes, SST_ANIMATION_BUDGET, a.samples,
++                            (unsigned long long)a.hits, (unsigned long long)a.misses,
++                            (unsigned long long)a.sword_captures, (unsigned long long)a.sword_hits, nremote,
++                            (unsigned long long)a.resumes, (unsigned long long)a.attachments, (unsigned long long)a.attachment_hits,
++                            (unsigned long long)a.rigid_skips, (unsigned long long)a.skinned_hits, (unsigned long long)a.skinned_misses);
++                        SstAnimationReplayStats replay_stats = sst_animation_replay_stats();
++                        LOG("[sst-replay] exact=%llu neutral=%llu unavailable=%llu suppressed=%llu neutral_parts=%zu\n",
++                            (unsigned long long)replay_stats.exact_frames, (unsigned long long)replay_stats.neutral_frames,
++                            (unsigned long long)replay_stats.unavailable_frames, (unsigned long long)replay_stats.suppressed_parts,
++                            replay_stats.neutral_parts);
++                        for (int peer = 0; peer < nremote; peer++)
++                            LOG("[sst-replay] peer=%u source=%u/%u phase=%.2f mode=%s playback=%u/%u phase=%.2f cohort=%llu\n",
++                                remote[peer].id, remote[peer].pose.anim_id, remote[peer].pose.action, remote[peer].pose.anim_frame,
++                                !replay[peer].ready ? "unavailable" : replay[peer].cohort ? "neutral" : "exact",
++                                replay[peer].pose.anim_id, replay[peer].pose.action, replay[peer].pose.anim_frame,
++                                (unsigned long long)replay[peer].cohort);
++                        trace_frame = frame;
++                    }
+                 }
+             }
+         }
+     }
++    // Adapted from the user-provided MIT SST handoff (2026-10-30). This
++    // diagnostic observes unknown meshes; it never admits them to avatar replay.
++    if(sst_census_enabled() && g_is_skyward && inst==1 && st.ds[0] &&
++        st.ubuf[0][0].size==864 && st.ubuf[0][0].addr &&
++        st.viewport[0][0]==0 && st.viewport[0][1]==0 && st.vbuf[0].addr && st.vbuf[0].size>=256) {
++        const float *uniform=(const float *)(uintptr_t)st.ubuf[0][0].addr;
++        SstLocal local=sst_game_local();SstCamera camera;
++        if(local.valid && local.pose.max_health && uniform[14]==-1 && uniform[15]==0 &&
++            sst_game_read_camera(&SST_LAYOUT_SSHD_100,16,9,&camera)) {
++            float view[12];sst_camera_view(&camera,view);
++            Range positions=st.ubuf[0][3],normals=st.ubuf[0][4];
++            if(!(pr->vi->cbuf_mask&(1u<<6)))positions=(Range){0};
++            if(!(pr->vi->cbuf_mask&(1u<<7)))normals=(Range){0};
++            const void *vertices=(const void *)(uintptr_t)st.vbuf[0].addr;
++            SstCensusDraw draw={.hash=sst_avatar_signature(vertices,st.vbuf[0].size),
++                .size=(uint32_t)st.vbuf[0].size,.positions=(uint32_t)positions.size,.normals=(uint32_t)normals.size,
++                .count=use_index?icount:count,.first=first,.known=sst_avatar_mesh_id(vertices,st.vbuf[0].size)};
++            sst_census_draw(&draw,&local.pose,view,uniform+16,(const void *)(uintptr_t)positions.addr,
++                renderer_present_count());
++        }
++    }
+     stat_draws++;
+     cum_draws++;
+     if (g_gpuprof_frame && gp_n) {
+diff --git a/runtime/ui/developer_tab.mm b/runtime/ui/developer_tab.mm
+index 2ad8f38..b9f1cb3 100644
+--- a/runtime/ui/developer_tab.mm
++++ b/runtime/ui/developer_tab.mm
+@@ -8,6 +8,8 @@
+ #include "../sst/sst_avatar.h"
+ #include "../sst/sst_game.h"
+ #include "../sst/sst_host.h"
++#include "../sst/sst_census.h"
++#include "../sst/sst_debug.h"
+ extern "C" {
+ #include "../settings.h"
+ }
+@@ -21,6 +23,11 @@ struct Diagnostics {
+     uint64_t captured_ms;
+     SstStatus status;
+     SstConnectionStats connection;
++    SstNetDiag network;
++    SstCensusStats census;
++    SstDebugLine events[SST_DEBUG_LOG_LINES];
++    int event_count;
++    uint32_t events_dropped;
+     uint16_t host_port, player_id;
+     uint32_t generation;
+     bool local_valid, avatars;
+@@ -74,6 +81,9 @@ void capture(Diagnostics &d) {
+     d = {};
+     d.status = sst_net_status(NULL, 0);
+     d.connection = sst_net_stats();
++    d.network = sst_net_diag();
++    d.census = sst_census_stats();
++    d.event_count = sst_debug_lines(d.events, SST_DEBUG_LOG_LINES, &d.events_dropped);
+     d.host_port = sst_host_port();
+     d.player_id = sst_net_my_id();
+     d.generation = sst_net_generation();
+@@ -127,6 +137,16 @@ void build_report(const Diagnostics &d, Report &r) {
+     r.add("TCP queued bytes: %llu\nQueue recoveries: %u\nUDP sent/received/fallbacks: %u/%u/%u\n",
+         (unsigned long long)d.connection.queued_bytes, d.connection.queue_recoveries,
+         d.connection.udp_sent, d.connection.udp_received, d.connection.udp_fallbacks);
++    // Never export network.host/last_error or event text: endpoint/session data
++    // may be present in diagnostics supplied by future callers.
++    r.add("Connection phase/failure IDs: %u/%u\nConnect attempts/failures/handshakes: %u/%u/%u\nTCP/handshake deadline: %u/%u ms\n",
++        (unsigned)d.network.phase, (unsigned)d.network.failure,
++        d.network.attempts, d.network.consecutive_failures, d.network.handshakes,
++        d.network.connect_timeout_ms, d.network.handshake_timeout_ms);
++    r.add("Mesh census entries/unknown/wrist: %u/%u/%u\nCensus lines/suppressed: %llu/%llu\nLocal event history lines/dropped: %d/%u (text omitted)\n",
++        d.census.entries, d.census.unknown_entries, d.census.unknown_on_wrist,
++        (unsigned long long)d.census.lines, (unsigned long long)d.census.suppressed,
++        d.event_count, d.events_dropped);
+     r.add("Target FPS: %d\nRemote characters: %s\nLocal gameplay sample: %s\n",
+         d.frame_rate, d.avatars ? "shown" : "hidden", d.local_valid ? "valid" : "unavailable");
+     if (d.local_valid) {
+@@ -196,6 +216,10 @@ void tab_developer(float scale) {
+     if (frozen) ImGui::TextDisabled("Frozen snapshot: %.1f s old", now >= d.captured_ms ? (now - d.captured_ms) / 1000.0 : 0.0);
+ 
+     if (ImGui::CollapsingHeader("Connection", ImGuiTreeNodeFlags_DefaultOpen)) {
++        ImGui::TextWrapped("Phase: %s | Attempts: %u | Handshakes: %u",
++            sst_net_phase_name(d.network.phase), d.network.attempts, d.network.handshakes);
++        if (d.network.failure != SST_FAIL_NONE)
++            ImGui::TextWrapped("%s", sst_net_failure_hint(d.network.failure));
+         ImGui::Text("%s | Session role: %s", status_text(d.status), role_text(d));
+         if (d.host_port) ImGui::Text("Listening on port: %u", d.host_port);
+         ImGui::TextWrapped("Local ID: %u | Connection generation: %u | Other players: %d", d.player_id, d.generation, d.peer_count);
+@@ -266,6 +290,18 @@ void tab_developer(float scale) {
+         ImGui::TextWrapped("These rendering totals are separate from the received peer clips above. Static fallback holds an observed idle pose instead of reproducing the requested action.");
+     }
+ 
++    if (ImGui::CollapsingHeader("Connection event history (local)")) {
++        ImGui::TextDisabled("Clipboard export omits event text and endpoint details.");
++        for (int i = 0; i < d.event_count; ++i)
++            ImGui::TextWrapped("#%u [%u] %s", d.events[i].serial, d.events[i].category, d.events[i].text);
++        if (d.events_dropped) ImGui::TextDisabled("Older lines replaced: %u", d.events_dropped);
++    }
++    if (ImGui::CollapsingHeader("Mesh census")) {
++        ImGui::TextWrapped("Observed: %u | Unknown: %u | Unknown on a wrist: %u",
++            d.census.entries, d.census.unknown_entries, d.census.unknown_on_wrist);
++        ImGui::TextWrapped("Logged lines: %llu | Suppressed: %llu. Census observes geometry; it does not authorize new mesh mappings.",
++            (unsigned long long)d.census.lines, (unsigned long long)d.census.suppressed);
++    }
+     if (ImGui::CollapsingHeader("Avatar pose cache", ImGuiTreeNodeFlags_DefaultOpen)) {
+         const SstAnimationStats &a = d.animation;
+         ImGui::TextWrapped("Cache: %.2f / %.0f MiB | Samples: %zu | Captures: %llu",
+diff --git a/runtime/ui/multiplayer_tab.mm b/runtime/ui/multiplayer_tab.mm
+index 1c0e9bf..66fbf88 100644
+--- a/runtime/ui/multiplayer_tab.mm
++++ b/runtime/ui/multiplayer_tab.mm
+@@ -29,8 +29,15 @@ void tab_multiplayer(float scale) {
+     static const ImVec4 colors[] = {{0.7f, 0.7f, 0.7f, 1}, {0.93f, 0.76f, 0.33f, 1}, {0.45f, 0.85f, 0.45f, 1}, {0.95f, 0.4f, 0.35f, 1}};
+     ImGui::TextColored(colors[st], "%s", names[st]);
+     if (why[0] && st != SST_ONLINE) { ImGui::SameLine(); ImGui::TextDisabled("(%s)", why); }
++    SstNetDiag diag = sst_net_diag();
++    if (st == SST_CONNECTING) ImGui::TextDisabled("Connection: %s", sst_net_phase_name(diag.phase));
++    if (diag.failure != SST_FAIL_NONE && st != SST_ONLINE)
++        ImGui::TextWrapped("%s", sst_net_failure_hint(diag.failure));
+     uint16_t host_port = sst_host_port();
+-    if (host_port) ImGui::Text("Session role: Hosting (port %u)", host_port);
++    char session_code[7]; bool session_creator = false;
++    if (sst_game_session(session_code, sizeof session_code, &session_creator))
++        ImGui::Text("Online room: %s | %s", session_code, session_creator ? "Creator" : "Guest");
++    else if (host_port) ImGui::Text("Session role: Hosting (port %u)", host_port);
+     else if (st == SST_ONLINE) ImGui::TextUnformatted("Session role: Joined another host");
+     else if (st == SST_CONNECTING) ImGui::TextUnformatted("Session role: Joining another host");
+     else ImGui::TextDisabled("Session role: Disconnected");
+@@ -86,14 +93,14 @@ void tab_multiplayer(float scale) {
+     if (ImGui::Checkbox("Show remote characters", &g_sst.show_avatars)) settings_save();
+     if (ImGui::Checkbox("Share carried pots and barrels", &g_sst.sync_props)) settings_save();
+     if (ImGui::Checkbox("Sync collected pickups", &g_sst.sync_pickups)) settings_save();
+-    ImGui::TextWrapped("Rupees and consumables go to the collector; collected pickups disappear for teammates.");
++    ImGui::TextWrapped("Supported fixed pickups go to the collector and disappear for teammates. Dropped items and specialized collection sources are still being added.");
+     if (ImGui::Checkbox("Share story and permanent world progress", &g_sst.sync_progress)) settings_save();
+     if (ImGui::Checkbox("Share regular enemy damage and defeats", &g_sst.sync_enemies)) settings_save();
+     if (ImGui::IsItemHovered()) ImGui::SetTooltip("Damage waits while your game map or dialogue is open. Turning sharing back on refreshes enemy health from teammates.");
+     ImGui::BeginDisabled(!g_sst.sync_enemies);
+     if (ImGui::Checkbox("Share regular enemy movement", &g_sst.sync_enemy_motion)) settings_save();
+     ImGui::EndDisabled();
+-    ImGui::TextWrapped("Supported chests and wardrobes share rupees, materials, heart pieces, small keys, dungeon maps, boss keys, Bomb Bag, all Bows, Clawshots, Slingshot/Scattershot, all Beetles, both Nets, Gust Bellows, Whip, both Mitts, Water Dragon's Scale and Fireshield Earrings. New Bow/Slingshot variants include base ammunition; repeat rewards preserve spent shots. Dungeon items arrive when you enter their dungeon. Pouch expansion chests add capacity even when full and restore missing earned slots from completed receipts. The seven medals, all nine spare ammo pouch variants, Potion Lady's first empty bottle and supported bottle chests wait for an unlocked, free Adventure Pouch slot. Medals retain their native effects; spent spare ammo is not refilled by resync. Parrow preserves a prior quest bottle or supplies an empty bottle with his crystals. The five freestanding heart pieces, five Eldin key-piece digging spots and 15 single Gratitude Crystals and all thirteen vanilla NPC five-crystal rewards are shared. Cawlin's letter reward waits for your hand-over choice. Kina, Beedle, Owlan and Item Check rewards are included; an already completed Item Check ending preserves your choice and cannot award another pack. Batreaux's reviewed crystal-threshold rewards share wallets, one heart piece and rupee bundles; stronger wallets and personal rupees are preserved. Boss heart containers stay personal.");
++    ImGui::TextWrapped("Supported chests and wardrobes share opened receipts and progression rewards: heart pieces, small keys, dungeon maps, boss keys, Bomb Bag, all Bows, Clawshots, Slingshot/Scattershot, all Beetles, both Nets, Gust Bellows, Whip, both Mitts, Water Dragon's Scale and Fireshield Earrings. New Bow/Slingshot variants include base ammunition; repeat rewards preserve spent shots. Dungeon items arrive when you enter their dungeon. Pouch expansion chests add capacity even when full and restore missing earned slots from completed receipts. The seven medals, all nine spare ammo pouch variants, Potion Lady's first empty bottle and supported bottle chests wait for an unlocked, free Adventure Pouch slot. Medals retain their native effects; spent spare ammo is not refilled by resync. Parrow preserves a prior quest bottle or supplies an empty bottle with his crystals. The five freestanding heart pieces, five Eldin key-piece digging spots and 15 single Gratitude Crystals and all thirteen vanilla NPC five-crystal rewards are shared. Cawlin's letter reward waits for your hand-over choice. Kina, Beedle, Owlan and Item Check rewards are included; an already completed Item Check ending preserves your choice and cannot award another pack. Batreaux's reviewed crystal-threshold rewards share wallets and one heart piece. Currency and ordinary treasures stay with the collector; stronger wallets are preserved. Boss heart containers stay personal.");
+     ImGui::TextWrapped("All four Silent Realm completions share their permanent rewards, including the Stone of Trials, after returning. Tears, timers and Guardians stay local. Sky Keep opening waits for your Hylia completion and Stone.");
+     ImGui::TextWrapped("First acquisition of each spare-ammo pouch type is shared once, including crafted tiers. Empty bags still count as owned; resync never refills or replaces them. Incoming pouches wait until you leave the Bazaar.");
+     ImGui::TextWrapped("First acquisition of each shield type shares one personal shield, including crafted tiers. Stored or broken shields are not replaced by resync. Shield rewards wait until you leave the Bazaar.");
+diff --git a/tools/test_sst_diagnostics.cpp b/tools/test_sst_diagnostics.cpp
+index 402ec43..876cdd7 100644
+--- a/tools/test_sst_diagnostics.cpp
++++ b/tools/test_sst_diagnostics.cpp
+@@ -121,7 +121,7 @@ void useful_fields_and_privacy(void) {
+     const char *private_values[] = {
+         "PRIVATE_PLAYER_SENTINEL", "PRIVATE_TEAM_SENTINEL", "PRIVATE_ROOM_SENTINEL",
+         "PRIVATE_HOST_SENTINEL.invalid:7623", "PRIVATE_GAME_PATH_SENTINEL",
+-        "PRIVATE_KEYS_PATH_SENTINEL", "PRIVATE_SEED_SENTINEL"
++        "PRIVATE_KEYS_PATH_SENTINEL", "PRIVATE_SEED_SENTINEL", "PRIVATE_EVENT_SENTINEL"
+     };
+     Diagnostics d = gameplay_sample();
+     snprintf(d.peers[0].name, sizeof d.peers[0].name, "%s", private_values[0]);
+@@ -133,6 +133,13 @@ void useful_fields_and_privacy(void) {
+     snprintf(g_settings.rom_path, sizeof g_settings.rom_path, "%s", private_values[4]);
+     snprintf(g_settings.keys_path, sizeof g_settings.keys_path, "%s", private_values[5]);
+     snprintf(g_settings.rando_seed, sizeof g_settings.rando_seed, "%s", private_values[6]);
++    snprintf(d.network.host, sizeof d.network.host, "%s", private_values[3]);
++    snprintf(d.network.last_error, sizeof d.network.last_error, "%s", private_values[3]);
++    d.event_count = 1;
++    snprintf(d.events[0].text, sizeof d.events[0].text, "%s", private_values[7]);
++    d.network.handshake_timeout_ms = 10000;
++    d.census.entries = 52;
++    d.census.unknown_on_wrist = 2;
+     d.animation.bytes = 4096;
+     d.animation.samples = 17;
+     d.animation.captures = 23;
+@@ -157,6 +164,9 @@ void useful_fields_and_privacy(void) {
+     d.replay.neutral_parts = 19;
+     Report r = report_for(d);
+     for (const char *private_value : private_values) CHECK(!contains(r, private_value));
++    CHECK(contains(r, "TCP/handshake deadline: 0/10000 ms"));
++    CHECK(contains(r, "Mesh census entries/unknown/wrist: 52/0/2"));
++    CHECK(contains(r, "Local event history lines/dropped: 1/0 (text omitted)"));
+     CHECK(contains(r, "Local player ID: 7\nConnection generation: 3\nOther players: 1\n"));
+     CHECK(contains(r, "Local scene: F001r / room 2 / layer 1 / entrance 4\n"));
+     CHECK(contains(r, "Local action/clip/frame: 19/42/12.50\nLocal clip length: 48.00\n"));

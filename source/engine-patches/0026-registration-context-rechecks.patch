@@ -1,0 +1,85 @@
+From 1899878ed2e82436d99d9053b35a7ec607d027b5 Mon Sep 17 00:00:00 2001
+From: SST development <sst-development@localhost>
+Date: Tue, 3 Nov 2026 21:51:00 -0500
+Subject: [PATCH] Revalidate player context around each model registration
+
+---
+ runtime/hle/sst_dev.c | 41 +++++++++++++++++++++++++----------------
+ 1 file changed, 25 insertions(+), 16 deletions(-)
+
+diff --git a/runtime/hle/sst_dev.c b/runtime/hle/sst_dev.c
+index cb9049c..1b9168c 100644
+--- a/runtime/hle/sst_dev.c
++++ b/runtime/hle/sst_dev.c
+@@ -340,17 +340,27 @@ static void vis73_finish_queue(Cpu *c);
+ static GuestFn vis71_original_draw,vis71_original_predraw;
+ static bool vis71_registered;
+ static pthread_mutex_t vis71_log_mu=PTHREAD_MUTEX_INITIALIZER;
+-static bool source82_normal_context(uint64_t actor,uint32_t instance) {
+-    // Intro/loading Draws cannot calibrate the later gameplay Entry context.
+-    // Include ready third-person gameplay: action104 is only required for supply.
++static bool source87_context(uint64_t actor,uint32_t instance,const SstScene *scene,
++                             bool first_person,SstLocal *out) {
++    // Entry may reach a guest safe point. Recheck gameplay context before every
++    // registration and after it returns, before touching captured model objects.
++    // Legacy research has no active allocation epoch; canonical mode requires it.
+     SstLocal live={0};
+-    return sst_origin_active_generation() && !menu_input_captured() &&
+-        ordinary_game(&live) && live.player_address==actor && live.player_instance==instance &&
+-        sst_origin_active_scene_matches(&live.scene) &&
+-        live.scene.room==0 && live.scene.layer==1 &&
+-        (!strcmp(live.scene.stage,"F009r") || !strcmp(live.scene.stage,"F000")) &&
+-        *(uint8_t *)(uintptr_t)(actor+0x1a2b)==1 && !read64(actor+0x1b90) &&
+-        !(read32(actor+0x448)&0x100a0u);
++    if(getenv("SST_NO_PLAYER_READ") || menu_input_captured() || !ordinary_game(&live) ||
++       live.player_address!=actor || live.player_instance!=instance ||
++       (scene && !same_scene(&live.scene,scene)) || live.scene.room!=0 || live.scene.layer!=1 ||
++       (strcmp(live.scene.stage,"F009r") && strcmp(live.scene.stage,"F000")) ||
++       *(uint8_t *)(uintptr_t)(actor+0x1a2b)!=1 || read64(actor+0x1b90) ||
++       (read32(actor+0x448)&0x100a0u))return false;
++    if(sst_origin_feature_enabled() && (!sst_origin_active_generation() ||
++       !sst_origin_active_scene_matches(&live.scene)))return false;
++    if(first_person && (live.pose.action!=104 || !(read32(actor+0x444)&(1u<<18))))return false;
++    if(out)*out=live;
++    return true;
++}
++static bool source82_normal_context(uint64_t actor,uint32_t instance) {
++    // Ready third-person gameplay can calibrate; supply separately requires104.
++    return sst_origin_active_generation() && source87_context(actor,instance,NULL,false,NULL);
+ }
+ static void vis71_callback(Cpu *c,GuestFn original,unsigned kind) {
+     uint64_t actor=c->x[0];uint32_t action=0,flags=0,instance=0;bool trusted=false;int segment=0;
+@@ -583,9 +593,7 @@ static void vis73_finish_queue_(Cpu *c) {
+     pthread_mutex_unlock(&vis73_thread_mu);
+     if(!correct_thread || getenv("SST_NO_PLAYER_READ") || menu_input_captured()){vis73_gate(1);return;}
+     SstLocal before={0};
+-    if(!ordinary_game(&before) || before.player_address!=vis73_queue.player || before.player_instance!=vis73_queue.instance || before.pose.action!=104 ||
+-       (strcmp(before.scene.stage,"F009r") && strcmp(before.scene.stage,"F000")) || before.scene.room!=0 || before.scene.layer!=1 ||
+-       *(uint8_t *)(uintptr_t)(before.player_address+0x1a2b)!=1 || read64(before.player_address+0x1b90) || !(read32(before.player_address+0x444)&(1u<<18))){vis73_gate(2);return;}
++    if(!source87_context(vis73_queue.player,vis73_queue.instance,NULL,true,&before)){vis73_gate(2);return;}
+     if(sst_net_status(NULL,0)!=SST_ONLINE){vis73_gate(3);return;}
+     SstPlayer peers[SST_MAX_PLAYERS];int count=sst_net_players(peers,SST_MAX_PLAYERS);bool live=false;uint64_t now=sst_now_ms();
+     for(int i=0;i<count;i++)if(peers[i].active && peers[i].has_pose && peers[i].pose.max_health && same_scene(&peers[i].scene,&before.scene) && now>=peers[i].pose_time_ms && now-peers[i].pose_time_ms<=1000)live=true;
+@@ -606,15 +614,16 @@ static void vis73_finish_queue_(Cpu *c) {
+     unsigned inserted=0;bool consistent=true;
+     for(unsigned role=0;role<4;role++) {
+         SstLocal current={0};
+-        if(!ordinary_game(&current) || current.player_address!=before.player_address || current.player_instance!=before.player_instance ||
+-           current.pose.action!=104 || !same_scene(&current.scene,&before.scene) || read64(UINT64_C(0x7002bfe688))!=root ||
++        if(!source87_context(before.player_address,before.player_instance,&before.scene,true,&current) ||
++           read64(UINT64_C(0x7002bfe688))!=root ||
+            !ptr(root,0x100) || read64(root)!=UINT64_C(0x7001699050) || read64(root+0xf0)!=array || read32(root+0xf8)!=capacity ||
+            read32(root+0xfc)!=initial+inserted || read64(before.player_address+vis72_object_offset[role])!=objects[role] ||
+            read64(objects[role])!=tables[role] || read64(objects[role]+8) || read64(objects[role]+0xf8)!=resources[role]){consistent=false;break;}
+         Cpu post_original=*c;vis73_queue.injecting=true;c->x[0]=before.player_address+vis72_wrapper_offset[role];
+         guest_call(c,UINT64_C(0x7000f1e218));uint32_t result=(uint32_t)c->x[0];*c=post_original;vis73_queue.injecting=false;
+         // Cpu restoration deliberately does NOT undo native graph/parent changes.
+-        if(result!=1 || !actor_same(before.player_address,before.player_instance) || read64(UINT64_C(0x7002bfe688))!=root ||
++        if(result!=1 || !source87_context(before.player_address,before.player_instance,&before.scene,true,NULL) ||
++           read64(UINT64_C(0x7002bfe688))!=root ||
+            !ptr(root,0x100) || read64(root)!=UINT64_C(0x7001699050) || read64(root+0xf0)!=array || read32(root+0xf8)!=capacity ||
+            read64(before.player_address+vis72_object_offset[role])!=objects[role] || read64(objects[role])!=tables[role] ||
+            read64(objects[role]+0xf8)!=resources[role] || read64(objects[role]+8)!=root || read32(root+0xfc)!=initial+inserted+1 ||
+-- 
+2.56.0
+

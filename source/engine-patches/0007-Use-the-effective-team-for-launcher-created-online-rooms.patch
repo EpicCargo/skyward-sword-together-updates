@@ -1,0 +1,48 @@
+From b6c0b4123c067a24e45236a3d93522511392e0aa Mon Sep 17 00:00:00 2001
+From: SST Development <sst-development@localhost>
+Date: Fri, 30 Oct 2026 05:50:00 +0000
+Subject: [PATCH] Use the effective team for launcher-created online rooms
+
+---
+ runtime/hle/sst_world.c       | 4 ++--
+ runtime/ui/multiplayer_tab.mm | 2 +-
+ 2 files changed, 3 insertions(+), 3 deletions(-)
+
+diff --git a/runtime/hle/sst_world.c b/runtime/hle/sst_world.c
+index 40d0fd5..dd2973e 100644
+--- a/runtime/hle/sst_world.c
++++ b/runtime/hle/sst_world.c
+@@ -1947,7 +1947,7 @@ static void recover(Cpu *c, SstLocal l, uint64_t fm, bool boss, bool paused, boo
+         SstPlayer ps[SST_MAX_PLAYERS]; int n = sst_net_players(ps, SST_MAX_PLAYERS); bool found = false;
+         const char *reason = "Teammate left the session";
+         for (int i = 0; i < n; i++) if (ps[i].id == recovery_peer) {
+-            SstCatchupStatus availability = sst_world_catchup_status(&ps[i], g_sst.team, sst_now_ms());
++            SstCatchupStatus availability = sst_world_catchup_status(&ps[i], sst_game_team(), sst_now_ms());
+             if (availability == SST_CATCHUP_READY && sst_net_can_catchup(&ps[i])) {
+                 target = ps[i].scene; found = true;
+             } else reason = availability == SST_CATCHUP_READY ?
+@@ -1980,7 +1980,7 @@ static bool motion_source_live(const SstMotionTrack *track, const SstPlayer *pla
+     for (int i = 0; i < count; i++) {
+         const SstPlayer *p = &players[i];
+         if (!p->active || p->id != track->from || !p->has_pose ||
+-            p->presence_generation != track->presence_generation || strcmp(p->team, g_sst.team) ||
++            p->presence_generation != track->presence_generation || strcmp(p->team, sst_game_team()) ||
+             !sst_world_same_area(&p->scene, &motion.scene) || !p->pose.health ||
+             p->pose_time_ms > now || now - p->pose_time_ms > SST_MOTION_FRESH_MS) continue;
+         // An old owner's last in-flight sample may bridge a menu handoff, but
+diff --git a/runtime/ui/multiplayer_tab.mm b/runtime/ui/multiplayer_tab.mm
+index 66fbf88..3539730 100644
+--- a/runtime/ui/multiplayer_tab.mm
++++ b/runtime/ui/multiplayer_tab.mm
+@@ -167,7 +167,7 @@ void tab_multiplayer(float scale) {
+             if (ps[i].has_pose && ps[i].pose.max_health) ImGui::Text("%u/%u", ps[i].pose.health, ps[i].pose.max_health);
+             else ImGui::TextDisabled("-");
+             ImGui::TableNextColumn();
+-            SstCatchupStatus availability = sst_world_catchup_status(&ps[i], g_sst.team, sst_now_ms());
++            SstCatchupStatus availability = sst_world_catchup_status(&ps[i], sst_game_team(), sst_now_ms());
+             if (availability != SST_CATCHUP_READY) {
+                 ImGui::PushStyleColor(ImGuiCol_Text, ImGui::GetStyleColorVec4(ImGuiCol_TextDisabled));
+                 ImGui::TextWrapped("%s", sst_world_catchup_text(availability));
+-- 
+2.56.0
+

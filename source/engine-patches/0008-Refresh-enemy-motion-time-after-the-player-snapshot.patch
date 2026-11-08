@@ -1,0 +1,26 @@
+From 5b27b7004747210ce0f3c7114887a2c9be0a64d7 Mon Sep 17 00:00:00 2001
+From: SST Development <sst-development@localhost>
+Date: Sun, 1 Nov 2026 01:40:00 +0000
+Subject: [PATCH] Refresh enemy motion time after the player snapshot
+
+---
+ runtime/hle/sst_world.c | 3 +++
+ 1 file changed, 3 insertions(+)
+
+diff --git a/runtime/hle/sst_world.c b/runtime/hle/sst_world.c
+index dd2973e..2063956 100644
+--- a/runtime/hle/sst_world.c
++++ b/runtime/hle/sst_world.c
+@@ -2016,6 +2016,9 @@ static void follow_frame(uint64_t now) {
+     // thread. Old heap bytes, cached addresses or packet IDs never prove liveness.
+     if (find_actors(player, local.scene.room) || actor_overflow) { motion_clear(); return; }
+     SstPlayer players[SST_MAX_PLAYERS]; int count = sst_net_players(players, SST_MAX_PLAYERS);
++    // Pose timestamps were copied under the network lock. Sample afterward so
++    // a pose received during the tree traversal is not rejected as "future".
++    now = sst_now_ms();
+     for (unsigned i = 0; i < actor_count; i++) {
+         const Actor *a = &actors[i];
+         if (!motion_actor_live(a, local.scene.room)) continue;
+-- 
+2.56.0
+

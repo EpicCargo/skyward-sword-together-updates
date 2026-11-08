@@ -1,0 +1,14 @@
+engine/
+build/
+.deps/
+__pycache__/
+*.pyc
+node_modules/
+.wrangler/
+.env
+.dev.vars
+*.sav
+*.screenshot
+skygame.*
+romfs.bin
+exefs/

@@ -1,0 +1,78 @@
+From 195871920057970c3a20e95e8dd5fa662f19d9ac Mon Sep 17 00:00:00 2001
+From: SST Build <sst-build@localhost>
+Date: Fri, 30 Oct 2026 02:05:00 +0000
+Subject: [PATCH] Keep vase native calls outside the bridge lock
+
+Snapshot the selected vase target while holding the bridge mutex, release the lock before native model processing, and validate the binding again before recording the applied target. This keeps guest HLE unwind points outside the bridge lock.
+---
+ runtime/hle/sst_prop_bridge.h | 42 ++++++++++++++++++++++-------------
+ 1 file changed, 26 insertions(+), 16 deletions(-)
+
+diff --git a/runtime/hle/sst_prop_bridge.h b/runtime/hle/sst_prop_bridge.h
+index 881babe..913eb75 100644
+--- a/runtime/hle/sst_prop_bridge.h
++++ b/runtime/hle/sst_prop_bridge.h
+@@ -198,37 +198,47 @@ static SstPropNativePose prop_display_pose(const SstProp *p) {
+ 
+ static GuestFn prop_original;
+ static void prop_execute(Cpu *c) {
+-    uint64_t actor = c->x[0]; bool presented = false;
++    uint64_t actor = c->x[0]; SstProp target = {0}; SstPropNativePose pose;
++    uint32_t instance = 0, load = 0, gen = 0; bool candidate = false;
+     pthread_mutex_lock(&props_bridge.mu);
+     PropBinding *b = props_bridge.enabled && g_sst.sync_props &&
+         sst_net_status(NULL, 0) == SST_ONLINE ? prop_binding(actor) : NULL;
+     if (b && sst_prop_native_held(actor, props_bridge.player)) b->remote_held = false;
+     if (b && !sst_prop_native_held(actor, props_bridge.player)) {
+-        SstProp target;
+         if (sst_props_get(&props_bridge.state, &b->key, sst_now_ms(), &target) &&
+             target.from != sst_net_my_id() && (target.phase == SST_PROP_CARRY ||
+             target.from != b->applied_owner || target.sequence != b->applied_sequence ||
+             target.presence_generation != b->applied_generation)) {
+-            SstPropNativePose pose = prop_display_pose(&target);
+-            presented = sst_prop_native_present(c, actor, &pose);
+-            if (presented) {
+-                b->applied_owner = target.from; b->applied_sequence = target.sequence;
+-                b->applied_generation = target.presence_generation;
+-                b->remote_held = target.phase == SST_PROP_CARRY;
+-                // Also align old position during carry, so disable/disconnect
+-                // can safely resume normal physics without stale-pointer writes.
+-                sst_prop_native_release_velocity(actor);
+-                c->x[0] = 1;
+-            }
++            pose = prop_display_pose(&target); candidate = true;
++            instance = b->instance; load = props_bridge.load; gen = props_bridge.generation;
+         }
+-        if (!presented) prop_release(b);
++        if (!candidate) prop_release(b);
+     }
+     pthread_mutex_unlock(&props_bridge.mu);
+-    if (presented) return;
++    // Native model processing can enter HLE safe points. No bridge mutex may be
++    // held across a guest call: shutdown/reboot can unwind the whole guest stack.
++    bool presented = candidate && sst_prop_native_vase(actor) && r32(actor + 8) == instance &&
++        sst_prop_native_present(c, actor, &pose);
++    if (presented) {
++        sst_prop_native_release_velocity(actor); c->x[0] = 1;
++        pthread_mutex_lock(&props_bridge.mu);
++        b = props_bridge.enabled && props_bridge.load == load && props_bridge.generation == gen ?
++            prop_binding(actor) : NULL;
++        if (b) {
++            b->applied_owner = target.from; b->applied_sequence = target.sequence;
++            b->applied_generation = target.presence_generation;
++            b->remote_held = target.phase == SST_PROP_CARRY;
++        }
++        pthread_mutex_unlock(&props_bridge.mu);
++        return;
++    }
+     if (prop_original) prop_original(c);
+     pthread_mutex_lock(&props_bridge.mu);
+     b = props_bridge.enabled ? prop_binding(actor) : NULL;
+-    if (b) prop_send(b, sst_prop_native_held(actor, props_bridge.player), sst_now_ms());
++    if (b) {
++        if (candidate) prop_release(b);
++        prop_send(b, sst_prop_native_held(actor, props_bridge.player), sst_now_ms());
++    }
+     pthread_mutex_unlock(&props_bridge.mu);
+ }
+ 

@@ -1,0 +1,542 @@
+From 67a253ccdf0ccd9b463027b553178231df746419 Mon Sep 17 00:00:00 2001
+From: SST development <sst-dev@local.invalid>
+Date: Mon, 2 Nov 2026 22:32:10 -0500
+Subject: [PATCH] Prototype owned first-person source registration and recorded
+ draw origin
+
+---
+ runtime/hle/sst_dev.c     | 246 ++++++++++++++++++++++++++++++++++++++
+ runtime/nvn/cmdbuf.c      |  17 ++-
+ runtime/nvn/nvn.h         |   1 +
+ runtime/nvn/vulkan/exec.c |  89 ++++++++++----
+ 4 files changed, 326 insertions(+), 27 deletions(-)
+
+diff --git a/runtime/hle/sst_dev.c b/runtime/hle/sst_dev.c
+index 9d4ae3a..f03120c 100644
+--- a/runtime/hle/sst_dev.c
++++ b/runtime/hle/sst_dev.c
+@@ -10,6 +10,7 @@
+ #include <pthread.h>
+ extern bool menu_input_captured(void);
+ #include <stdatomic.h>
++#include "../sst/sst_origin.h"
+ #include <stdio.h>
+ #include <string.h>
+ 
+@@ -313,7 +314,250 @@ static void player_update(Cpu *c) {
+     in_update=false;
+ }
+ bool sst_dev_noclip_supported(void){return atomic_load(&noclip_capable);}
++
++// Private read-only virtual callback observation. Originals always run once.
++
++// EXPERIMENT ONLY: normal native scene-graph insertion, never visibility-bit forcing.
++typedef struct {bool active,injecting;uint64_t player;uint32_t instance,seen;int segment;Cpu *cpu;uint64_t stack,link;} Vis73Queue;
++static _Thread_local Vis73Queue vis73_queue;
++static pthread_mutex_t vis73_thread_mu=PTHREAD_MUTEX_INITIALIZER;
++static pthread_t vis73_registration_thread;
++static bool vis73_have_thread,vis73_multiple_threads;
++static _Atomic bool vis73_failed;
++static Cpu *vis73_normal_cpu;static uint64_t vis73_normal_stack,vis73_normal_link;
++static _Thread_local unsigned vis73_scene_dispatch_depth;
++static void vis73_observe_entry(uint64_t player,uint32_t instance,uint32_t role,bool success);
++static void vis73_finish_queue(Cpu *c);
++
++static GuestFn vis71_original_draw,vis71_original_predraw;
++static bool vis71_registered;
++static pthread_mutex_t vis71_log_mu=PTHREAD_MUTEX_INITIALIZER;
++static void vis71_callback(Cpu *c,GuestFn original,unsigned kind) {
++    uint64_t actor=c->x[0];uint32_t action=0,flags=0,instance=0;bool trusted=false;int segment=0;
++    const char *gate=getenv("SST_VIS71_SEGMENT"),*path=getenv("SST_VIS71_METHODS");
++    if(path && gate && !getenv("SST_NO_PLAYER_READ")) {
++        FILE *f=fopen(gate,"r");if(f){if(fscanf(f,"%d",&segment)!=1)segment=0;fclose(f);}
++        if(segment>0) {
++            SstLocal fresh=sst_game_read_local(&SST_LAYOUT_SSHD_100,0); // guest-thread native read, no published render snapshot
++            if(fresh.valid && fresh.player_address==actor && actor_same(actor,fresh.player_instance)) {
++                trusted=true;action=fresh.pose.action;instance=fresh.player_instance;flags=read32(actor+0x448);
++            }
++        }
++    }
++    Vis73Queue previous_queue=vis73_queue;
++    if(kind==0)vis73_queue=(Vis73Queue){.active=trusted && getenv("SST_VIS73_QUEUE_MODELS") && getenv("LARECOMP_DEBUG_DATA"),.player=actor,.instance=instance,.segment=segment,.cpu=c,.stack=c->sp,.link=c->x[30]};
++    original(c); // Original actor callback always runs exactly once.
++    if(kind==0){vis73_finish_queue(c);vis73_queue=previous_queue;}
++    if(trusted) {
++        pthread_mutex_lock(&vis71_log_mu);
++        static FILE *output;static uint64_t calls[2],last[2];static unsigned rows;
++        uint64_t now=sst_now_ms();calls[kind]++;
++        if(rows<1024 && now>=last[kind] && now-last[kind]>=100) {
++            if(!output){output=fopen(path,"w");if(output)fprintf(output,"segment,method,calls,action,flags448,actor_instance,return_w0,at_ms\n");}
++            if(output){fprintf(output,"%d,%u,%llu,%u,%u,%u,%u,%llu\n",segment,kind,(unsigned long long)calls[kind],action,flags,instance,(uint32_t)c->x[0],(unsigned long long)now);fflush(output);rows++;last[kind]=now;}
++        }
++        pthread_mutex_unlock(&vis71_log_mu);
++    }
++}
++static void vis71_draw(Cpu *c){vis71_callback(c,vis71_original_draw,0);}
++static void vis71_predraw(Cpu *c){vis71_callback(c,vis71_original_predraw,1);}
++static void vis71_dispatch_init(void) {
++    if(vis71_registered || !getenv("SST_VIS71_METHODS") || !getenv("LARECOMP_DEBUG_DATA") || !g_is_skyward)return;
++    const uint64_t draw=UINT64_C(0x7000ab0310),predraw=UINT64_C(0x7000ab130c);
++    if(read32(draw)!=0xd10283ff || read32(draw+4)!=0xfd000bec ||
++       read32(predraw)!=0xa9bf7bfd || read32(predraw+4)!=0x910003fd ||
++       read64(UINT64_C(0x7001637d70))!=draw || read64(UINT64_C(0x7001637d78))!=predraw)return;
++    GuestFn d=dispatch_lookup(draw),p=dispatch_lookup(predraw);if(!d||!p)return;
++    vis71_original_draw=d;vis71_original_predraw=p;
++    hle_override(draw,vis71_draw,"SST private read-only draw census");
++    hle_override(predraw,vis71_predraw,"SST private read-only predraw census");vis71_registered=true;
++}
++
++
++// Private registration / G3dProc entry counters. No visibility or actor writes.
++static GuestFn vis72_entry_original,vis72_simple_original,vis72_complex_original;
++static bool vis72_registered;
++static pthread_mutex_t vis72_log_mu=PTHREAD_MUTEX_INITIALIZER;
++static const uint32_t vis72_wrapper_offset[4]={0x540,0x5f8,0x648,0x7e0};
++static const uint32_t vis72_object_offset[4]={0x560,0x618,0x668,0x800};
++typedef struct {uint64_t player,object;uint32_t instance,role,action,d8,flags444,flags448;} Vis72Owner;
++static bool vis72_owned(uint64_t incoming,unsigned kind,Vis72Owner *out) {
++    if(getenv("SST_NO_PLAYER_READ"))return false;
++    uint64_t player=read64(PLAYER);if(!ptr(player,0x6b00))return false;
++    uint32_t instance=read32(player+8);if(!actor_same(player,instance))return false;
++    unsigned role=0;for(;role<4;role++)if(incoming==(kind?read64(player+vis72_object_offset[role]):player+vis72_wrapper_offset[role]))break;
++    if(role==4)return false;
++    if(!kind){uint64_t table=read64(incoming);if(!ptr(table,0x28)||read64(table+0x20)!=UINT64_C(0x7000f1e218))return false;}
++    uint64_t object=read64(player+vis72_object_offset[role]);if(!ptr(object,0x190))return false;
++    uint64_t table=read64(object);
++    if(table!=UINT64_C(0x7001698d50) && table!=UINT64_C(0x7001698de8))return false;
++    if((kind==1 && table!=UINT64_C(0x7001698de8)) || (kind==2 && table!=UINT64_C(0x7001698d50)))return false;
++    SstLocal fresh=sst_game_read_local(&SST_LAYOUT_SSHD_100,0);
++    if(!fresh.valid || !fresh.pose.health || fresh.player_address!=player || fresh.player_instance!=instance)return false;
++    *out=(Vis72Owner){player,object,instance,role,fresh.pose.action,read32(object+0xd8),read32(player+0x444),read32(player+0x448)};return true;
++}
++
++static pthread_mutex_t source74_mu=PTHREAD_MUTEX_INITIALIZER;
++static struct {bool forced;uint64_t root;SstOriginIdentity id;} source74_members[4];
++static _Atomic uint64_t source74_generation=1;
++struct {uint64_t forced_scopes,unowned_scopes,published,failed,detached,natural_entries;} sst_source74_native_stats;
++static void source74_membership(const Vis72Owner *owner,bool forced) {
++    uint64_t resource=read64(owner->object+0xf8),root=read64(owner->object+8);
++    if(!ptr(resource,4) || memcmp((void *)(uintptr_t)resource,"MDL0",4) || !ptr(root,0x100))return;
++    SstLocal fresh=sst_game_read_local(&SST_LAYOUT_SSHD_100,0);
++    if(!fresh.valid || fresh.player_address!=owner->player || fresh.player_instance!=owner->instance)return;
++    uint64_t generation=atomic_load(&source74_generation);
++    for(;;){if(!generation || generation==UINT64_MAX){sst_origin_latch_unsupported();return;}
++        if(atomic_compare_exchange_weak(&source74_generation,&generation,generation+1))break;}
++    pthread_mutex_lock(&source74_mu);
++    source74_members[owner->role].forced=forced;source74_members[owner->role].root=root;
++    source74_members[owner->role].id=(SstOriginIdentity){.actor_address=owner->player,.actor_instance=owner->instance,.scene=fresh.scene,
++        .model_address=owner->player+vis72_wrapper_offset[owner->role],.object_address=owner->object,.resource_address=resource,
++        .role=(uint16_t)owner->role,.model_registration_generation=generation};
++    if(!forced)sst_source74_native_stats.natural_entries++;
++    pthread_mutex_unlock(&source74_mu);
++}
++static SstOriginMarker source74_emission(uint64_t object,unsigned task) {
++    SstOriginMarker parent=sst_origin_current(),mark=sst_origin_unowned(parent);
++    SstOriginIdentity identity={0};uint64_t root=0;bool forced=false;
++    pthread_mutex_lock(&source74_mu);
++    for(unsigned i=0;i<4;i++)if(source74_members[i].forced && source74_members[i].id.object_address==object){forced=true;identity=source74_members[i].id;root=source74_members[i].root;break;}
++    if(task==0x10003)for(unsigned i=0;i<4;i++)if(source74_members[i].id.object_address==object){source74_members[i].forced=false;sst_source74_native_stats.detached++;}
++    pthread_mutex_unlock(&source74_mu);
++    if(!forced || (task!=6 && task!=7)) {pthread_mutex_lock(&source74_mu);sst_source74_native_stats.unowned_scopes++;pthread_mutex_unlock(&source74_mu);return mark;}
++    mark=sst_origin_forced_unresolved();
++    // Origin stays forced even if live ownership cannot authorize optional replay.
++    Vis72Owner current={0};
++    if(vis72_owned(object,2,&current) && current.player==identity.actor_address && current.instance==identity.actor_instance && current.role==identity.role &&
++       read64(object+0xf8)==identity.resource_address && read64(object+8)==root) {
++        SstOriginProof proof={.identity=identity,.recorded_ms=sst_now_ms()};
++        if(!sst_origin_publish(&proof,proof.recorded_ms,&mark))sst_origin_latch_unsupported();
++    } else sst_origin_latch_unsupported();
++    pthread_mutex_lock(&source74_mu);sst_source74_native_stats.forced_scopes++;if(sst_origin_unsupported())sst_source74_native_stats.failed++;else sst_source74_native_stats.published++;pthread_mutex_unlock(&source74_mu);
++    return mark;
++}
++
++static void vis72_model_callback(Cpu *c,GuestFn original,unsigned kind) {
++    const char *path=getenv("SST_VIS72_MODEL_METHODS"),*gate=getenv("SST_VIS71_SEGMENT");
++    unsigned task=kind?(uint32_t)c->x[1]:0;Vis72Owner owner={0};bool trusted=false;int segment=0;
++    if(path && gate && task<=7 && vis72_owned(c->x[0],kind,&owner)) {
++        FILE *f=fopen(gate,"r");if(f){if(fscanf(f,"%d",&segment)!=1)segment=0;fclose(f);}trusted=segment>0;
++    }
++    if(trusted && kind==0 && vis73_queue.active && vis73_queue.player==owner.player && vis73_queue.instance==owner.instance)vis73_queue.seen|=1u<<owner.role;
++    SstOriginScope emission_scope;bool pushed=false;
++    if(kind){vis73_scene_dispatch_depth++;SstOriginMarker mark=source74_emission(c->x[0],(uint32_t)c->x[1]);pushed=sst_origin_scope_push(mark,&emission_scope);}
++    original(c); // Forward all objects/tasks exactly once, including unknown ones.
++    if(kind){if(pushed)sst_origin_scope_pop(&emission_scope);vis73_scene_dispatch_depth--;}
++    if(trusted && kind==0 && actor_same(owner.player,owner.instance) && read64(owner.player+vis72_object_offset[owner.role])==owner.object)vis73_observe_entry(owner.player,owner.instance,owner.role,(uint32_t)c->x[0]==1);
++    if(trusted && kind==0 && (uint32_t)c->x[0]==1 && actor_same(owner.player,owner.instance) && read64(owner.player+vis72_object_offset[owner.role])==owner.object)
++        source74_membership(&owner,vis73_queue.active && vis73_queue.injecting);
++    if(trusted && actor_same(owner.player,owner.instance) && read64(owner.player+vis72_object_offset[owner.role])==owner.object) {
++        pthread_mutex_lock(&vis72_log_mu);
++        static FILE *output;static uint64_t calls[3][4][8],last[3][4][8];static unsigned rows;
++        uint64_t now=sst_now_ms();uint64_t *count=&calls[kind][owner.role][task],*previous=&last[kind][owner.role][task];(*count)++;
++        if(rows<4096 && now>=*previous && now-*previous>=250) {
++            if(!output){output=fopen(path,"w");if(output)fprintf(output,"segment,kind,role,task,calls,action,task_flags_d8,task_disabled,flags444,flags448,actor_instance,at_ms\n");}
++            if(output){unsigned disabled=task?!!(owner.d8&(UINT32_C(1)<<(task-1))):0;
++                fprintf(output,"%d,%u,%u,%u,%llu,%u,%u,%u,%u,%u,%u,%llu\n",segment,kind,owner.role,task,(unsigned long long)*count,owner.action,owner.d8,disabled,owner.flags444,owner.flags448,owner.instance,(unsigned long long)now);fflush(output);rows++;*previous=now;}
++        }
++        pthread_mutex_unlock(&vis72_log_mu);
++    }
++}
++static void vis72_entry(Cpu *c){vis72_model_callback(c,vis72_entry_original,0);}
++static void vis72_simple(Cpu *c){vis72_model_callback(c,vis72_simple_original,1);}
++static void vis72_complex(Cpu *c){vis72_model_callback(c,vis72_complex_original,2);}
++static void vis72_dispatch_init(void) {
++    if(vis72_registered || !getenv("SST_VIS72_MODEL_METHODS") || !getenv("LARECOMP_DEBUG_DATA") || !g_is_skyward)return;
++    uint64_t entry=UINT64_C(0x7000f1e218),simple=UINT64_C(0x7000feae5c),complex=UINT64_C(0x7000fe8b6c);
++    if(read32(entry)!=0x9000e708 || read32(entry+4)!=0xf9401002 ||
++       read32(simple)!=0xd10643ff || read32(simple+4)!=0xa9136ffc ||
++       read32(complex)!=0xa9ba6ffc || read32(complex+4)!=0xa90167fa ||
++       read64(UINT64_C(0x7001698df0))!=simple || read64(UINT64_C(0x7001698d58))!=complex)return;
++    GuestFn e=dispatch_lookup(entry),s=dispatch_lookup(simple),m=dispatch_lookup(complex);if(!e||!s||!m)return;
++    vis72_entry_original=e;vis72_simple_original=s;vis72_complex_original=m;
++    hle_override(entry,vis72_entry,"SST private component registration census");
++    hle_override(simple,vis72_simple,"SST private simple G3d entry census");
++    hle_override(complex,vis72_complex,"SST private complex G3d entry census");vis72_registered=true;
++}
++
++
++static void vis73_observe_entry(uint64_t player,uint32_t instance,uint32_t role,bool success) {
++    (void)role;
++    if(!success || vis73_scene_dispatch_depth || !vis73_queue.active || vis73_queue.injecting || vis73_queue.player!=player || vis73_queue.instance!=instance)return;
++    pthread_mutex_lock(&vis73_thread_mu);
++    if(!vis73_have_thread){vis73_registration_thread=pthread_self();vis73_normal_cpu=vis73_queue.cpu;vis73_normal_stack=vis73_queue.stack;vis73_normal_link=vis73_queue.link;vis73_have_thread=true;}
++    else if(!pthread_equal(vis73_registration_thread,pthread_self()) || vis73_normal_cpu!=vis73_queue.cpu || vis73_normal_stack!=vis73_queue.stack || vis73_normal_link!=vis73_queue.link)vis73_multiple_threads=true;
++    pthread_mutex_unlock(&vis73_thread_mu);
++}
++static void vis73_gate(unsigned reason) {
++    const char *path=getenv("SST_VIS73_QUEUE_LOG");if(!path)return;
++    static pthread_mutex_t mu=PTHREAD_MUTEX_INITIALIZER;static FILE *file;static unsigned rows;
++    pthread_mutex_lock(&mu);
++    if(rows<512){if(!file){char name[1024];snprintf(name,sizeof name,"%s.gates.csv",path);file=fopen(name,"w");if(file)fprintf(file,"reason,segment,seen,have_context,multiple_contexts,scene_depth,stack,normal_stack,link,normal_link\n");}
++        if(file){pthread_mutex_lock(&vis73_thread_mu);fprintf(file,"%u,%d,%u,%u,%u,%u,%llu,%llu,%llu,%llu\n",reason,vis73_queue.segment,vis73_queue.seen,vis73_have_thread,vis73_multiple_threads,vis73_scene_dispatch_depth,(unsigned long long)vis73_queue.stack,(unsigned long long)vis73_normal_stack,(unsigned long long)vis73_queue.link,(unsigned long long)vis73_normal_link);pthread_mutex_unlock(&vis73_thread_mu);fflush(file);rows++;}}
++    pthread_mutex_unlock(&mu);
++}
++static void vis73_finish_queue(Cpu *c) {
++    if(sst_origin_unsupported() || atomic_load(&vis73_failed) || !vis73_queue.active || vis73_queue.seen || vis73_scene_dispatch_depth || !vis72_registered || !vis72_entry_original)return;
++    const char *switch_path=getenv("SST_VIS73_QUEUE_SWITCH");int enabled=0;FILE *switch_file=switch_path?fopen(switch_path,"r"):NULL;
++    if(switch_file){if(fscanf(switch_file,"%d",&enabled)!=1)enabled=0;fclose(switch_file);}if(enabled!=1)return;
++    bool correct_thread;
++    pthread_mutex_lock(&vis73_thread_mu);
++    correct_thread=vis73_have_thread && !vis73_multiple_threads && pthread_equal(vis73_registration_thread,pthread_self()) &&
++        vis73_normal_cpu==c && vis73_normal_stack==vis73_queue.stack && vis73_normal_link==vis73_queue.link && c->sp==vis73_queue.stack;
++    pthread_mutex_unlock(&vis73_thread_mu);
++    if(!correct_thread || getenv("SST_NO_PLAYER_READ") || menu_input_captured()){vis73_gate(1);return;}
++    SstLocal before={0};
++    if(!ordinary_game(&before) || before.player_address!=vis73_queue.player || before.player_instance!=vis73_queue.instance || before.pose.action!=104 ||
++       (strcmp(before.scene.stage,"F009r") && strcmp(before.scene.stage,"F000")) || before.scene.room!=0 || before.scene.layer!=1 ||
++       *(uint8_t *)(uintptr_t)(before.player_address+0x1a2b)!=1 || read64(before.player_address+0x1b90) || !(read32(before.player_address+0x444)&(1u<<18))){vis73_gate(2);return;}
++    if(sst_net_status(NULL,0)!=SST_ONLINE){vis73_gate(3);return;}
++    SstPlayer peers[SST_MAX_PLAYERS];int count=sst_net_players(peers,SST_MAX_PLAYERS);bool live=false;uint64_t now=sst_now_ms();
++    for(int i=0;i<count;i++)if(peers[i].active && peers[i].has_pose && peers[i].pose.max_health && same_scene(&peers[i].scene,&before.scene) && now>=peers[i].pose_time_ms && now-peers[i].pose_time_ms<=1000)live=true;
++    if(!live || (c->sp&15) || c->sp<4096 || !ptr(c->sp-4096,4096)){vis73_gate(4);return;}
++    uint64_t root=read64(UINT64_C(0x7002bfe688));
++    if(!ptr(root,0x100) || read64(root)!=UINT64_C(0x7001699050) || read64(UINT64_C(0x70016990b0))!=UINT64_C(0x7000fecfe4)){vis73_gate(5);return;}
++    uint64_t array=read64(root+0xf0);uint32_t capacity=read32(root+0xf8),initial=read32(root+0xfc);
++    if(capacity!=512 || initial>capacity-4 || (array&7) || !ptr(array,(size_t)capacity*8)){vis73_gate(6);return;}
++    uint64_t objects[4],resources[4],tables[4];
++    for(unsigned role=0;role<4;role++) {
++        Vis72Owner owner;
++        if(!vis72_owned(before.player_address+vis72_wrapper_offset[role],0,&owner) || owner.role!=role || owner.instance!=before.player_instance || read64(owner.object+8)){vis73_gate(10+role);return;}
++        objects[role]=owner.object;tables[role]=read64(owner.object);resources[role]=read64(owner.object+0xf8);
++        for(unsigned old=0;old<role;old++)if(objects[old]==objects[role]){vis73_gate(30+role);return;}
++        if(!ptr(resources[role],4) || memcmp((const void *)(uintptr_t)resources[role],"MDL0",4)){vis73_gate(20+role);return;}
++    }
++    // Every prospective object is preflighted before the first graph mutation.
++    unsigned inserted=0;bool consistent=true;
++    for(unsigned role=0;role<4;role++) {
++        SstLocal current={0};
++        if(!ordinary_game(&current) || current.player_address!=before.player_address || current.player_instance!=before.player_instance ||
++           current.pose.action!=104 || !same_scene(&current.scene,&before.scene) || read64(UINT64_C(0x7002bfe688))!=root ||
++           !ptr(root,0x100) || read64(root)!=UINT64_C(0x7001699050) || read64(root+0xf0)!=array || read32(root+0xf8)!=capacity ||
++           read32(root+0xfc)!=initial+inserted || read64(before.player_address+vis72_object_offset[role])!=objects[role] ||
++           read64(objects[role])!=tables[role] || read64(objects[role]+8) || read64(objects[role]+0xf8)!=resources[role]){consistent=false;break;}
++        Cpu post_original=*c;vis73_queue.injecting=true;c->x[0]=before.player_address+vis72_wrapper_offset[role];
++        guest_call(c,UINT64_C(0x7000f1e218));uint32_t result=(uint32_t)c->x[0];*c=post_original;vis73_queue.injecting=false;
++        // Cpu restoration deliberately does NOT undo native graph/parent changes.
++        if(result!=1 || !actor_same(before.player_address,before.player_instance) || read64(UINT64_C(0x7002bfe688))!=root ||
++           !ptr(root,0x100) || read64(root)!=UINT64_C(0x7001699050) || read64(root+0xf0)!=array || read32(root+0xf8)!=capacity ||
++           read64(before.player_address+vis72_object_offset[role])!=objects[role] || read64(objects[role])!=tables[role] ||
++           read64(objects[role]+0xf8)!=resources[role] || read64(objects[role]+8)!=root || read32(root+0xfc)!=initial+inserted+1 ||
++           read64(array+(uint64_t)(initial+inserted)*8)!=objects[role]){consistent=false;break;}
++        inserted++;
++    }
++    if(!consistent){atomic_store(&vis73_failed,true);sst_origin_latch_unsupported();} // No further attempts after any attempted-batch inconsistency.
++    const char *path=getenv("SST_VIS73_QUEUE_LOG");
++    if(path){static pthread_mutex_t mu=PTHREAD_MUTEX_INITIALIZER;static FILE *output;static unsigned rows;pthread_mutex_lock(&mu);
++        if(rows<1024){if(!output){output=fopen(path,"w");if(output)fprintf(output,"segment,actor_instance,initial_children,inserted,consistent,at_ms\n");}
++            if(output){fprintf(output,"%d,%u,%u,%u,%u,%llu\n",vis73_queue.segment,before.player_instance,initial,inserted,consistent,(unsigned long long)sst_now_ms());fflush(output);rows++;}}
++        pthread_mutex_unlock(&mu);}
++    // Ordinary native frame-clear removes/detaches them. No manual rollback.
++}
++
+ void sst_dev_dispatch_init(void) {
++    vis72_dispatch_init();
++    vis71_dispatch_init();
+     original_update=dispatch_lookup(PLAYER_UPDATE);
+     bindings=g_is_skyward && original_update && read32(PLAYER_UPDATE)==0x6db63bef &&
+         read32(PLAYER_UPDATE+4)==0x6d0133ed && read32(CRR_POS)==0xfc180fea && read32(CRR_POS+4)==0x6d0123e9 &&
+@@ -324,6 +568,8 @@ void sst_dev_dispatch_init(void) {
+     if(bindings && !registered){hle_override(PLAYER_UPDATE,player_update,"SST local developer movement");registered=true;}
+ }
+ RT_ON_RESET(sst_dev_reset_runtime) {
++    pthread_mutex_lock(&source74_mu);memset(source74_members,0,sizeof source74_members);pthread_mutex_unlock(&source74_mu);sst_origin_reset();
++
+     sst_dev_reset();sst_teleport_reset(&teleport);pending=(SstDevRequest){0};scratch=tracked_actor=0;tracked_instance=0;
+     pending_since=0;memset(&tracked_scene,0,sizeof tracked_scene);destination_loading=false;was_flying=false;last_flight_ms=0;memset(&input,0,sizeof input);
+     memset(&sst_dev_native_stats,0,sizeof sst_dev_native_stats);atomic_store(&noclip_capable,false);atomic_store(&input_allowed,false);
+diff --git a/runtime/nvn/cmdbuf.c b/runtime/nvn/cmdbuf.c
+index 310e4d8..aa655ba 100644
+--- a/runtime/nvn/cmdbuf.c
++++ b/runtime/nvn/cmdbuf.c
+@@ -5,6 +5,7 @@
+ #include <string.h>
+ 
+ #include "nvn.h"
++#include "../sst/sst_origin.h"
+ 
+ #define JUMP_RESERVE (sizeof(CmdRec) + 8)
+ 
+@@ -90,9 +91,10 @@ NVN(nvnCommandBufferEndRecording) {
+ NVN(nvnCommandBufferIsRecording) { RET(cb_of(A(0))->recording); }
+ 
+ // ---- generic recorders
+-typedef struct { uint64_t x[8]; float f[4]; } Snap;
++typedef struct { uint64_t x[8]; float f[4]; SstOriginMarker origin; } Snap;
+ static Snap snap(Cpu *c) {
+     Snap s;
++    s.origin=sst_origin_current(); // freeze BEFORE rec() may enter a guest OOM callback
+     memcpy(s.x, c->x, sizeof s.x);
+     for (int i = 0; i < 4; i++) s.f[i] = *(float *)&c->v[i];
+     return s;
+@@ -101,6 +103,9 @@ static CmdRec *record(Cpu *c, uint32_t op, uint32_t extra, Snap *s) {
+     CmdRec *r = rec(c, cb_of(s->x[0]), op, extra);
+     memcpy(r->x, s->x + 1, sizeof r->x);
+     memcpy(r->f, s->f, sizeof r->f);
++    memcpy(r->source_origin,s->origin.bytes,sizeof r->source_origin);
++    if(sst_origin_is_forced(s->origin) && (op==CMD_CALL || op==CMD_DRAW_ARRAYS_INDIRECT || op==CMD_DRAW_ELEMENTS_INDIRECT || op==CMD_DRAW_TEXTURE || op==CMD_DISPATCH || op==CMD_DISPATCH_INDIRECT))
++        sst_origin_latch_unsupported(); // direct-draw PRIVATE stage: stop new source insertion
+     return r;
+ }
+ // record with a copy of `len` bytes from the guest pointer in argument `arg`
+@@ -273,7 +278,7 @@ NVN(nvnCommandBufferSaveZCullData) { (void)c; }
+ NVN(nvnCommandBufferRestoreZCullData) { (void)c; }
+ 
+ static uint64_t copy_row_stride, copy_image_stride;
+-RT_ON_RESET(cmdbuf_reset) { copy_row_stride = copy_image_stride = 0; }
++RT_ON_RESET(cmdbuf_reset) { copy_row_stride = copy_image_stride = 0; sst_origin_reset(); }
+ NVN(nvnCommandBufferSetCopyRowStride) {
+     Snap s = snap(c);
+     copy_row_stride = s.x[1];
+@@ -364,10 +369,10 @@ NVN(nvnCommandBufferDrawElementsBaseVertex) {
+ NVN(nvnCommandBufferDrawElementsInstanced) { trace_draw(c, c->x[3]); Snap s = snap(c); record(c, CMD_DRAW_ELEMENTS, 0, &s); }
+ PLAIN(nvnCommandBufferDrawArraysIndirect, CMD_DRAW_ARRAYS_INDIRECT)
+ PLAIN(nvnCommandBufferDrawElementsIndirect, CMD_DRAW_ELEMENTS_INDIRECT)
+-NVN(nvnCommandBufferMultiDrawArraysIndirectCount) { (void)c; }
+-NVN(nvnCommandBufferMultiDrawElementsIndirectCount) { (void)c; }
+-NVN(nvnCommandBufferDrawTransformFeedback) { (void)c; }
+-NVN(nvnCommandBufferDrawTexture) { (void)c; }
++NVN(nvnCommandBufferMultiDrawArraysIndirectCount) { if(sst_origin_is_forced(sst_origin_current()))sst_origin_latch_unsupported();(void)c; }
++NVN(nvnCommandBufferMultiDrawElementsIndirectCount) { if(sst_origin_is_forced(sst_origin_current()))sst_origin_latch_unsupported();(void)c; }
++NVN(nvnCommandBufferDrawTransformFeedback) { if(sst_origin_is_forced(sst_origin_current()))sst_origin_latch_unsupported();(void)c; }
++NVN(nvnCommandBufferDrawTexture) { if(sst_origin_is_forced(sst_origin_current()))sst_origin_latch_unsupported();(void)c; }
+ PLAIN(nvnCommandBufferDispatchCompute, CMD_DISPATCH)
+ PLAIN(nvnCommandBufferDispatchComputeIndirect, CMD_DISPATCH_INDIRECT)
+ NVN(nvnCommandBufferBeginTransformFeedback) { (void)c; }
+diff --git a/runtime/nvn/nvn.h b/runtime/nvn/nvn.h
+index d6665be..f13d267 100644
+--- a/runtime/nvn/nvn.h
++++ b/runtime/nvn/nvn.h
+@@ -104,6 +104,7 @@ typedef struct {
+     uint32_t op, size;  // size includes the header, multiple of 8
+     uint64_t x[7];      // x1..x7 of the call
+     float f[4];         // s0..s3 of the call
++    unsigned char source_origin[16]; // opaque immutable source class/ref; HOST IR only
+     uint8_t extra[];
+ } CmdRec;
+ 
+diff --git a/runtime/nvn/vulkan/exec.c b/runtime/nvn/vulkan/exec.c
+index 9f5bfc5..e394258 100644
+--- a/runtime/nvn/vulkan/exec.c
++++ b/runtime/nvn/vulkan/exec.c
+@@ -24,6 +24,7 @@
+ #include "../../sst/sst_avatar.h"
+ #include "../../sst/sst_animation.h"
+ #include "../../sst/sst_census.h"
++#include "../../sst/sst_origin.h"
+ 
+ // Only the replay's descriptors use transformed copies. Guest memory and the local draw stay intact.
+ static const float *sst_replay_transform;
+@@ -2639,14 +2640,48 @@ static bool topology(uint32_t mode, VkPrimitiveTopology *t, uint8_t *cls) {
+     }
+ }
+ 
+-static void draw_(CmdRec *r, bool indexed);
+-static void draw(CmdRec *r, bool indexed) {
++
++struct {uint64_t forced_draws,forced_invalid,native_suppressed,native_census,remote_draws,unknown_forced,natural_draws,forced_calls;} sst_source74_render_stats;
++static bool source74_span(uint64_t address,size_t size) {
++    return address>=SST_LAYOUT_SSHD_100.guest_lo && address<SST_LAYOUT_SSHD_100.guest_hi && size<=SST_LAYOUT_SSHD_100.guest_hi-address;
++}
++static uint64_t source74_u64(uint64_t at){uint64_t value;memcpy(&value,(void *)(uintptr_t)at,8);return value;}
++static bool source74_resolve(SstOriginMarker marker,SstOriginProof *proof,SstLocal *local) {
++    if(!sst_origin_read(marker,sst_now_ms(),proof))return false;
++    SstLocal published=sst_game_local();*local=sst_game_read_render_local(&SST_LAYOUT_SSHD_100,&published,sst_game_pose_tick());
++    SstOriginIdentity *id=&proof->identity;static const uint32_t wrapper[4]={0x540,0x5f8,0x648,0x7e0},object[4]={0x560,0x618,0x668,0x800};
++    if(!local->valid || id->role>=4 || local->player_address!=id->actor_address || local->player_instance!=id->actor_instance ||
++       strcmp(local->scene.stage,id->scene.stage) || local->scene.room!=id->scene.room || local->scene.layer!=id->scene.layer || local->scene.entrance!=id->scene.entrance ||
++       !source74_span(id->actor_address,0x6b00) || source74_u64(id->actor_address)!=UINT64_C(0x7001637d28) || source74_u64(id->actor_address+0x38)!=id->actor_address ||
++       id->model_address!=id->actor_address+wrapper[id->role] || source74_u64(id->actor_address+object[id->role])!=id->object_address || !source74_span(id->object_address,0x190))return false;
++    uint64_t table=source74_u64(id->object_address);
++    if((table!=UINT64_C(0x7001698d50) && table!=UINT64_C(0x7001698de8)) || source74_u64(id->object_address+0xf8)!=id->resource_address)return false;
++    SstOriginProof verified;
++    return sst_origin_peek(marker,id,sst_now_ms(),&verified);
++}
++static bool source74_hide_enabled(void) {
++    const char *path=getenv("SST_SOURCE74_HIDE_SWITCH");int enabled=0;FILE *f=path?fopen(path,"r"):NULL;
++    if(f){if(fscanf(f,"%d",&enabled)!=1)enabled=0;fclose(f);}return enabled==1;
++}
++
++static void draw_(CmdRec *r, bool indexed,SstOriginMarker origin);
++static void draw(CmdRec *r, bool indexed,SstOriginMarker invocation) {
+     PROF_T0();
+-    draw_(r, indexed);
++    SstOriginMarker recorded;memcpy(recorded.bytes,r->source_origin,16);
++    draw_(r,indexed,sst_origin_combine(recorded,invocation));
+     PROF_ADD(prof_draw);
+ }
+ static uint64_t prof_tp_;
+-static void draw_(CmdRec *r, bool indexed) {
++static void draw_(CmdRec *r, bool indexed,SstOriginMarker origin) {
++    bool forced=sst_origin_is_forced(origin);bool hide_native=false;SstOriginProof source_proof={0};SstLocal forced_local={0};
++    if(forced) {
++        sst_source74_render_stats.forced_draws++;
++        if(!source74_resolve(origin,&source_proof,&forced_local)){sst_source74_render_stats.forced_invalid++;sst_source74_render_stats.native_suppressed++;return;}
++        sst_animation_source_frame(&forced_local.scene,&forced_local.pose,renderer_present_count(),false);
++        if(forced_local.pose.action!=104){sst_source74_render_stats.forced_invalid++;sst_source74_render_stats.native_suppressed++;return;}
++        hide_native=source74_hide_enabled();
++        if(hide_native)sst_source74_render_stats.native_suppressed++;else sst_source74_render_stats.native_census++;
++    } else sst_source74_render_stats.natural_draws++;
+     if (prof) prof_tp_ = SDL_GetTicksNS();
+     if (!st.program) { stat_skipped++; return; }
+     ShaderKey vkey = {0}, fkey = {0};
+@@ -3098,8 +3133,10 @@ static void draw_(CmdRec *r, bool indexed) {
+             VkDescriptorSet rset = stage_set(pr, pr->set_layout[1], 1, 1, pr->fi, rs0, rtint, 0, 0, 0, fii);
+             vkCmdBindDescriptorSets(cb, VK_PIPELINE_BIND_POINT_GRAPHICS, pr->layout, 1, 1, &rset, 0, NULL);
+         }
+-        if (!use_index) vkCmdDraw(cb, count, run_n[ri], first, base_inst + run_at[ri]);
+-        else vkCmdDrawIndexed(cb, icount, run_n[ri], 0, base_vertex, base_inst + run_at[ri]);
++        if(!hide_native) {
++            if (!use_index) vkCmdDraw(cb, count, run_n[ri], first, base_inst + run_at[ri]);
++            else vkCmdDrawIndexed(cb, icount, run_n[ri], 0, base_vertex, base_inst + run_at[ri]);
++        }
+     }
+     // Verified SSHD Link geometry, in the main perspective pass. Reuse its textures and meshes;
+     // each peer gets separate model/view and skinning uniforms, including depth-tested occlusion.
+@@ -3118,8 +3155,8 @@ static void draw_(CmdRec *r, bool indexed) {
+             static SstAnimationReplay replay[SST_MAX_PLAYERS];
+             static int nremote;
+             uint64_t frame = renderer_present_count();
+-            sst_animation_frame(&local.scene, &local.pose, frame);
+-            sst_animation_set_length(local.pose.anim_id, local.animation_length);
++            sst_animation_source_frame(&local.scene,&local.pose,frame,!forced);
++            if(!forced)sst_animation_set_length(local.pose.anim_id,local.animation_length);
+             if (sampled_frame != frame) {
+                 nremote = sst_remote_network_sample(&local.scene, remote, SST_MAX_PLAYERS);
+                 for (int peer = 0; peer < nremote; peer++)
+@@ -3133,16 +3170,17 @@ static void draw_(CmdRec *r, bool indexed) {
+             if (!(pr->vi->cbuf_mask & (1u << 7))) normals = (Range){0};
+             if (sst_avatar_local_skin(&local.pose, view, uniform + 16,
+                     (const void *)(uintptr_t)positions.addr, positions.size)) {
+-                sst_avatar_note_local(avatar_mesh,frame);
++                if(!forced)sst_avatar_note_local(avatar_mesh,frame);
+                 // Own equipment still gets reported when this viewer hides peer avatars.
+                 if(g_sst.show_avatars && (!sst_avatar_equipment(avatar_mesh) || (!positions.size && !normals.size))) {
+                     uint16_t pose_mesh = sst_avatar_pose_mesh(avatar_mesh, positions.size, normals.size);
+                     if(sst_avatar_equipment(avatar_mesh))
+                         pose_mesh=sst_avatar_equipment_pose(avatar_mesh,
+-                            sst_game_equipment_flags(&local, sst_avatar_local_equipment()) & SST_EQUIP_SWORD_DRAWN);
+-                    sst_animation_capture(pose_mesh, &local.pose, view, uniform + 16,
+-                        (const void *)(uintptr_t)positions.addr, positions.size,
+-                        (const void *)(uintptr_t)normals.addr, normals.size);
++                            sst_game_equipment_flags(&local,forced?0:sst_avatar_local_equipment()) & SST_EQUIP_SWORD_DRAWN);
++                    if(forced)sst_animation_declare_part(pose_mesh,positions.size,normals.size);
++                    else sst_animation_capture(pose_mesh,&local.pose,view,uniform+16,
++                        (const void *)(uintptr_t)positions.addr,positions.size,
++                        (const void *)(uintptr_t)normals.addr,normals.size);
+                     for (int peer = 0; peer < nremote; peer++) {
+                         float transform[12];
+                         if (!sst_avatar_transform(&local.pose, &remote[peer].pose, view, transform)) continue;
+@@ -3166,6 +3204,7 @@ static void draw_(CmdRec *r, bool indexed) {
+                         vkCmdBindDescriptorSets(cb, VK_PIPELINE_BIND_POINT_GRAPHICS, pr->layout, 0, 1, &puppet, 0, NULL);
+                         if (!use_index) vkCmdDraw(cb, count, 1, first, base_inst);
+                         else vkCmdDrawIndexed(cb, icount, 1, 0, base_vertex, base_inst);
++                        if(forced)sst_source74_render_stats.remote_draws++;
+                     }
+                     vkCmdBindDescriptorSets(cb, VK_PIPELINE_BIND_POINT_GRAPHICS, pr->layout, 0, 1, &vset, 0, NULL);
+                     static uint64_t trace_frame;
+@@ -3194,9 +3233,10 @@ static void draw_(CmdRec *r, bool indexed) {
+             }
+         }
+     }
++    if(forced && !avatar_mesh)sst_source74_render_stats.unknown_forced++;
+     // Adapted from the user-provided MIT SST handoff (2026-10-30). This
+-    // diagnostic observes unknown meshes; it never admits them to avatar replay.
+-    if(sst_census_enabled() && g_is_skyward && inst==1 && st.ds[0] &&
++    // diagnostic observes natural unknown meshes; forced sources never teach it.
++    if(!forced && sst_census_enabled() && g_is_skyward && inst==1 && st.ds[0] &&
+         st.ubuf[0][0].size==864 && st.ubuf[0][0].addr &&
+         st.viewport[0][0]==0 && st.viewport[0][1]==0 && st.vbuf[0].addr && st.vbuf[0].size>=256) {
+         const float *uniform=(const float *)(uintptr_t)st.ubuf[0][0].addr;
+@@ -3799,11 +3839,13 @@ void renderer_save_texture_tex(TexBackend *b, const char *path) {
+ }
+ 
+ // ================================================================== executor (renderer.m exec_list)
+-static void exec_list(uint64_t handle, int depth) {
++static void exec_list(uint64_t handle, int depth,SstOriginMarker invocation) {
+     uint64_t p = handle;
+     for (int guard = 0; guard < 10000000; guard++) {
+         CmdRec *r = (CmdRec *)(uintptr_t)p;
+         void *x = r->extra;
++        SstOriginMarker record_origin;memcpy(record_origin.bytes,r->source_origin,16);
++        SstOriginMarker effective_origin=sst_origin_combine(record_origin,invocation);
+         if (r->op < CMD_COUNT) op_counts[r->op]++;
+         switch (r->op) {
+         case CMD_END: return;
+@@ -3820,7 +3862,9 @@ static void exec_list(uint64_t handle, int depth) {
+             break;
+         case CMD_CALL: {
+             const uint64_t *h = x;
+-            for (uint64_t i = 0; i < r->x[0] && depth < 8; i++) exec_list(h[i], depth + 1);
++            SstOriginMarker recorded;memcpy(recorded.bytes,r->source_origin,16);SstOriginMarker nested=sst_origin_combine(recorded,invocation);
++            if(sst_origin_is_forced(nested)){sst_source74_render_stats.forced_calls++;sst_origin_latch_unsupported();}
++            for (uint64_t i=0;i<r->x[0] && depth<8;i++)exec_list(h[i],depth+1,nested);
+             break;
+         }
+         case CMD_BIND_PROGRAM: st.program = (NvnProgram *)(uintptr_t)r->x[0]; break;
+@@ -3970,9 +4014,12 @@ static void exec_list(uint64_t handle, int depth) {
+                 clear(-1, 0, NULL, 0, r->x[0] != 0, r->f[0], has_stencil && r->x[2] != 0, (uint32_t)r->x[1], (uint32_t)r->x[2]);
+             }
+             break;
+-        case CMD_DISPATCH: dispatch_compute((uint32_t)r->x[0], (uint32_t)r->x[1], (uint32_t)r->x[2]); break;
+-        case CMD_DRAW_ARRAYS: draw(r, false); break;
+-        case CMD_DRAW_ELEMENTS: draw(r, true); break;
++        case CMD_DISPATCH:
++            if(!sst_origin_is_forced(effective_origin))dispatch_compute((uint32_t)r->x[0],(uint32_t)r->x[1],(uint32_t)r->x[2]);
++            else sst_origin_latch_unsupported();
++            break;
++        case CMD_DRAW_ARRAYS: draw(r,false,invocation); break;
++        case CMD_DRAW_ELEMENTS: draw(r,true,invocation); break;
+         case CMD_UPDATE_UNIFORM_BUFFER:
+             memcpy((void *)(uintptr_t)(r->x[0] + r->x[2]), x, r->x[3]);
+             guest_copy_flush();  // (cbuf copies shared within the submission are stale now)
+@@ -4045,7 +4092,7 @@ void backend_execute(uint64_t handle) {
+                          renderer_present_count());
+     }
+     PROF_T0();
+-    exec_list(handle, 0);
++    exec_list(handle,0,sst_origin_none());
+     PROF_ADD(prof_exec);
+     if (prof) cum_exec += SDL_GetTicksNS() - prof_t0_;
+     static int sync_submit = -1;
+-- 
+2.56.0
+

@@ -1,0 +1,105 @@
+{
+  "passed": true,
+  "actual_windows_hardware": true,
+  "runtime_sha256": "2f9f58d82851478620474f5125498b518c1b250030874d73b81c38c970daa6a7",
+  "full_game_processes": 1,
+  "lightweight_tcp_peers": 3,
+  "requested_capture_frame": 36000,
+  "source_key": [
+    117,
+    496,
+    4294967280,
+    0,
+    1
+  ],
+  "genuine_native_descriptors": 1193,
+  "replay_descriptors": 3141,
+  "native_area_loads": 1,
+  "pickup_putdown_observed": true,
+  "receiver_hand_support_visually_reviewed": true,
+  "receiver_movement_visually_reviewed": true,
+  "stale_descriptor_sender_stopped": true,
+  "pose_updates_continued": true,
+  "expiration_restoration_visually_reviewed": true,
+  "invalid_context_restoration_visually_reviewed": true,
+  "valid_carry_recovered": true,
+  "remote_place_and_settled_floor_visually_reviewed": true,
+  "cold_import_used": false,
+  "arrival_labels_visible": true,
+  "keyboard_travel_completed": true,
+  "reviewed_images": {
+    "navigation-target.png": {
+      "sha256": "3339c786546ed060e295af653de353390278eb60810f9fbbaad6764faaabae85",
+      "review": "Correct room0/layer1/entrance2 selected; keyboard focus reaches enabled Teleport button",
+      "method": "Assistant visual inspection of this exact PNG using view_image"
+    },
+    "academy-hall-arrival.png": {
+      "sha256": "ae51a99f8d6145651ea094891dba905cd81aadc1bdfcd54d5436a398f18f31f9",
+      "review": "Native Link and three named complete remote characters visible in the Academy hall",
+      "method": "Assistant visual inspection of this exact PNG using view_image"
+    },
+    "genuine-pickup.png": {
+      "sha256": "e0e91a15a25df9f2537d0194709131ce489381b0d96d83dfac054ed4b9080882",
+      "review": "Native Link holds the pot in raised hands; Put down prompt",
+      "method": "Assistant visual inspection of this exact PNG using view_image"
+    },
+    "genuine-putdown.png": {
+      "sha256": "0fd228ee45253e606c6029152de87dbb1c2ed5041e3aefb03fdf4ad7e6a7b7ac",
+      "review": "Native hands empty, grounded pot, Pick up prompt",
+      "method": "Assistant visual inspection of this exact PNG using view_image"
+    },
+    "remote-pot-carry.png": {
+      "sha256": "5252d9691400ee9b42fc913e75d2f306bfb5b6b4f79acd09331e482b5cb925bb",
+      "review": "Simulated1 visibly supports received vase in raised hands; native player empty-handed",
+      "method": "Assistant visual inspection of this exact PNG using view_image"
+    },
+    "remote-pot-moved.png": {
+      "sha256": "42155c55ea36287ae4938abf075918a10716f4ea52be03fed8c14977d36feb0a",
+      "review": "Same remote partner changes position with vase supported by hands",
+      "method": "Assistant visual inspection of this exact PNG using view_image"
+    },
+    "remote-pot-expired.png": {
+      "sha256": "d28d9c5f4d56ab0d632d53d97e30af1bf5f0a86be76dd6c8fe67aa62d5fde4f0",
+      "review": "Fresh peer poses continue; remote raised hands empty and vase restored to native floor position",
+      "method": "Assistant visual inspection of this exact PNG using view_image"
+    },
+    "remote-pot-resumed.png": {
+      "sha256": "3e9d7a9afa50de88385fe271e2d4d8a71e19ba3400e90b49ae8a1ed0cb529cd6",
+      "review": "Received vase back in remote partner hands after fresh descriptors resume",
+      "method": "Assistant visual inspection of this exact PNG using view_image"
+    },
+    "remote-pot-invalid-context.png": {
+      "sha256": "6f15c022e4fc5099026dd4fbac02e6555ecbd21677fa3fc5d6c61b94d4f05990",
+      "review": "Invalid drawn-plus-carry request leaves remote arms idle and vase on native floor",
+      "method": "Assistant visual inspection of this exact PNG using view_image"
+    },
+    "remote-pot-valid-again.png": {
+      "sha256": "853c820594e5b99231edfbb8887a48d7cc7a6bad0ee51f13a8b4d1fb1350264d",
+      "review": "Valid carry resumes vase supported by remote hands",
+      "method": "Assistant visual inspection of this exact PNG using view_image"
+    },
+    "remote-pot-placed.png": {
+      "sha256": "b1a322c75e64b16e2a9c283cb409800ffa938db50169dc3052a9c2214e109c12",
+      "review": "Remote arms idle and vase grounded beside remote player",
+      "method": "Assistant visual inspection of this exact PNG using view_image"
+    },
+    "remote-place-settled.png": {
+      "sha256": "aeedd433b7ed8ac9c5bb51ded9611a8ca59bf62e246a310e30c5511c32c19040",
+      "review": "Vase remains grounded beside remote player after descriptor refresh stops",
+      "method": "Assistant visual inspection of this exact PNG using view_image"
+    },
+    "window.png": {
+      "sha256": "949579a71f4eaef6c98f542c80cade613a743f3e266b8f529967aa54bc679f12",
+      "review": "Final four-character scene, vase grounded at remote putdown position",
+      "method": "Assistant visual inspection of this exact PNG using view_image"
+    }
+  },
+  "owned_children_final": 0,
+  "owned_sockets_final": 0,
+  "independent_full_clients_tested": false,
+  "internet_or_campaign_acceptance": false,
+  "same_vase_instance_independently_probed": false,
+  "all_object_classes_tested": false,
+  "installed": false,
+  "published": false
+}

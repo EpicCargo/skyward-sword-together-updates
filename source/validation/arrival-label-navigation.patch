@@ -1,0 +1,20 @@
+diff --git a/runtime/ui/developer_tab.mm b/runtime/ui/developer_tab.mm
+index 21a9ce3..701b514 100644
+--- a/runtime/ui/developer_tab.mm
++++ b/runtime/ui/developer_tab.mm
+@@ -307,12 +307,12 @@ static void draw_destination_tools(float scale) {
+     ImGui::EndChild();
+     if(travel.dirty)rebuild_travel();
+     ImGui::Text("Arrivals (%zu)",travel.matches.size());
+-    if(ImGui::BeginChild("##sst_dev_arrivals",ImVec2(0,ImGui::GetTextLineHeightWithSpacing()*6.5f),ImGuiChildFlags_Borders)) {
++    if(ImGui::BeginChild("##sst_dev_arrivals",ImVec2(0,ImGui::GetTextLineHeightWithSpacing()*6.5f),ImGuiChildFlags_Borders|ImGuiChildFlags_NavFlattened)) {
+         ImGuiListClipper clip;clip.Begin((int)travel.matches.size());
+         while(clip.Step())for(int row=clip.DisplayStart;row<clip.DisplayEnd;row++) {
+             size_t index=travel.matches[(size_t)row];const SstDestination *d=sst_destination_at(index);if(!d)continue;
+-            char label[448];snprintf(label,sizeof label,"%s | %s / room %u / layer %u / entry %u%s##arrival%zu",d->label,
+-                d->stage,d->room,d->layer,d->entrance,(d->flags&SST_DEST_EVENT_OR_TITLE)?" (event/title)":"",index);
++            char label[448];snprintf(label,sizeof label,"%s / room %u / layer %u / entry %u | %s%s##arrival%zu",
++                d->stage,d->room,d->layer,d->entrance,d->label,(d->flags&SST_DEST_EVENT_OR_TITLE)?" (event/title)":"",index);
+             ImGui::BeginDisabled(!destination_playable(d));
+             if(ImGui::Selectable(label,travel.selected==index)){travel.selected=index;travel.queue_failed=false;}
+             ImGui::EndDisabled();

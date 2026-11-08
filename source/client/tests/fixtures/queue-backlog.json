@@ -1,0 +1,57 @@
+{
+  "version": 1,
+  "config": {
+    "expected": "converged",
+    "transport": "real TCP C client"
+  },
+  "steps": [
+    {
+      "op": "flags",
+      "index": 50,
+      "count": 700
+    },
+    {
+      "op": "flags",
+      "index": 50,
+      "count": 700
+    },
+    {
+      "op": "flags",
+      "index": 50,
+      "count": 700
+    },
+    {
+      "op": "flags",
+      "index": 50,
+      "count": 700
+    },
+    {
+      "op": "flags",
+      "index": 50,
+      "count": 700
+    },
+    {
+      "op": "flags",
+      "index": 50,
+      "count": 700
+    },
+    {
+      "op": "flags",
+      "index": 65530,
+      "value": 1,
+      "pin": true
+    }
+  ],
+  "shrunk": {
+    "signature": "shared_flag_lost",
+    "original_steps": 18,
+    "reduced_steps": 7,
+    "list_key": "steps",
+    "oracle_runs": 26,
+    "complete": true,
+    "first": null,
+    "violations": [
+      "queued snapshot lost the final progress flag"
+    ]
+  }
+}

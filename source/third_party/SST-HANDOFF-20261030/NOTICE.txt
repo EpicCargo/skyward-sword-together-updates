@@ -1,0 +1,4 @@
+Compatible SST fixes adapted from user-provided SST-dev-handoff-20261030.zip.
+Original archive preserved at Downloads/Skysword; SHA25660e7a237eb95a5846e35b59588296ad42fc50cb19f15f77e59c3103efc17846e.
+Source histories and precise imported features recorded in build/incoming-handoff-audit/MERGE-AUDIT.txt.
+No archived prebuilt binaries or game assets were adopted. Preserve applicable MIT notices with adapted source.

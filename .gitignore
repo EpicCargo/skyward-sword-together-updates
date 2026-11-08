@@ -1,0 +1,9 @@
+**/__pycache__/
+**/*.pyc
+source/engine/
+source/build/
+source/.deps/
+**/node_modules/
+**/.wrangler/
+.env
+.dev.vars

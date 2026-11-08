@@ -1,0 +1,236 @@
+{
+  "scope": "Actual private Windows run profile416; controls applied immediately around observed logged frames, not exact application-frame assertions",
+  "key": {
+    "placed_id": 117,
+    "profile": 496,
+    "params": 4294967280,
+    "room": 0,
+    "layer": 1
+  },
+  "steps": [
+    {
+      "observed_present_frame": 20101,
+      "mode": "carry",
+      "request": 1,
+      "equipment": [
+        0,
+        0,
+        0
+      ],
+      "positions": [
+        [
+          3100,
+          1.5,
+          -2980
+        ],
+        [
+          3000,
+          1.5,
+          -3150
+        ],
+        [
+          3500,
+          1.5,
+          -3100
+        ]
+      ],
+      "approve_captured_place": false
+    },
+    {
+      "observed_present_frame": 24301,
+      "mode": "carry",
+      "request": 2,
+      "equipment": [
+        0,
+        0,
+        0
+      ],
+      "positions": [
+        [
+          3150,
+          1.5,
+          -3080
+        ],
+        [
+          3000,
+          1.5,
+          -3150
+        ],
+        [
+          3500,
+          1.5,
+          -3100
+        ]
+      ],
+      "approve_captured_place": false
+    },
+    {
+      "observed_present_frame": 25201,
+      "mode": "stale",
+      "request": 3,
+      "equipment": [
+        0,
+        0,
+        0
+      ],
+      "positions": [
+        [
+          3150,
+          1.5,
+          -3080
+        ],
+        [
+          3000,
+          1.5,
+          -3150
+        ],
+        [
+          3500,
+          1.5,
+          -3100
+        ]
+      ],
+      "approve_captured_place": false
+    },
+    {
+      "observed_present_frame": 27961,
+      "mode": "carry",
+      "request": 4,
+      "equipment": [
+        0,
+        0,
+        0
+      ],
+      "positions": [
+        [
+          3150,
+          1.5,
+          -3080
+        ],
+        [
+          3000,
+          1.5,
+          -3150
+        ],
+        [
+          3500,
+          1.5,
+          -3100
+        ]
+      ],
+      "approve_captured_place": false
+    },
+    {
+      "observed_present_frame": 29461,
+      "mode": "carry",
+      "request": 5,
+      "equipment": [
+        3,
+        0,
+        0
+      ],
+      "positions": [
+        [
+          3150,
+          1.5,
+          -3080
+        ],
+        [
+          3000,
+          1.5,
+          -3150
+        ],
+        [
+          3500,
+          1.5,
+          -3100
+        ]
+      ],
+      "approve_captured_place": false
+    },
+    {
+      "observed_present_frame": 31561,
+      "mode": "carry",
+      "request": 6,
+      "equipment": [
+        0,
+        0,
+        0
+      ],
+      "positions": [
+        [
+          3150,
+          1.5,
+          -3080
+        ],
+        [
+          3000,
+          1.5,
+          -3150
+        ],
+        [
+          3500,
+          1.5,
+          -3100
+        ]
+      ],
+      "approve_captured_place": false
+    },
+    {
+      "observed_present_frame": 32461,
+      "mode": "place",
+      "request": 7,
+      "equipment": [
+        0,
+        0,
+        0
+      ],
+      "positions": [
+        [
+          3150,
+          1.5,
+          -3080
+        ],
+        [
+          3000,
+          1.5,
+          -3150
+        ],
+        [
+          3500,
+          1.5,
+          -3100
+        ]
+      ],
+      "approve_captured_place": true
+    },
+    {
+      "observed_present_frame": 34561,
+      "mode": "stop",
+      "request": null,
+      "equipment": [
+        0,
+        0,
+        0
+      ],
+      "positions": [
+        [
+          3150,
+          1.5,
+          -3080
+        ],
+        [
+          3000,
+          1.5,
+          -3150
+        ],
+        [
+          3500,
+          1.5,
+          -3100
+        ]
+      ],
+      "approve_captured_place": false
+    }
+  ]
+}

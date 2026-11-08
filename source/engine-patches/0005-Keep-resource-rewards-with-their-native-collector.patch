@@ -1,0 +1,44 @@
+From cb612e1a9d448d4d7f55eba79233690d9f72c37f Mon Sep 17 00:00:00 2001
+From: SST verification <sst-verification@localhost>
+Date: Thu, 29 Oct 2026 21:34:56 -0400
+Subject: [PATCH] Keep resource rewards with their native collector
+
+Mark shared resource chest receipts without granting another player currency, ammunition or materials. Preserve Mallara quest crystal progression while leaving the twenty-rupee payment with its collector.
+---
+ runtime/hle/sst_world.c | 13 +++++++++++--
+ 1 file changed, 11 insertions(+), 2 deletions(-)
+
+diff --git a/runtime/hle/sst_world.c b/runtime/hle/sst_world.c
+index fa00420..5c11a77 100644
+--- a/runtime/hle/sst_world.c
++++ b/runtime/hle/sst_world.c
+@@ -1297,8 +1297,9 @@ static bool grant_quest(Cpu *c, uint64_t fm, unsigned index) {
+         r8(f.defs + 1004) != 54 || r8(f.defs + 1005) != 0x36) return false;
+     uint64_t ivt = r64(f.mgr), item_setter = ptr(ivt, 0x40) ? r64(ivt + 0x38) : 0;
+     if (!code(item_setter)) return false;
+-    // Mallara's first cleaning reward includes a red rupee after the five crystals.
+-    unsigned counters = receipt.flag == 575 ? 2 : 1;
++    // Quest crystals remain shared progression. Mallara's accompanying currency
++    // stays with the native collector, as do other consumable resources.
++    unsigned counters = 1;
+     if (counters == 2 && !wallet_capacity_ready(c)) return false;
+     uint64_t rupee_own; uint16_t rupee_mask;
+     if (counters == 2 && !location(&f, 4, &rupee_own, &rupee_mask)) return false;
+@@ -1361,6 +1362,14 @@ static bool grant_chest(Cpu *c, uint64_t fm, unsigned index, uint16_t item) {
+     if (sst_chest_pouch_expansion(item)) return grant_pouch_expansion(c, fm, index);
+     if (sst_chest_pouch_quantity(item)) return grant_pouch_chest(c, fm, index, item, &receipt);
+     if (!sst_chest_item(item, &counter, &amount)) return false;
++    if (sst_chest_collector_only_resource(item)) {
++        // Share the opened container/quest receipt, preserving the collector's
++        // exclusive currency or treasure reward. Never copy wallet balances.
++        if (!backup(fm) || !prepare_receipt(c, &receipt)) return false;
++        mark_receipt(&receipt); applied++;
++        LOG("[sst-chest] collector-only resource receipt index=%u item=%u\n", index, item);
++        return true;
++    }
+     unsigned quantity = sst_chest_reward_quantity(index, item);
+     if (counter == 0 && !wallet_capacity_ready(c)) return false;
+     unsigned table = receipt.table;
+-- 
+2.56.0
+

@@ -1,0 +1,194 @@
+From a86e7ba8dda6e7f63bf7026296569affc6c58d65 Mon Sep 17 00:00:00 2001
+From: SST development <sst-development@localhost>
+Date: Tue, 3 Nov 2026 21:08:22 -0500
+Subject: [PATCH] Keep prop discovery active in larger Skyloft actor trees
+
+---
+ runtime/hle/sst_prop_bridge.h | 75 ++++++++++++++++++++---------------
+ runtime/hle/sst_prop_walk.h   | 54 +++++++++++++++++++++++++
+ 2 files changed, 98 insertions(+), 31 deletions(-)
+ create mode 100644 runtime/hle/sst_prop_walk.h
+
+diff --git a/runtime/hle/sst_prop_bridge.h b/runtime/hle/sst_prop_bridge.h
+index 68bb471..b33e5a9 100644
+--- a/runtime/hle/sst_prop_bridge.h
++++ b/runtime/hle/sst_prop_bridge.h
+@@ -1,6 +1,7 @@
+ // Ordinary SSHD vases only. Included after the world bridge's memory helpers.
+ #include "sst_prop_native.h"
+ #include "sst_prop_rest.h"
++#include "sst_prop_walk.h"
+ #include "../sst/sst_props.h"
+ #include "../sst/sst_remote.h"
+ 
+@@ -24,6 +25,7 @@ static struct {
+ } props_bridge = {.mu = PTHREAD_MUTEX_INITIALIZER};
+ struct {uint64_t received,carry_denied,carried_presented,placed_presented,last_sequence,last_owner,parked_presented;}
+     sst_prop_presentation_stats;
++struct {uint64_t walks,last_nodes,last_bindings,failures;} sst_prop_discovery_stats;
+ 
+ static void prop_release(PropBinding *b) {
+     if (b->remote_held && sst_prop_native_vase(b->actor) && r32(b->actor + 8) == b->instance)
+@@ -47,50 +49,60 @@ static PropBinding *prop_binding(uint64_t actor) {
+     return NULL;
+ }
+ 
++// Native validation and binding stay separate from the scalar bounded walker.
++typedef struct {const SstScene *scene;} PropWalkContext;
++static bool prop_walk_step(uint64_t node,SstPropWalkLinks *links,void *opaque) {
++    const SstScene *scene=((PropWalkContext *)opaque)->scene;
++    if(!ptr(node,0x28) || node<GUEST_LO+0x18)return false;
++    uint64_t actor=node-0x18;
++    if(!ptr(actor,0x180) || r64(node+0x20)!=actor)return false;
++    if (sst_prop_native_vase(actor) &&
++        (r8(actor + 0x17c) == scene->room || r8(actor + 0x17c) == 0xff)) {
++        PropBinding *b = NULL, *empty = NULL;
++        for (unsigned i = 0; i < SST_PROPS; i++) {
++            PropBinding *candidate = &props_bridge.bindings[i];
++            if (candidate->actor == actor && candidate->instance == r32(actor + 8)) { b = candidate; break; }
++            if (!candidate->actor && !empty) empty = candidate;
++        }
++        if (!b && empty) {
++            b = empty; memset(b, 0, sizeof *b); b->actor = actor; b->instance = r32(actor + 8);
++            b->key = (SstPropKey){.placed_id=r16(actor + 0x136), .profile=r16(actor + 0x10),
++                .params=r32(actor + 0xc), .room=scene->room, .layer=scene->layer};
++        }
++        if (b) b->seen = true;
++    }
++    links->child=r64(node+8);links->next=r64(node+0x18);
++    return true;
++}
++
+ // Rebind a bounded native tree every input tick. A packet never supplies an address.
+ static bool prop_discover(uint64_t player, const SstScene *scene) {
++    sst_prop_discovery_stats.walks++;
++    sst_prop_discovery_stats.last_nodes=sst_prop_discovery_stats.last_bindings=0;
+     uint64_t node = player + 0x18;
+     for (unsigned depth = 0;; depth++) {
+-        if (depth == 64 || !ptr(node, 0x28)) return false;
++        if (depth == 64 || !ptr(node, 0x28)) goto failed;
+         uint64_t parent = r64(node); if (!parent) break; node = parent;
+     }
+-    uint64_t stack[512], visited[512]; unsigned n = 1, count = 0;
+-    stack[0] = node;
+-    for (unsigned i = 0; i < SST_PROPS; i++) props_bridge.bindings[i].seen = false;
+-    while (n) {
+-        node = stack[--n];
+-        if (!ptr(node, 0x28) || node < GUEST_LO + 0x18 || count == 512) return false;
+-        for (unsigned i = 0; i < count; i++) if (visited[i] == node) return false;
+-        visited[count++] = node; uint64_t actor = node - 0x18;
+-        if (!ptr(actor, 0x180) || r64(node + 0x20) != actor) return false;
+-        if (sst_prop_native_vase(actor) &&
+-            (r8(actor + 0x17c) == scene->room || r8(actor + 0x17c) == 0xff)) {
+-            PropBinding *b = NULL, *empty = NULL;
+-            for (unsigned i = 0; i < SST_PROPS; i++) {
+-                PropBinding *candidate = &props_bridge.bindings[i];
+-                if (candidate->actor == actor && candidate->instance == r32(actor + 8)) { b = candidate; break; }
+-                if (!candidate->actor && !empty) empty = candidate;
+-            }
+-            if (!b && empty) {
+-                b = empty; memset(b, 0, sizeof *b); b->actor = actor; b->instance = r32(actor + 8);
+-                b->key = (SstPropKey){.placed_id=r16(actor + 0x136), .profile=r16(actor + 0x10),
+-                    .params=r32(actor + 0xc), .room=scene->room, .layer=scene->layer};
+-            }
+-            if (b) b->seen = true;
+-        }
+-        uint64_t child = r64(node + 8), next = r64(node + 0x18);
+-        if (child) { if (n == 512) return false; stack[n++] = child; }
+-        if (next) { if (n == 512) return false; stack[n++] = next; }
+-    }
+-    // Duplicate placement identities are ambiguous; neither actor can be modified.
++    for(unsigned i=0;i<SST_PROPS;i++)props_bridge.bindings[i].seen=false;
++    PropWalkContext context={.scene=scene};uint32_t nodes=0;
++    bool walked=sst_prop_walk(node,prop_walk_step,&context,&nodes);
++    sst_prop_discovery_stats.last_nodes=nodes;
++    if(!walked)goto failed;
++    // Duplicate placement identities remain ambiguous; neither actor can be modified.
+     for (unsigned i = 0; i < SST_PROPS; i++) {
+         PropBinding *b = &props_bridge.bindings[i];
+         if (!b->seen) { memset(b, 0, sizeof *b); continue; }
+         for (unsigned j = i + 1; j < SST_PROPS; j++)
+             if (props_bridge.bindings[j].seen && sst_prop_key_equal(&b->key, &props_bridge.bindings[j].key))
+-                return false;
++                goto failed;
++        sst_prop_discovery_stats.last_bindings++;
+     }
+     return true;
++failed:
++    sst_prop_discovery_stats.last_bindings=0;
++    sst_prop_discovery_stats.failures++;
++    return false;
+ }
+ 
+ static void prop_incoming(const SstProp *p, void *unused) {
+@@ -300,6 +312,7 @@ void sst_prop_dispatch_init(void) {
+ }
+ 
+ RT_ON_RESET(sst_prop_bridge_reset) {
++    memset(&sst_prop_discovery_stats,0,sizeof sst_prop_discovery_stats);
+     // All guest threads stopped; guest memory is about to be discarded.
+     memset(props_bridge.bindings, 0, sizeof props_bridge.bindings);
+     sst_props_reset(&props_bridge.state); props_bridge.enabled = false;
+diff --git a/runtime/hle/sst_prop_walk.h b/runtime/hle/sst_prop_walk.h
+new file mode 100644
+index 0000000..56c8eee
+--- /dev/null
++++ b/runtime/hle/sst_prop_walk.h
+@@ -0,0 +1,54 @@
++// Bounded scalar actor-tree DFS. No game pointers are dereferenced here.
++#ifndef SST_PROP_WALK_H
++#define SST_PROP_WALK_H
++#include <stdbool.h>
++#include <stdint.h>
++#include <stddef.h>
++
++enum {
++    SST_PROP_WALK_NODES = 2048,
++    SST_PROP_WALK_HASH = 4096, // at most50% occupied
++    SST_PROP_WALK_PROBES = 128 // constant per-node work; heavy collisions fail closed
++};
++typedef struct { uint64_t child, next; } SstPropWalkLinks;
++typedef bool (*SstPropWalkStep)(uint64_t node, SstPropWalkLinks *links, void *context);
++static inline size_t sst_prop_walk_bucket(uint64_t node) {
++    node ^= node >> 30; node *= UINT64_C(0xbf58476d1ce4e5b9);
++    node ^= node >> 27; node *= UINT64_C(0x94d049bb133111eb);
++    node ^= node >> 31;
++    return (size_t)node & (SST_PROP_WALK_HASH - 1u);
++}
++static inline bool sst_prop_walk(uint64_t root, SstPropWalkStep step, void *context,
++                                 uint32_t *visited_nodes) {
++    // 16KiB DFS +32KiB hash; bounded stack well below96KiB including locals.
++    uint64_t stack[SST_PROP_WALK_NODES], seen[SST_PROP_WALK_HASH] = {0};
++    unsigned pending = 0; uint32_t count = 0;
++    if (visited_nodes) *visited_nodes = 0;
++    if (!root || !step) return false;
++    stack[pending++] = root;
++    while (pending) {
++        uint64_t node = stack[--pending];
++        if (!node || count == SST_PROP_WALK_NODES) return false;
++        size_t slot = sst_prop_walk_bucket(node); bool inserted = false;
++        for (unsigned probe = 0; probe < SST_PROP_WALK_PROBES; probe++) {
++            if (seen[slot] == node) return false; // repeated ownership/cycle
++            if (!seen[slot]) {seen[slot] = node; inserted = true; break;}
++            slot = (slot + 1u) & (SST_PROP_WALK_HASH - 1u);
++        }
++        if (!inserted) return false;
++        count++; if (visited_nodes) *visited_nodes = count;
++        SstPropWalkLinks links = {0};
++        if (!step(node, &links, context)) return false;
++        // Preserve the original push order: next sibling is visited before child.
++        if (links.child) {
++            if (pending == SST_PROP_WALK_NODES) return false;
++            stack[pending++] = links.child;
++        }
++        if (links.next) {
++            if (pending == SST_PROP_WALK_NODES) return false;
++            stack[pending++] = links.next;
++        }
++    }
++    return true;
++}
++#endif
+-- 
+2.56.0
+

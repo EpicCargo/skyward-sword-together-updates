@@ -1,0 +1,121 @@
+From 9491c5b46d2282b5666492654a809a6af775d4f2 Mon Sep 17 00:00:00 2001
+From: SST development <sst-development@localhost>
+Date: Tue, 3 Nov 2026 00:17:27 -0500
+Subject: [PATCH] Probe private first-person peer wall occlusion with completed
+ GPU queries
+
+---
+ runtime/nvn/vulkan/exec.c | 70 +++++++++++++++++++++++++++++++++++++++
+ 1 file changed, 70 insertions(+)
+
+diff --git a/runtime/nvn/vulkan/exec.c b/runtime/nvn/vulkan/exec.c
+index 526188e..412bfa4 100644
+--- a/runtime/nvn/vulkan/exec.c
++++ b/runtime/nvn/vulkan/exec.c
+@@ -80,6 +80,60 @@ static uint64_t submit_seq;  // last submitted
+ static pthread_mutex_t seq_lock = PTHREAD_MUTEX_INITIALIZER;
+ static bool in_pass;
+ 
++// Private depth acceptance only: actual GPU occlusion queries around the first
++// peer's body draw. Flag0 gives a reliable zero/nonzero result, NOT precise
++// sample counts. No shader, geometry, palette or native memory is retained.
++#define DEPTH77_QUERIES 512u
++typedef struct {uint32_t segment,mode,peer,mesh,inherited_dt,inherited_dw,dt,dw,compare,stencil,width,height,color_count,depth_format,samples,action;
++    uint64_t frame,occurrence,depth_identity,color_identity;} Depth77Row;
++static struct {VkQueryPool pool;uint32_t n;uint64_t seq;Depth77Row rows[DEPTH77_QUERIES];} depth77_queries[SUBS];
++static uint32_t depth77_segment,depth77_mode;
++struct {uint64_t recorded,resolved,failed,dropped,overrides,restores,rows_written;} sst_depth77_stats;
++static bool depth77_enabled(void) {
++    static int enabled=-1;
++    if(enabled<0)enabled=getenv("LARECOMP_DEBUG_DATA") && getenv("SST_TEST_PEER_DEPTH_LOG");
++    return enabled!=0;
++}
++static void depth77_collect(unsigned slot) {
++    if(!depth77_enabled() || !depth77_queries[slot].n)return;
++    // vk_wait_seq can log a timeout and return. Never read/reset pending queries.
++    uint64_t completed=0;
++    if(vkGetSemaphoreCounterValue(g_vk.dev,g_vk.timeline,&completed)!=VK_SUCCESS || completed<depth77_queries[slot].seq) {
++        sst_depth77_stats.failed++;FATAL("private depth query slot reused before GPU timeline completion\n");
++    }
++    uint64_t values[DEPTH77_QUERIES];uint32_t count=depth77_queries[slot].n;
++    VkResult result=vkGetQueryPoolResults(g_vk.dev,depth77_queries[slot].pool,0,count,sizeof values,values,sizeof *values,VK_QUERY_RESULT_64_BIT);
++    if(result!=VK_SUCCESS)sst_depth77_stats.failed++;
++    else {
++        static FILE *output;
++        if(!output){output=fopen(getenv("SST_TEST_PEER_DEPTH_LOG"),"w");if(output)fprintf(output,"segment,mode,submission,peer,mesh,inherited_depth_test,inherited_depth_write,depth_test,depth_write,compare,stencil,width,height,color_count,depth_format,samples,action,frame,occurrence,depth_identity,color_identity,occlusion_value,visible\n");}
++        for(uint32_t i=0;i<count;i++) {
++            Depth77Row *r=&depth77_queries[slot].rows[i];sst_depth77_stats.resolved++;
++            if(output && sst_depth77_stats.rows_written<16384) {
++                fprintf(output,"%u,%u,%llu,%u,%u,%u,%u,%u,%u,%u,%u,%u,%u,",r->segment,r->mode,(unsigned long long)depth77_queries[slot].seq,r->peer,r->mesh,r->inherited_dt,r->inherited_dw,r->dt,r->dw,r->compare,r->stencil,r->width,r->height);
++                fprintf(output,"%u,%u,%u,%u,%llu,%llu,%llu,%llu,%llu,%u\n",r->color_count,r->depth_format,r->samples,r->action,(unsigned long long)r->frame,(unsigned long long)r->occurrence,(unsigned long long)r->depth_identity,(unsigned long long)r->color_identity,(unsigned long long)values[i],values[i]!=0);
++                sst_depth77_stats.rows_written++;
++            }
++        }
++        if(output)fflush(output);
++    }
++    depth77_queries[slot].n=0;
++}
++static void depth77_reset(VkCommandBuffer cb,unsigned slot,uint64_t seq) {
++    if(!depth77_enabled())return;
++    if(!depth77_queries[slot].pool) {
++        VkQueryPoolCreateInfo info={.sType=VK_STRUCTURE_TYPE_QUERY_POOL_CREATE_INFO,.queryType=VK_QUERY_TYPE_OCCLUSION,.queryCount=DEPTH77_QUERIES};
++        if(vkCreateQueryPool(g_vk.dev,&info,NULL,&depth77_queries[slot].pool)!=VK_SUCCESS){sst_depth77_stats.failed++;return;}
++    }
++    depth77_queries[slot].seq=seq;depth77_queries[slot].n=0;
++    vkCmdResetQueryPool(cb,depth77_queries[slot].pool,0,DEPTH77_QUERIES); // outside render pass, after prior slot completed
++}
++static void depth77_control(void) {
++    depth77_mode=depth77_segment=0;if(!depth77_enabled())return;
++    const char *path=getenv("SST_TEST_PEER_DEPTH_CONTROL");FILE *f=path?fopen(path,"r"):NULL;
++    if(f){unsigned segment,mode;if(fscanf(f,"%u %u",&segment,&mode)==2 && mode<=2 && segment<=1000){depth77_segment=segment;depth77_mode=mode;}fclose(f);}
++}
++
+ uint64_t vk_completed_seq(void) {
+     uint64_t v = 0;
+     vkGetSemaphoreCounterValue(g_vk.dev, g_vk.timeline, &v);
+@@ -260,6 +314,7 @@ static Sub *sub(void) {
+     if (s->seq != submit_seq + 1) {  // slot reused: its previous submission must be done
+         wait_why = "ring slot";
+         vk_wait_seq(s->seq);
++        depth77_collect((unsigned)cur_sub); // actual timeline completion before reading/resetting queries
+         cq_resolve_done(s->seq);
+         if (s->ts) {  // (profiling) GPU time of that submission
+             uint64_t t[2];
+@@ -292,6 +347,7 @@ VkCommandBuffer vk_cmd(void) {
+     Sub *s = sub();
+     if (!s->main_begun) {
+         begin_cb(&s->main, &s->main_begun);
++        depth77_reset(s->main,(unsigned)cur_sub,s->seq);
+         ss_forget();  // (a new command buffer starts with no state)
+         if (vk_counter_mode() == 2) {  // this slot's timing counter queries (reset outside any render pass)
+             CounterQ *q = &cq[cur_sub];
+@@ -3227,8 +3283,21 @@ static void draw_(CmdRec *r, bool indexed,SstOriginMarker origin) {
+                         sst_replay_view = NULL;
+                         if (sst_replay_failed) continue;
+                         vkCmdBindDescriptorSets(cb, VK_PIPELINE_BIND_POINT_GRAPHICS, pr->layout, 0, 1, &puppet, 0, NULL);
++                        bool depth77_override=forced && peer==0 && depth77_mode==2 && depth77_enabled();
++                        if(depth77_override){vkCmdSetDepthTestEnable(cb,VK_FALSE);vkCmdSetDepthWriteEnable(cb,VK_FALSE);sst_depth77_stats.overrides++;}
++                        uint32_t depth77_index=UINT32_MAX;
++                        if(forced && peer==0 && pose_mesh==6 && depth77_mode && depth77_enabled()) {
++                            unsigned slot=(unsigned)cur_sub;
++                            if(depth77_queries[slot].pool && depth77_queries[slot].n<DEPTH77_QUERIES) {
++                                depth77_index=depth77_queries[slot].n++;
++                                depth77_queries[slot].rows[depth77_index]=(Depth77Row){.segment=depth77_segment,.mode=depth77_mode,.peer=remote[peer].id,.mesh=pose_mesh,.inherited_dt=dt,.inherited_dw=dw,.dt=depth77_override?0:dt,.dw=depth77_override?0:dw,.compare=dop,.stencil=sten,.width=pass_w,.height=pass_h,.color_count=pass_ncolor,.depth_format=pass_depth,.samples=pass_samples,.action=local.pose.action,.frame=frame,.occurrence=sst_depth77_stats.recorded+1,.depth_identity=(uint64_t)(uintptr_t)st.rt.depth,.color_identity=(uint64_t)(uintptr_t)st.rt.color[0]};
++                                vkCmdBeginQuery(cb,depth77_queries[slot].pool,depth77_index,0);sst_depth77_stats.recorded++;
++                            } else sst_depth77_stats.dropped++;
++                        }
+                         if (!use_index) vkCmdDraw(cb, count, 1, first, base_inst);
+                         else vkCmdDrawIndexed(cb, icount, 1, 0, base_vertex, base_inst);
++                        if(depth77_index!=UINT32_MAX)vkCmdEndQuery(cb,depth77_queries[cur_sub].pool,depth77_index);
++                        if(depth77_override){vkCmdSetDepthTestEnable(cb,dt);vkCmdSetDepthWriteEnable(cb,dw);sst_depth77_stats.restores++;}
+                         if(forced)sst_source74_render_stats.remote_draws++;
+                     }
+                     vkCmdBindDescriptorSets(cb, VK_PIPELINE_BIND_POINT_GRAPHICS, pr->layout, 0, 1, &vset, 0, NULL);
+@@ -4111,6 +4180,7 @@ static void exec_list(uint64_t handle, int depth,SstOriginMarker invocation) {
+ }
+ 
+ void backend_execute(uint64_t handle) {
++    depth77_control();
+     const char *avatar_request=getenv("SST_TEST_AVATAR_REQUEST");
+     if(avatar_request && getenv("LARECOMP_DEBUG_DATA")){FILE *f=fopen(avatar_request,"r");if(f){int value=-1;if(fscanf(f,"%d",&value)==1 && (value==0 || value==1))g_sst.show_avatars=value;fclose(f);remove(avatar_request);}}
+     if (g_is_skyward) {

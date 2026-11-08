@@ -1,0 +1,9 @@
+{
+  "name": "sst-opaque-rooms",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": { "test": "node --no-warnings --loader ./test/cloudflare-loader.mjs test/worker.test.mjs" },
+  "engines": { "node": ">=20" },
+  "license": "MIT"
+}

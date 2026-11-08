@@ -1,0 +1,42 @@
+From 2d146342a7b0a07a417a1ca523c8eeb65abfb9c8 Mon Sep 17 00:00:00 2001
+From: SST local development <sst-local@localhost>
+Date: Fri, 6 Nov 2026 17:29:25 -0500
+Subject: [PATCH] Bind prop streams to the authenticated current-area roster
+
+---
+ runtime/hle/sst_prop_bridge.h | 21 ++++++++++++---------
+ 1 file changed, 12 insertions(+), 9 deletions(-)
+
+diff --git a/runtime/hle/sst_prop_bridge.h b/runtime/hle/sst_prop_bridge.h
+index b33e5a9..914c99f 100644
+--- a/runtime/hle/sst_prop_bridge.h
++++ b/runtime/hle/sst_prop_bridge.h
+@@ -133,16 +133,19 @@ static void prop_tick(SstLocal l, uint32_t load, bool allowed, bool pause) {
+     sst_props_begin(&props_bridge.state, &l.scene, load);
+     if (!prop_discover(l.player_address, &l.scene)) { prop_clear(); goto done; }
+     SstPlayer players[SST_MAX_PLAYERS]; int count = sst_net_players(players, SST_MAX_PLAYERS);
+-    for (unsigned i = 0; i < SST_MAX_PLAYERS; i++) {
+-        SstPropPeer *peer = &props_bridge.state.peers[i];
+-        if (!peer->used || !peer->active || peer->id == sst_net_my_id()) continue;
+-        bool found = false;
+-        for (int j = 0; j < count; j++)
+-            if (players[j].active && players[j].id == peer->id &&
+-                players[j].presence_generation == peer->generation &&
+-                sst_world_same_area(&players[j].scene, &l.scene)) found = true;
+-        if (!found) sst_props_forget(&props_bridge.state, peer->id, peer->generation);
++    SstPropPresence live[SST_MAX_PLAYERS]; unsigned live_count = 0;
++    uint16_t mine = sst_net_my_id();
++    if (!mine) { prop_clear(); goto done; }
++    live[live_count++] = (SstPropPresence){mine, props_bridge.generation};
++    for (int j = 0; j < count; j++) {
++        if (!players[j].active || players[j].id == mine ||
++            !sst_world_same_area(&players[j].scene, &l.scene)) continue;
++        if (live_count == SST_MAX_PLAYERS) { prop_clear(); goto done; }
++        live[live_count++] = (SstPropPresence){players[j].id, players[j].presence_generation};
+     }
++    // Retired IDs must not occupy the four slots forever. The exact current
++    // authenticated roster makes slot reuse safe without admitting late packets.
++    if (!sst_props_roster(&props_bridge.state, live, live_count)) { prop_clear(); goto done; }
+     sst_net_poll_props(prop_incoming, NULL);
+ done:
+     pthread_mutex_unlock(&props_bridge.mu);

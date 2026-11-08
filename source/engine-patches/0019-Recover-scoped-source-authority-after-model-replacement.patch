@@ -1,0 +1,437 @@
+From ec3e0be350404e2bb05b287b35fa179909584b4a Mon Sep 17 00:00:00 2001
+From: SST development <sst-development@localhost>
+Date: Tue, 3 Nov 2026 16:30:20 -0500
+Subject: [PATCH] Recover scoped first-person source authority after verified
+ model replacement
+
+---
+ runtime/hle/sst_dev.c              | 48 +++++++++++++++----
+ runtime/hle/sst_source_lifecycle.c | 76 +++++++++++++++++++++---------
+ runtime/hle/sst_source_lifecycle.h |  3 ++
+ runtime/nvn/source_policy.h        |  3 +-
+ runtime/nvn/vulkan/exec.c          | 56 ++++++++++++++++++++--
+ 5 files changed, 151 insertions(+), 35 deletions(-)
+
+diff --git a/runtime/hle/sst_dev.c b/runtime/hle/sst_dev.c
+index e202811..8d95fc1 100644
+--- a/runtime/hle/sst_dev.c
++++ b/runtime/hle/sst_dev.c
+@@ -248,11 +248,15 @@ void sst_dev_input(uint64_t raw,uint64_t *buttons,int32_t *lx,int32_t *ly,int32_
+     (void)rx;(void)ry;
+ }
+ static void source75_before_actor_update(uint64_t player);
++static void source80_try_activate(uint64_t player);
+ static void player_update(Cpu *c) {
+     if(!original_update)return;
+-    if(!g_is_skyward || ENV("SST_NO_PLAYER_READ") || in_update){original_update(c);return;}
++    if(!g_is_skyward || ENV("SST_NO_PLAYER_READ")){original_update(c);return;}
++    if(sst_origin_recovery_enabled())sst_origin_recovery_owner_check();
+     if(!ptr(c->x[0],0x6b00) || c->x[0]!=read64(PLAYER) || read64(c->x[0])!=PLAYER_VT){original_update(c);return;}
+     source75_before_actor_update(c->x[0]); // before native prefix/direct model builders
++    if(in_update){original_update(c);return;} // movement recursion guard, after lifetime invalidation
++    uint64_t update_actor=c->x[0];
+     in_update=true;sst_dev_native_stats.updates++;
+     if(ptr(c->x[0],0x6b00) && c->x[0]==read64(PLAYER) && read64(c->x[0])==PLAYER_VT)dev_update(c);
+     DevInput held;pthread_mutex_lock(&input_mutex);held=input;pthread_mutex_unlock(&input_mutex);
+@@ -314,6 +318,7 @@ static void player_update(Cpu *c) {
+     } else if(!still)was_flying=false;
+     atomic_store(&input_allowed,still && foot_action(after.pose.action));
+     if(!still)atomic_store(&noclip_capable,false);
++    source80_try_activate(update_actor);
+     in_update=false;
+ }
+ bool sst_dev_noclip_supported(void){return atomic_load(&noclip_capable);}
+@@ -405,6 +410,17 @@ static struct {bool forced;uint64_t root;SstOriginIdentity id;} source74_members
+ static _Atomic uint64_t source74_generation=1;
+ struct {uint64_t forced_scopes,unowned_scopes,published,failed,detached,natural_entries;} sst_source74_native_stats;
+ uint64_t sst_source75_rebuild_stops;
++struct {uint64_t count,actor,instance,flags;} sst_source80_pending_stats;
++static void source80_try_activate(uint64_t player) {
++    if(!sst_origin_recovery_enabled() || sst_origin_hard_failed() || sst_origin_active_generation())return;
++    SstOriginCohort candidate;if(!sst_origin_activation_enter(&candidate))return;
++    SstLocal live={0};bool ready=ordinary_game(&live) && live.player_address==player && live.player_instance==candidate.actor_instance && player==candidate.actor_address;
++    if(ready && live.scene.room==0 && live.scene.layer==1 && (!strcmp(live.scene.stage,"F009r") || !strcmp(live.scene.stage,"F000")) && !(read32(player+0x448)&0x100a0u)) {
++        bool noheld=read64(player+0x1b90)==0;
++        sst_source_lifecycle_activate(player,live.player_instance,&live.scene,ready,noheld);
++    }
++    sst_origin_activation_leave();
++}
+ static void source75_before_actor_update(uint64_t player) {
+     // These pending bits enter verified same-actor allocation/rebuild paths.
+     // Do not touch the actor's bits or infer complete coverage of other paths.
+@@ -414,7 +430,9 @@ static void source75_before_actor_update(uint64_t player) {
+     pthread_mutex_lock(&source74_mu);
+     for(unsigned role=0;role<4;role++)if(source74_members[role].id.actor_address==player && source74_members[role].id.actor_instance==instance && source74_members[role].id.model_registration_generation)known=true;
+     pthread_mutex_unlock(&source74_mu);
+-    if(known && sst_origin_lifetime_armed() && !sst_origin_unsupported()) {
++    if(sst_origin_recovery_enabled() && (sst_origin_candidate_exists() || sst_origin_active_generation() || sst_origin_lifetime_armed()))known=true;
++    if(known && (sst_origin_lifetime_armed() || sst_origin_recovery_enabled()) && !sst_origin_hard_failed()) {
++        if(sst_origin_recovery_enabled()){sst_source80_pending_stats.count++;sst_source80_pending_stats.actor=player;sst_source80_pending_stats.instance=instance;sst_source80_pending_stats.flags=read32(player+0x448);}
+         sst_origin_revoke(); // discard authority after draining CPU users; keep FORCE
+         sst_source75_rebuild_stops++;
+     }
+@@ -428,11 +446,11 @@ static void source74_membership(const Vis72Owner *owner,bool forced) {
+     uint64_t generation=atomic_load(&source74_generation);
+     for(;;){if(!generation || generation==UINT64_MAX){sst_origin_latch_unsupported();return;}
+         if(atomic_compare_exchange_weak(&source74_generation,&generation,generation+1))break;}
++    SstOriginIdentity next={.actor_address=owner->player,.actor_instance=owner->instance,.scene=fresh.scene,.model_address=owner->player+vis72_wrapper_offset[owner->role],.object_address=owner->object,.resource_address=resource,.role=(uint16_t)owner->role,.model_registration_generation=generation};
++    next.model_allocation_epoch=sst_origin_member_generation(&next);
+     pthread_mutex_lock(&source74_mu);
+     source74_members[owner->role].forced=forced;source74_members[owner->role].root=root;
+-    source74_members[owner->role].id=(SstOriginIdentity){.actor_address=owner->player,.actor_instance=owner->instance,.scene=fresh.scene,
+-        .model_address=owner->player+vis72_wrapper_offset[owner->role],.object_address=owner->object,.resource_address=resource,
+-        .role=(uint16_t)owner->role,.model_registration_generation=generation};
++    source74_members[owner->role].id=next;
+     if(!forced)sst_source74_native_stats.natural_entries++;
+     pthread_mutex_unlock(&source74_mu);
+ }
+@@ -445,26 +463,39 @@ static SstOriginMarker source74_emission(uint64_t object,unsigned task) {
+     pthread_mutex_unlock(&source74_mu);
+     if(!forced || (task!=6 && task!=7)) {pthread_mutex_lock(&source74_mu);sst_source74_native_stats.unowned_scopes++;pthread_mutex_unlock(&source74_mu);return mark;}
+     mark=sst_origin_forced_unresolved();
++    if(sst_origin_recovery_enabled() && (!identity.model_allocation_epoch || sst_origin_member_generation(&identity)!=identity.model_allocation_epoch))return mark;
+     // Origin stays forced even if live ownership cannot authorize optional replay.
+     Vis72Owner current={0};
+     if(vis72_owned(object,2,&current) && current.player==identity.actor_address && current.instance==identity.actor_instance && current.role==identity.role &&
+        read64(object+0xf8)==identity.resource_address && read64(object+8)==root) {
+         SstOriginProof proof={.identity=identity,.recorded_ms=sst_now_ms()};
+-        if(!sst_origin_publish(&proof,proof.recorded_ms,&mark))sst_origin_latch_unsupported();
++        if(!sst_origin_publish(&proof,proof.recorded_ms,&mark) && !sst_origin_unsupported())sst_origin_latch_unsupported();
+     } else sst_origin_latch_unsupported();
+     pthread_mutex_lock(&source74_mu);sst_source74_native_stats.forced_scopes++;if(sst_origin_unsupported())sst_source74_native_stats.failed++;else sst_source74_native_stats.published++;pthread_mutex_unlock(&source74_mu);
+     return mark;
+ }
+ 
+ static void vis72_model_callback(Cpu *c,GuestFn original,unsigned kind) {
++    bool emission_use=false,deny_private_read=false,private_forced=false;
++    if(sst_origin_recovery_enabled()) {
++        bool on_owner=sst_origin_recovery_owner_current();
++        pthread_mutex_lock(&source74_mu);for(unsigned i=0;i<4;i++)if(source74_members[i].forced && source74_members[i].id.object_address==c->x[0])private_forced=true;pthread_mutex_unlock(&source74_mu);
++        if(kind && ((uint32_t)c->x[1]==6 || (uint32_t)c->x[1]==7) && private_forced){emission_use=sst_origin_emission_enter();deny_private_read=!emission_use;}
++        else if(!on_owner)deny_private_read=true; // skip our native census, preserve original unowned callback
++    }
+     const char *path=getenv("SST_VIS72_MODEL_METHODS"),*gate=getenv("SST_VIS71_SEGMENT");
+     unsigned task=kind?(uint32_t)c->x[1]:0;Vis72Owner owner={0};bool trusted=false;int segment=0;
+-    if(path && gate && task<=7 && vis72_owned(c->x[0],kind,&owner)) {
++    if(!deny_private_read && path && gate && task<=7 && vis72_owned(c->x[0],kind,&owner)) {
+         FILE *f=fopen(gate,"r");if(f){if(fscanf(f,"%d",&segment)!=1)segment=0;fclose(f);}trusted=segment>0;
+     }
+     if(trusted && kind==0 && vis73_queue.active && vis73_queue.player==owner.player && vis73_queue.instance==owner.instance)vis73_queue.seen|=1u<<owner.role;
+     SstOriginScope emission_scope;bool pushed=false;
+-    if(kind){vis73_scene_dispatch_depth++;SstOriginMarker mark=source74_emission(c->x[0],(uint32_t)c->x[1]);pushed=sst_origin_scope_push(mark,&emission_scope);}
++    if(kind){
++        vis73_scene_dispatch_depth++;
++        SstOriginMarker mark=deny_private_read?(private_forced?sst_origin_forced_unresolved():sst_origin_unowned(sst_origin_current())):source74_emission(c->x[0],(uint32_t)c->x[1]);
++        if(sst_origin_recovery_enabled() && private_forced && (task==6 || task==7) && !sst_origin_is_forced(mark))mark=sst_origin_forced_unresolved();
++        pushed=sst_origin_scope_push(mark,&emission_scope);
++    }
+     original(c); // Forward all objects/tasks exactly once, including unknown ones.
+     if(kind){if(pushed)sst_origin_scope_pop(&emission_scope);vis73_scene_dispatch_depth--;}
+     if(trusted && kind==0 && actor_same(owner.player,owner.instance) && read64(owner.player+vis72_object_offset[owner.role])==owner.object)vis73_observe_entry(owner.player,owner.instance,owner.role,(uint32_t)c->x[0]==1);
+@@ -481,6 +512,7 @@ static void vis72_model_callback(Cpu *c,GuestFn original,unsigned kind) {
+         }
+         pthread_mutex_unlock(&vis72_log_mu);
+     }
++    if(emission_use)sst_origin_emission_leave(); // covers every post-original native diagnostic read
+ }
+ static void vis72_entry(Cpu *c){vis72_model_callback(c,vis72_entry_original,0);}
+ static void vis72_simple(Cpu *c){vis72_model_callback(c,vis72_simple_original,1);}
+diff --git a/runtime/hle/sst_source_lifecycle.c b/runtime/hle/sst_source_lifecycle.c
+index c0895a3..3e3558c 100644
+--- a/runtime/hle/sst_source_lifecycle.c
++++ b/runtime/hle/sst_source_lifecycle.c
+@@ -1,4 +1,4 @@
+-// Private experiment: permanent revocation, never a resumable allocation epoch.
++// Private experiment: legacy permanent closure, opt-in verified cohort recovery.
+ #include "../hle.h"
+ #include "sst_source_lifecycle.h"
+ #include "../sst/sst_origin.h"
+@@ -12,9 +12,9 @@
+ #include <stdatomic.h>
+ #include <string.h>
+ 
+-// Observation only. A successful init-return event plus a coherent four-role tuple
+-// is recorded independently of pointer changes; it NEVER reopens admission or
+-// authorizes a model allocation epoch. No stale actor/global read on teardown.
++// Legacy observations never grant authority. In opt-in recovery, a verified
++// complete candidate still requires separate fresh live-context activation.
++// No stale actor/global read on teardown and no journal-based auto-authorization.
+ static pthread_mutex_t birth78_mu=PTHREAD_MUTEX_INITIALIZER;
+ struct {uint64_t returns,false_returns,bad_actor,bad_roles,complete,overflow,serial,busy;
+     uint64_t actor,instance,result,family,objects[4],resources[4];} sst_source78_birth_stats;
+@@ -25,7 +25,8 @@ static uint64_t birth78_u64(uint64_t p){uint64_t v;memcpy(&v,(void *)(uintptr_t)
+ static uint32_t birth78_u32(uint64_t p){uint32_t v;memcpy(&v,(void *)(uintptr_t)p,4);return v;}
+ static uint16_t birth78_u16(uint64_t p){uint16_t v;memcpy(&v,(void *)(uintptr_t)p,2);return v;}
+ static uint8_t birth78_u8(uint64_t p){uint8_t v;memcpy(&v,(void *)(uintptr_t)p,1);return v;}
+-typedef struct {uint64_t ticket,actor,instance;bool pre_valid;} Source79Receipt;
++typedef struct {uint64_t ticket,actor,instance;bool pre_valid;SstOriginModelAttempt model;} Source79Receipt;
++struct {uint64_t candidates,activations,activation_rejects,last_candidate,last_active,actor,instance,failures;} sst_source80_stats;
+ static _Atomic uint64_t sst_source79_attempt_id;
+ struct {uint64_t reserved,pre_valid,pre_invalid,matched_post,unmatched_post,overflow;
+     uint64_t last_ticket,last_actor,last_pre_instance,last_post_instance,last_kind,last_current;} sst_source79_receipt_stats;
+@@ -53,9 +54,10 @@ static uint64_t source79_reserve_attempt(void) {
+ static void source79_bind_pre(Source79Receipt *r,unsigned kind) {
+     // Receipt was already reserved at callback entry, before known mutation and
+     // original heap reset. No old model/object/resource field is read here.
+-    bool inspect=kind==0 && getenv("SST_TEST_MODEL_BIRTH_LOG") && getenv("LARECOMP_DEBUG_DATA");
++    bool inspect=kind==0 && (getenv("SST_TEST_MODEL_BIRTH_LOG") || sst_origin_recovery_enabled()) && getenv("LARECOMP_DEBUG_DATA");
+     if(inspect && sst_origin_observation_enter()) {
+         Birth79Header h=birth79_header(r->actor);r->pre_valid=!h.reason;r->instance=h.instance;
++        if(r->pre_valid && sst_origin_recovery_enabled() && !sst_origin_model_bind(&r->model,h.instance))r->pre_valid=false;
+         sst_origin_observation_leave();
+     }
+     pthread_mutex_lock(&birth78_mu);
+@@ -103,18 +105,8 @@ static uint32_t source79_callback_mask(uint64_t actor,const uint64_t objects[4])
+     }
+     return mask;
+ }
+-static void birth78_observe(uint64_t actor,uint64_t result,const Source79Receipt *receipt) {
+-    const char *path=getenv("SST_TEST_MODEL_BIRTH_LOG");
+-    if(!path || !getenv("LARECOMP_DEBUG_DATA"))return;
+-    pthread_mutex_lock(&birth78_mu);sst_source78_birth_stats.returns++;
+-    if(!(result&1)){sst_source78_birth_stats.false_returns++;pthread_mutex_unlock(&birth78_mu);return;}
+-    if(!sst_origin_observation_enter()){sst_source78_birth_stats.busy++;pthread_mutex_unlock(&birth78_mu);return;}
+-    Birth79Header header=birth79_header(actor);
+-    uint32_t instance=header.instance;uint8_t lifecycle=header.lifecycle;
+-    sst_source78_header_stats=(__typeof__(sst_source78_header_stats)){actor,result,header.reason,header.table,header.self,header.profile,lifecycle,instance};
+-    if(header.reason) {
+-        sst_source78_birth_stats.bad_actor++;sst_origin_observation_leave();pthread_mutex_unlock(&birth78_mu);return;
+-    }
++static bool source80_collect(uint64_t actor,SstOriginCohort *cohort,Birth79Header *header) {
++    memset(cohort,0,sizeof *cohort);*header=birth79_header(actor);if(header->reason)return false;
+     const uint32_t wrappers[4]={0x540,0x5f8,0x648,0x7e0};
+     const uint64_t tables[4]={UINT64_C(0x7001674288),UINT64_C(0x7001688940),UINT64_C(0x7001688ad8),UINT64_C(0x7001688ad8)};
+     uint64_t objects[4],resources[4];bool valid=true;
+@@ -129,12 +121,49 @@ static void birth78_observe(uint64_t actor,uint64_t result,const Source79Receipt
+         for(unsigned j=0;j<i;j++)if(objects[j]==objects[i])valid=false;
+         if(!valid)break;
+     }
+-    if(!valid){sst_source78_birth_stats.bad_roles++;sst_origin_observation_leave();pthread_mutex_unlock(&birth78_mu);return;}
++    if(!valid)return false;
+     uint8_t family=birth78_u8(actor+0x1a2b);
+     uint64_t resource_file=birth78_u64(actor+0x538);uint32_t complex_mask=0;
+     for(unsigned i=0;i<4;i++)if(birth78_u64(objects[i])==UINT64_C(0x7001698d50))complex_mask|=1u<<i;
+     uint32_t callback_mask=source79_callback_mask(actor,objects);
+     SstModelBindings names={0};bool named=family==1 && source79_named_bindings(resource_file,resources,&names);
++    cohort->actor_address=actor;cohort->actor_instance=header->instance;cohort->family=family;cohort->resource_file=resource_file;
++    cohort->named_mask=named?names.matched_mask:0;cohort->corroborated_mask=names.corroborated_mask;cohort->callback_mask=callback_mask;cohort->complex_mask=complex_mask;cohort->metadata_bytes=names.bytes_read;
++    for(unsigned i=0;i<4;i++){cohort->models[i]=actor+wrappers[i];cohort->objects[i]=objects[i];cohort->resources[i]=resources[i];cohort->callbacks[i]=birth78_u64(objects[i]+0xe0);}
++    return true;
++}
++bool sst_source_lifecycle_activate(uint64_t actor,uint32_t instance,const SstScene *scene,bool ready,bool noheld) {
++    SstOriginCohort current;Birth79Header header;
++    bool coherent=source80_collect(actor,&current,&header);
++    bool ok=coherent && header.instance==instance && sst_origin_activation_commit(&current,scene,ready,noheld,header.lifecycle);
++    if(ok){sst_source80_stats.activations++;sst_source80_stats.last_active=sst_origin_active_generation();sst_source80_stats.actor=actor;sst_source80_stats.instance=instance;}
++    else sst_source80_stats.activation_rejects++;
++    return ok;
++}
++static void birth78_observe(uint64_t actor,uint64_t result,const Source79Receipt *receipt) {
++    const char *path=getenv("SST_TEST_MODEL_BIRTH_LOG");
++    if((!path && !sst_origin_recovery_enabled()) || !getenv("LARECOMP_DEBUG_DATA"))return;
++    pthread_mutex_lock(&birth78_mu);sst_source78_birth_stats.returns++;
++    if(!(result&1)){sst_source78_birth_stats.false_returns++;pthread_mutex_unlock(&birth78_mu);return;}
++    if(!sst_origin_observation_enter()){sst_source78_birth_stats.busy++;pthread_mutex_unlock(&birth78_mu);return;}
++    Birth79Header header=birth79_header(actor);
++    uint32_t instance=header.instance;uint8_t lifecycle=header.lifecycle;
++    sst_source78_header_stats=(__typeof__(sst_source78_header_stats)){actor,result,header.reason,header.table,header.self,header.profile,lifecycle,instance};
++    if(header.reason) {
++        sst_source78_birth_stats.bad_actor++;sst_origin_observation_leave();pthread_mutex_unlock(&birth78_mu);return;
++    }
++    SstOriginCohort cohort;Birth79Header confirmed;
++    if(!source80_collect(actor,&cohort,&confirmed)){sst_source78_birth_stats.bad_roles++;sst_origin_observation_leave();pthread_mutex_unlock(&birth78_mu);return;}
++    uint8_t family=(uint8_t)cohort.family;uint64_t resource_file=cohort.resource_file;
++    uint64_t *objects=cohort.objects,*resources=cohort.resources;
++    uint32_t complex_mask=cohort.complex_mask,callback_mask=cohort.callback_mask;
++    SstModelBindings names={.matched_mask=cohort.named_mask,.corroborated_mask=cohort.corroborated_mask,.bytes_read=cohort.metadata_bytes};
++    bool named=cohort.named_mask==15; // read budget is diagnostic; replay authority uses full binding equality
++    if(sst_origin_recovery_enabled()) {
++        bool committed=sst_origin_model_complete((SstOriginModelAttempt *)&receipt->model,&cohort);
++        if(committed){sst_source80_stats.candidates++;sst_source80_stats.last_candidate=receipt->model.epoch;}
++        else sst_source80_stats.failures++;
++    }
+     uint64_t current=atomic_load(&sst_source79_attempt_id);
+     bool receipt_match=receipt && receipt->ticket && receipt->pre_valid && receipt->actor==actor && receipt->instance==instance && receipt->ticket==current;
+     // Journal match AT THIS SNAPSHOT only. It is neither an atomic publication
+@@ -146,9 +175,9 @@ static void birth78_observe(uint64_t actor,uint64_t result,const Source79Receipt
+     sst_source78_birth_stats.serial++;sst_source78_birth_stats.complete++;
+     sst_source78_birth_stats.actor=actor;sst_source78_birth_stats.instance=instance;
+     sst_source78_birth_stats.result=result;sst_source78_birth_stats.family=family;
+-    memcpy(sst_source78_birth_stats.objects,objects,sizeof objects);memcpy(sst_source78_birth_stats.resources,resources,sizeof resources);
++    memcpy(sst_source78_birth_stats.objects,objects,sizeof sst_source78_birth_stats.objects);memcpy(sst_source78_birth_stats.resources,resources,sizeof sst_source78_birth_stats.resources);
+     static FILE *output;static unsigned rows;
+-    if(!output){output=fopen(path,"w");if(output)fprintf(output,"serial,actor,instance,result,family,lifecycle,body,head,face,hands,body_resource,head_resource,face_resource,hands_resource,attempt_ticket,pre_instance,observed_current_attempt,receipt_matches,resource_file,complex_mask,callback_mask,named_resources_verified,named_mask,corroborated_mask,named_metadata_bytes\n");}
++    if(!output && path){output=fopen(path,"w");if(output)fprintf(output,"serial,actor,instance,result,family,lifecycle,body,head,face,hands,body_resource,head_resource,face_resource,hands_resource,attempt_ticket,pre_instance,observed_current_attempt,receipt_matches,resource_file,complex_mask,callback_mask,named_resources_verified,named_mask,corroborated_mask,named_metadata_bytes\n");}
+     if(output && rows<256) {
+         fprintf(output,"%llu,%llu,%llu,%llu,%llu,%u",(unsigned long long)sst_source78_birth_stats.serial,(unsigned long long)actor,(unsigned long long)sst_source78_birth_stats.instance,(unsigned long long)result,(unsigned long long)sst_source78_birth_stats.family,lifecycle);
+         for(unsigned i=0;i<4;i++)fprintf(output,",%llu",(unsigned long long)objects[i]);
+@@ -171,12 +200,12 @@ static void source76_lifecycle(Cpu *c,unsigned kind) {
+     // No guest reads or live actor/health/global/membership eligibility. Arm watch
+     // before registration, not after publication. Even an unarmed original is
+     // bracketed so concurrent first admission cannot pass through its mutation.
+-    sst_origin_lifecycle_begin();
++    if(sst_origin_recovery_enabled())sst_origin_model_begin(kind,incoming_actor,&receipt.model);else sst_origin_lifecycle_begin();
+     if(sst_origin_unsupported())atomic_fetch_add(&sst_source76_lifecycle_stats.revoked[kind],1);
+     source79_bind_pre(&receipt,kind);
+     source76_original[kind](c); // exactly once, unchanged full input/output Cpu
+     if(kind==0)birth78_observe(incoming_actor,c->x[0],&receipt); // still inside known mutator bracket
+-    sst_origin_lifecycle_end(); // no native reads; all locks released before original
++    if(sst_origin_recovery_enabled())sst_origin_model_end(&receipt.model);else sst_origin_lifecycle_end(); // no native reads; all locks released before original
+ }
+ static void source76_init_models(Cpu *c){source76_lifecycle(c,0);}
+ static void source76_dtor(Cpu *c){source76_lifecycle(c,1);}
+@@ -198,4 +227,5 @@ void sst_source_lifecycle_dispatch_init(void) {
+     memcpy(source76_original,originals,sizeof originals);
+     for(unsigned i=0;i<3;i++)hle_override(source76_addresses[i],hooks[i],"SST private source lifetime revocation");
+     atomic_store(&source76_ready,true);
++    if(getenv("SST_TEST_MODEL_RECOVERY") && getenv("SST_TEST_SOURCE_GPU_DRAIN") && !sst_origin_recovery_enable())sst_origin_latch_unsupported();
+ }
+diff --git a/runtime/hle/sst_source_lifecycle.h b/runtime/hle/sst_source_lifecycle.h
+index 7291223..a7808ce 100644
+--- a/runtime/hle/sst_source_lifecycle.h
++++ b/runtime/hle/sst_source_lifecycle.h
+@@ -3,3 +3,6 @@
+ #include <stdbool.h>
+ void sst_source_lifecycle_dispatch_init(void);
+ bool sst_source_lifecycle_ready(void);
++
++#include "../sst/sst_net.h"
++bool sst_source_lifecycle_activate(uint64_t actor,uint32_t instance,const SstScene *scene,bool ready,bool noheld);
+diff --git a/runtime/nvn/source_policy.h b/runtime/nvn/source_policy.h
+index 6ddb169..a8feb15 100644
+--- a/runtime/nvn/source_policy.h
++++ b/runtime/nvn/source_policy.h
+@@ -5,13 +5,14 @@
+ #include "../sst/sst_origin.h"
+ // Runs before command payload/child-handle dereference. Forced calls are not
+ // supported yet: do not traverse them and hope descendant draws alone are safe.
+-static inline bool nvn_source_command_allowed(const CmdRec *record,SstOriginMarker invocation,SstOriginMarker *effective) {
++static inline bool nvn_source_command_allowed(const CmdRec *record,SstOriginMarker invocation,SstOriginMarker *effective,uint64_t now) {
+     SstOriginMarker intrinsic;memcpy(intrinsic.bytes,record->source_origin,sizeof intrinsic.bytes);
+     *effective=sst_origin_combine(intrinsic,invocation);
+     if(!sst_origin_is_forced(*effective))return true;
+     // A late revoked source must not rebind freed buffers/pools for later draws.
+     // Keep only host command-memory continuation/termination; no source payload is decoded.
+     if(sst_origin_unsupported() && record->op!=CMD_JUMP && record->op!=CMD_END)return false;
++    if(sst_origin_recovery_enabled() && record->op!=CMD_JUMP && record->op!=CMD_END){SstOriginProof proof;if(!sst_origin_authorize(*effective,now,&proof))return false;}
+     switch(record->op) {
+     case CMD_CALL:
+     case CMD_CLEAR_COLOR: case CMD_CLEAR_DEPTH_STENCIL: case CMD_CLEAR_TEXTURE: case CMD_CLEAR_BUFFER:
+diff --git a/runtime/nvn/vulkan/exec.c b/runtime/nvn/vulkan/exec.c
+index 7fea0c2..7c03d3d 100644
+--- a/runtime/nvn/vulkan/exec.c
++++ b/runtime/nvn/vulkan/exec.c
+@@ -64,6 +64,9 @@ static char stats_text[2048];
+ void vk_collect_dead(void);
+ static _Thread_local bool source78_in_backend,source78_batch_pinned,source78_batch_forced;
+ static _Thread_local uint64_t source78_batch_required;
++static uint64_t source80_state_epoch,source80_state_resets;
++static _Thread_local bool source80_stale_probe;
++struct {uint64_t attempts,fresh_open,draw_host_denied,bind_guard_denied,bind_payload_reads,palette_unchanged,hands_unchanged,no_pixels;} sst_source80_stale_stats;
+ struct {uint64_t entered,finished,forced_batches,last_required,last_submitted,last_completed,strict_waits,failures;} sst_source78_gpu_stats;
+ static pthread_once_t source78_enable_once=PTHREAD_ONCE_INIT;
+ static bool source78_enable_value;
+@@ -2723,7 +2726,7 @@ static bool source74_span(uint64_t address,size_t size) {
+ }
+ static uint64_t source74_u64(uint64_t at){uint64_t value;memcpy(&value,(void *)(uintptr_t)at,8);return value;}
+ static bool source74_resolve(SstOriginMarker marker,SstOriginProof *proof,SstLocal *local) {
+-    if(!sst_origin_read(marker,sst_now_ms(),proof))return false;
++    if(!sst_origin_authorize(marker,sst_now_ms(),proof)){if(source80_stale_probe)sst_source80_stale_stats.draw_host_denied++;return false;}
+     SstLocal published=sst_game_local();*local=sst_game_read_render_local(&SST_LAYOUT_SSHD_100,&published,sst_game_pose_tick());
+     SstOriginIdentity *id=&proof->identity;static const uint32_t wrapper[4]={0x540,0x5f8,0x648,0x7e0},object[4]={0x560,0x618,0x668,0x800};
+     if(!local->valid || id->role>=4 || local->player_address!=id->actor_address || local->player_instance!=id->actor_instance ||
+@@ -2732,10 +2735,12 @@ static bool source74_resolve(SstOriginMarker marker,SstOriginProof *proof,SstLoc
+        id->model_address!=id->actor_address+wrapper[id->role] || source74_u64(id->actor_address+object[id->role])!=id->object_address || !source74_span(id->object_address,0x190))return false;
+     uint64_t table=source74_u64(id->object_address);
+     if((table!=UINT64_C(0x7001698d50) && table!=UINT64_C(0x7001698de8)) || source74_u64(id->object_address+0xf8)!=id->resource_address)return false;
++    if(sst_origin_recovery_enabled() && (*(uint8_t *)(uintptr_t)(id->actor_address+0x1a2b)!=1 || source74_u64(id->actor_address+0x1b90)))return false;
+     SstOriginProof verified;
+     return sst_origin_peek(marker,id,sst_now_ms(),&verified);
+ }
+ static CmdRec source75_delayed_record;
++static uint64_t source80_captured_epoch;
+ static bool source75_delayed_ready,source75_in_delayed;
+ struct {uint64_t captured,executed_after_exit,proof_valid_after_exit,no_palette_teaching,no_hand_teaching,no_native_or_peer_pixels;} sst_source75_delay_stats;
+ struct {uint64_t executed_after_revoke,rejected_before_reads,no_metadata_reads,no_palette_teaching,no_hand_teaching,no_native_or_peer_pixels;} sst_source76_delay_stats;
+@@ -2773,7 +2778,7 @@ static void draw_(CmdRec *r, bool indexed,SstOriginMarker origin) {
+         if(!source74_resolve(origin,&source_proof,&forced_local)){sst_source74_render_stats.forced_invalid++;sst_source74_render_stats.native_suppressed++;return;}
+         const char *request=getenv("SST_TEST_DELAY_SOURCE_REQUEST");
+         if(!source75_in_delayed && request && getenv("LARECOMP_DEBUG_DATA")) {
+-            FILE *f=fopen(request,"r");if(f){fclose(f);remove(request);memcpy(&source75_delayed_record,r,sizeof(CmdRec));source75_delayed_record.op=indexed?CMD_DRAW_ELEMENTS:CMD_DRAW_ARRAYS;source75_delayed_ready=true;sst_source75_delay_stats.captured++;}
++            FILE *f=fopen(request,"r");if(f){fclose(f);remove(request);memcpy(&source75_delayed_record,r,sizeof(CmdRec));source75_delayed_record.op=indexed?CMD_DRAW_ELEMENTS:CMD_DRAW_ARRAYS;source75_delayed_ready=true;source80_captured_epoch=source_proof.identity.model_allocation_epoch;sst_source75_delay_stats.captured++;}
+         }
+         sst_animation_source_frame(&forced_local.scene,&forced_local.pose,renderer_present_count(),false);
+         if(forced_local.pose.action!=104){
+@@ -3958,7 +3963,16 @@ static void exec_list(uint64_t handle, int depth,SstOriginMarker invocation) {
+     for (int guard = 0; guard < 10000000; guard++) {
+         CmdRec *r = (CmdRec *)(uintptr_t)p;
+         SstOriginMarker effective_origin;
+-        if(!nvn_source_command_allowed(r,invocation,&effective_origin)){p+=r->size;continue;}
++        if(!nvn_source_command_allowed(r,invocation,&effective_origin,sst_origin_recovery_enabled()?sst_now_ms():0)){
++            if(source80_stale_probe && r->op==CMD_SET_RENDER_TARGETS)sst_source80_stale_stats.bind_guard_denied++;
++            p+=r->size;continue;
++        }
++        if(sst_origin_recovery_enabled() && sst_origin_is_forced(effective_origin) && r->op!=CMD_END && r->op!=CMD_JUMP) {
++            if(!source78_batch_pinned){sst_origin_latch_unsupported();p+=r->size;continue;}
++            SstOriginProof accepted;if(!sst_origin_authorize(effective_origin,sst_now_ms(),&accepted)){p+=r->size;continue;}
++            if(!accepted.identity.model_allocation_epoch){p+=r->size;continue;}
++            source80_state_epoch=accepted.identity.model_allocation_epoch;source78_batch_forced=true;
++        }
+         void *x = r->extra;
+         if (r->op < CMD_COUNT) op_counts[r->op]++;
+         switch (r->op) {
+@@ -4020,6 +4034,7 @@ static void exec_list(uint64_t handle, int depth,SstOriginMarker invocation) {
+         case CMD_SET_TEXTURE_POOL: st.tpool = (NvnDescPool *)(uintptr_t)r->x[0]; break;
+         case CMD_SET_SAMPLER_POOL: st.spool = (NvnDescPool *)(uintptr_t)r->x[0]; break;
+         case CMD_SET_RENDER_TARGETS: {
++            if(source80_stale_probe)sst_source80_stale_stats.bind_payload_reads++;
+             const struct { uint64_t tex[8]; NvnTextureView views[8]; uint8_t has_view[8]; uint64_t depth;
+                            NvnTextureView dview; uint8_t has_dview; } *rt = x;
+             RtState prev = st.rt;  // the same targets again: keep the pass (a restart = full barrier + reload)
+@@ -4219,11 +4234,46 @@ void backend_execute(uint64_t handle) {
+     if(reason_request && getenv("LARECOMP_DEBUG_DATA")) {
+         FILE *f=fopen(reason_request,"r");if(f){fclose(f);remove(reason_request);sst_origin_latch_unsupported();}
+     }
++    if(sst_origin_recovery_enabled()) {
++        uint64_t active=sst_origin_active_generation();
++        if(source80_state_epoch && source80_state_epoch!=active) {
++            // Old binding state must not be inherited after its allocation dies.
++            vk_end_pass();st_defaults();ss_forget();source80_state_epoch=0;source80_state_resets++;
++        }
++        if(source78_batch_pinned && source80_state_epoch)source78_batch_forced=true; // conservative dependent batches
++    }
++    const char *old_request=getenv("SST_TEST_RECOVERY_OLD_RECORD");
++    uint64_t active80=sst_origin_active_generation();
++    if(sst_origin_recovery_enabled() && source75_delayed_ready && active80 && active80!=source80_captured_epoch && old_request && getenv("LARECOMP_DEBUG_DATA")) {
++        FILE *f=fopen(old_request,"r");if(f){
++            fclose(f);remove(old_request);source80_stale_probe=true;source75_in_delayed=true;sst_source80_stale_stats.attempts++;
++            if(source78_batch_pinned)sst_source80_stale_stats.fresh_open++;
++            uint64_t palette=sst_animation_teaching_hash(),hands=sst_hand_teaching_hash();
++            uint64_t native=sst_source74_render_stats.native_census,peers=sst_source74_render_stats.remote_draws;
++            draw(&source75_delayed_record,source75_delayed_record.op==CMD_DRAW_ELEMENTS,sst_origin_none());
++            // Real executor test, with a harmless bounded poison payload. If a
++            // stale guard regresses, payload-read counter catches it and saved
++            // host state is restored before executing any real game commands.
++            _Alignas(16) unsigned char list[2*sizeof(CmdRec)+1024]={0};
++            CmdRec *bind=(CmdRec *)list;memcpy(bind,&source75_delayed_record,sizeof(CmdRec));bind->op=CMD_SET_RENDER_TARGETS;bind->size=sizeof(CmdRec)+1024;bind->x[0]=1;
++            uint64_t poison=UINT64_MAX;memcpy(bind->extra,&poison,8);
++            CmdRec *end=(CmdRec *)(list+bind->size);end->op=CMD_END;end->size=sizeof(CmdRec);
++            __typeof__(st) saved=st;exec_list((uint64_t)(uintptr_t)list,0,sst_origin_none());st=saved;
++            if(palette==sst_animation_teaching_hash())sst_source80_stale_stats.palette_unchanged++;
++            if(hands==sst_hand_teaching_hash())sst_source80_stale_stats.hands_unchanged++;
++            if(native==sst_source74_render_stats.native_census && peers==sst_source74_render_stats.remote_draws)sst_source80_stale_stats.no_pixels++;
++            source80_stale_probe=source75_in_delayed=false;source75_delayed_ready=false;
++        }
++    }
+     depth77_control();
+     const char *avatar_request=getenv("SST_TEST_AVATAR_REQUEST");
+     if(avatar_request && getenv("LARECOMP_DEBUG_DATA")){FILE *f=fopen(avatar_request,"r");if(f){int value=-1;if(fscanf(f,"%d",&value)==1 && (value==0 || value==1))g_sst.show_avatars=value;fclose(f);remove(avatar_request);}}
+     if (g_is_skyward) {
+         SstLocal local=sst_game_local();
++        if(sst_origin_recovery_enabled() && sst_origin_active_generation() && local.valid) {
++            SstLocal live=sst_game_read_render_local(&SST_LAYOUT_SSHD_100,&local,sst_game_pose_tick());
++            if(live.valid && !sst_origin_active_scene_matches(&live.scene))sst_origin_reset();
++        }
+         sst_remote_frame(local.valid && local.pose.max_health ? &local.scene : NULL,
+                          renderer_present_count());
+         sst_origin_set_replay_requested(local.valid && local.pose.max_health && g_sst.show_avatars && sst_net_status(NULL,0)==SST_ONLINE);

@@ -1,0 +1,25 @@
+From ba3715e49cf29a143618666bdc7e5ca39d696b4d Mon Sep 17 00:00:00 2001
+From: SST development <sst-development@localhost>
+Date: Mon, 2 Nov 2026 00:58:59 -0500
+Subject: [PATCH] Use native sword state for equipment capture
+
+---
+ runtime/nvn/vulkan/exec.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/runtime/nvn/vulkan/exec.c b/runtime/nvn/vulkan/exec.c
+index dde8e3a..1e9e487 100644
+--- a/runtime/nvn/vulkan/exec.c
++++ b/runtime/nvn/vulkan/exec.c
+@@ -3139,7 +3139,7 @@ static void draw_(CmdRec *r, bool indexed) {
+                     uint16_t pose_mesh = sst_avatar_pose_mesh(avatar_mesh, positions.size, normals.size);
+                     if(sst_avatar_equipment(avatar_mesh))
+                         pose_mesh=sst_avatar_equipment_pose(avatar_mesh,
+-                            sst_avatar_local_equipment() & SST_EQUIP_SWORD_DRAWN);
++                            sst_game_equipment_flags(&local, sst_avatar_local_equipment()) & SST_EQUIP_SWORD_DRAWN);
+                     sst_animation_capture(pose_mesh, &local.pose, view, uniform + 16,
+                         (const void *)(uintptr_t)positions.addr, positions.size,
+                         (const void *)(uintptr_t)normals.addr, normals.size);
+-- 
+2.56.0
+
