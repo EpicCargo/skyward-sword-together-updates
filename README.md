@@ -12,7 +12,7 @@ Four-player co-op prototype for **Skyward Sword HD** on SkyRecomp 2.0.2.
 - Preserve existing Windows release manifests and leave no partial version after a failed copy.
 - Run native prop/carry/session, launcher/networking and relay checks automatically on GitHub.
 
-[November 11 changes and validation](source/CHANGES-2026-11-11.md) also record the travel9 portable's successful final Windows package check and the earlier RAM-guard stop. The new local candidate includes the tested navigation runtime and complete matching source; published downloads and the update feed are unchanged.
+[November 11 changes and validation](source/CHANGES-2026-11-11.md) also record the travel9 portable's successful final Windows package check and completed one-hour native Windows networking soak (359 player replacements). The earlier RAM-guard stop is retained in the history. The new local candidate includes the tested navigation runtime and complete matching source; published downloads and the update feed are unchanged.
 
 ## Co-op source update — November 8, 2026
 
