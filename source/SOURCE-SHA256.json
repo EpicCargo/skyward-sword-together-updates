@@ -243,6 +243,7 @@
   "server/rooms/wrangler.toml": "e3e8e652ce9f1652df63da6874e77eab6d1247375a8740200edcc451d7946c8b",
   "tests/owned_prop_census_test.c": "7f589ccc2592ad925cdf4f5c70031a0c6adcfe25312b778aa42d787c8b5c89c8",
   "tests/prop_bridge_binding_test.c": "d2c8d9c608754fea9c98fb832e20a5ee5345c970ff6dc45c832056b8ea4d07ec",
+  "tests/prop_bridge_disconnect_test.c": "f0f4a76187154a144f4dcb3eb2b7fc39a6b08108784377abcbd370d9103e426c",
   "tests/prop_bridge_handoff_test.c": "62fbc0f7f4084d28add21968702c293b0276b0137a0393050c132d725355db7a",
   "tests/prop_bridge_presentation_test.c": "5eecdaa1b54a87063819d38ab28c9af804b970635147d3de6f48f11c1d6482fb",
   "tests/prop_bridge_roster_test.c": "8bf4ad3d7212a02460f65291b1da54df302d01394573b1e550865fcc6e0ecbc6",
