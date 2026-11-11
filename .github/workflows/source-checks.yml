@@ -66,6 +66,11 @@ jobs:
             client/src/sst_props.c client/src/sst_world.c -lpthread -lm \
             -o build/source-checks/prop-presentation
           build/source-checks/prop-presentation
+          clang "${flags[@]}" -Wno-unused-function -ffunction-sections -fdata-sections \
+            -Wl,--gc-sections -I engine/runtime tests/prop_bridge_binding_test.c \
+            client/src/sst_props.c client/src/sst_world.c -lpthread -lm \
+            -o build/source-checks/prop-bindings
+          for mode in 1 2 3 4 5 6 7; do build/source-checks/prop-bindings "$mode"; done
           clang "${flags[@]}" -I client/src validation/prop_capacity_test.c \
             client/src/sst_props.c -lm -o build/source-checks/prop-capacity
           for mode in 1 2 3; do build/source-checks/prop-capacity "$mode"; done

@@ -1,8 +1,8 @@
 # SST source snapshot
 
-This snapshot contains the tested capacity8 client, relay and launcher sources, plus the hardware-validated gameplay9 travel UI fixes. Protocol **45**, Launcher **5**, SkyRecomp **2.0.2**.
+This snapshot contains the capacity8 client, relay and launcher sources, the hardware-validated gameplay9 travel UI fixes, and additional CPU-checked native prop-binding fixes. The binding fixes still need a full runtime build and hardware gameplay check. Protocol **45**, Launcher **5**, SkyRecomp **2.0.2**.
 
-The engine is represented by 28 patches against upstream commit `506a9bc5aead5fc9598bb8f4a521f3b26f8897e8`. Generated game code and upstream build dependencies are not included.
+The current engine is represented by 29 patches against upstream commit `506a9bc5aead5fc9598bb8f4a521f3b26f8897e8`. The accepted local travel9 portable remains pinned to its earlier 28-patch source and runtime. Generated game code and upstream build dependencies are not included.
 
 ## Reconstruct the engine
 
@@ -35,7 +35,7 @@ GitHub's [source and co-op checks](../.github/workflows/source-checks.yml) build
 - `client/`: co-op networking, state, pose and prop services, with tests.
 - `server/`: standalone relay and opaque-room Worker sources.
 - `launcher/`: setup/update launcher and online-room transport, with tests.
-- `engine-patches/`: complete ordered engine patch series, including the travel UI fix.
+- `engine-patches/`: complete ordered engine patch series, including travel UI and prop-binding fixes.
 - `scripts/`: source restoration, build, package and test tools.
 - `tests/`: actual bridge CPU fixture; `validation/`: extra capacity regressions and evidence.
 - `docs/`: existing protocol, hosting and world-sync reference material. Older platform-validation statements there are superseded by this snapshot's dated validation record.

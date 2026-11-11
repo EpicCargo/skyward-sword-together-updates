@@ -1,0 +1,117 @@
+{
+  "scope": "Actual bridge CPU regressions with owned synthetic arena and network/model stubs; no hardware acceptance",
+  "passed": true,
+  "baseline_engine_tree": "8e0368f43c1bba58897a379167f8f90db927b558",
+  "candidate_engine_tree": "687802ad93078709fb83d3b3a20d8ba015b39c35",
+  "engine_patches": 29,
+  "baseline_regressions_reproduced": 4,
+  "baseline_checks": [
+    {
+      "mode": 1,
+      "returncode": -6
+    },
+    {
+      "mode": 2,
+      "returncode": -6
+    },
+    {
+      "mode": 3,
+      "returncode": -6
+    },
+    {
+      "mode": 4,
+      "returncode": -6
+    }
+  ],
+  "candidate_checks": [
+    {
+      "name": "compile-roster",
+      "returncode": 0
+    },
+    {
+      "name": "roster",
+      "returncode": 0
+    },
+    {
+      "name": "compile-presentation",
+      "returncode": 0
+    },
+    {
+      "name": "presentation",
+      "returncode": 0
+    },
+    {
+      "name": "compile-binding",
+      "returncode": 0
+    },
+    {
+      "name": "binding-1",
+      "returncode": 0
+    },
+    {
+      "name": "binding-2",
+      "returncode": 0
+    },
+    {
+      "name": "binding-3",
+      "returncode": 0
+    },
+    {
+      "name": "binding-4",
+      "returncode": 0
+    },
+    {
+      "name": "binding-5",
+      "returncode": 0
+    },
+    {
+      "name": "binding-6",
+      "returncode": 0
+    },
+    {
+      "name": "binding-7",
+      "returncode": 0
+    },
+    {
+      "name": "compile-capacity",
+      "returncode": 0
+    },
+    {
+      "name": "capacity-1",
+      "returncode": 0
+    },
+    {
+      "name": "capacity-2",
+      "returncode": 0
+    },
+    {
+      "name": "capacity-3",
+      "returncode": 0
+    },
+    {
+      "name": "world-syntax",
+      "returncode": 0
+    },
+    {
+      "name": "compile-census",
+      "returncode": 0
+    },
+    {
+      "name": "census",
+      "returncode": 0
+    }
+  ],
+  "focused_binding_modes": 7,
+  "full_table_actor_replacements": 1000,
+  "source_bridge_sha256": "aa455512aba315d199af597bd278268c4b7ad88fabfaff34e887f5f68432652c",
+  "fixture_sha256": "d2c8d9c608754fea9c98fb832e20a5ee5345c970ff6dc45c832056b8ea4d07ec",
+  "asan": true,
+  "ubsan": true,
+  "compiler_jobs": 1,
+  "linux_owned_rss_cap_mib": 512,
+  "both_os_free_reserve_mib": 3072,
+  "game_run": false,
+  "full_runtime_built": false,
+  "hardware_gameplay_passed": false,
+  "installed_runtime_changed": false
+}

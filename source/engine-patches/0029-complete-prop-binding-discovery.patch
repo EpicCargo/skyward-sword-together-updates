@@ -1,0 +1,108 @@
+From 8f7b7c9e44386d5171930bd050ad97655c9eb971 Mon Sep 17 00:00:00 2001
+From: EpicCargo <149317426+EpicCargo@users.noreply.github.com>
+Date: Wed, 11 Nov 2026 12:42:18 -0500
+Subject: [PATCH] Validate complete prop discovery before replacing native
+ bindings
+
+---
+ runtime/hle/sst_prop_bridge.h | 59 ++++++++++++++++++++++-------------
+ 1 file changed, 37 insertions(+), 22 deletions(-)
+
+diff --git a/runtime/hle/sst_prop_bridge.h b/runtime/hle/sst_prop_bridge.h
+index 914c99f..e9a56f9 100644
+--- a/runtime/hle/sst_prop_bridge.h
++++ b/runtime/hle/sst_prop_bridge.h
+@@ -44,32 +44,33 @@ static PropBinding *prop_binding(uint64_t actor) {
+         PropBinding *b = &props_bridge.bindings[i];
+         if (b->seen && b->actor == actor && sst_prop_native_vase(actor) &&
+             r32(actor + 8) == b->instance && r32(actor + 0xc) == b->key.params &&
+-            r16(actor + 0x136) == b->key.placed_id) return b;
++            r16(actor + 0x136) == b->key.placed_id && r16(actor + 0x10) == b->key.profile &&
++            (r8(actor + 0x17c) == b->key.room || r8(actor + 0x17c) == 0xff)) return b;
+     }
+     return NULL;
+ }
+ 
+ // Native validation and binding stay separate from the scalar bounded walker.
+-typedef struct {const SstScene *scene;} PropWalkContext;
++typedef struct {
++    const SstScene *scene;
++    struct {uint64_t actor;uint32_t instance;SstPropKey key;} live[SST_PROPS];
++    unsigned count;
++} PropWalkContext;
+ static bool prop_walk_step(uint64_t node,SstPropWalkLinks *links,void *opaque) {
+-    const SstScene *scene=((PropWalkContext *)opaque)->scene;
++    PropWalkContext *context=opaque;const SstScene *scene=context->scene;
+     if(!ptr(node,0x28) || node<GUEST_LO+0x18)return false;
+     uint64_t actor=node-0x18;
+     if(!ptr(actor,0x180) || r64(node+0x20)!=actor)return false;
+     if (sst_prop_native_vase(actor) &&
+         (r8(actor + 0x17c) == scene->room || r8(actor + 0x17c) == 0xff)) {
+-        PropBinding *b = NULL, *empty = NULL;
+-        for (unsigned i = 0; i < SST_PROPS; i++) {
+-            PropBinding *candidate = &props_bridge.bindings[i];
+-            if (candidate->actor == actor && candidate->instance == r32(actor + 8)) { b = candidate; break; }
+-            if (!candidate->actor && !empty) empty = candidate;
+-        }
+-        if (!b && empty) {
+-            b = empty; memset(b, 0, sizeof *b); b->actor = actor; b->instance = r32(actor + 8);
+-            b->key = (SstPropKey){.placed_id=r16(actor + 0x136), .profile=r16(actor + 0x10),
+-                .params=r32(actor + 0xc), .room=scene->room, .layer=scene->layer};
+-        }
+-        if (b) b->seen = true;
++        // Skipping an overflow actor could hide a duplicate key after the last
++        // available slot. Require the entire eligible set to fit before binding.
++        if(context->count==SST_PROPS || !r32(actor+8))return false;
++        unsigned i=context->count++;
++        context->live[i].actor=actor;context->live[i].instance=r32(actor+8);
++        context->live[i].key=(SstPropKey){.placed_id=r16(actor+0x136),.profile=r16(actor+0x10),
++            .params=r32(actor+0xc),.room=scene->room,.layer=scene->layer};
++        for(unsigned j=0;j<i;j++)if(sst_prop_key_equal(&context->live[i].key,&context->live[j].key))return false;
+     }
+     links->child=r64(node+8);links->next=r64(node+0x18);
+     return true;
+@@ -84,20 +85,34 @@ static bool prop_discover(uint64_t player, const SstScene *scene) {
+         if (depth == 64 || !ptr(node, 0x28)) goto failed;
+         uint64_t parent = r64(node); if (!parent) break; node = parent;
+     }
+-    for(unsigned i=0;i<SST_PROPS;i++)props_bridge.bindings[i].seen=false;
+     PropWalkContext context={.scene=scene};uint32_t nodes=0;
+     bool walked=sst_prop_walk(node,prop_walk_step,&context,&nodes);
+     sst_prop_discovery_stats.last_nodes=nodes;
+     if(!walked)goto failed;
+-    // Duplicate placement identities remain ambiguous; neither actor can be modified.
++    // Retire missing/changed lifetimes before allocating new ones. A full table
++    // can then replace an actor in the same discovery without losing stable
++    // actors' independently observed native floor placements.
+     for (unsigned i = 0; i < SST_PROPS; i++) {
+         PropBinding *b = &props_bridge.bindings[i];
+-        if (!b->seen) { memset(b, 0, sizeof *b); continue; }
+-        for (unsigned j = i + 1; j < SST_PROPS; j++)
+-            if (props_bridge.bindings[j].seen && sst_prop_key_equal(&b->key, &props_bridge.bindings[j].key))
+-                goto failed;
+-        sst_prop_discovery_stats.last_bindings++;
++        b->seen=false;
++        for(unsigned j=0;j<context.count;j++)if(b->actor==context.live[j].actor &&
++            b->instance==context.live[j].instance && sst_prop_key_equal(&b->key,&context.live[j].key)) {
++            b->seen=true;break;
++        }
++        if(!b->seen)memset(b,0,sizeof *b);
++    }
++    for(unsigned i=0;i<context.count;i++) {
++        bool bound=false;
++        for(unsigned j=0;j<SST_PROPS;j++)if(props_bridge.bindings[j].seen &&
++            props_bridge.bindings[j].actor==context.live[i].actor){bound=true;break;}
++        if(bound)continue;
++        PropBinding *b=NULL;
++        for(unsigned j=0;j<SST_PROPS;j++)if(!props_bridge.bindings[j].actor){b=&props_bridge.bindings[j];break;}
++        if(!b)goto failed;
++        *b=(PropBinding){.actor=context.live[i].actor,.instance=context.live[i].instance,
++            .key=context.live[i].key,.seen=true};
+     }
++    sst_prop_discovery_stats.last_bindings=context.count;
+     return true;
+ failed:
+     sst_prop_discovery_stats.last_bindings=0;
+-- 
+2.43.0
+

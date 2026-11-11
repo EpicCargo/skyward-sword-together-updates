@@ -26,7 +26,7 @@ def main():
         raise SystemExit('Preserve the existing engine; choose a fresh source checkout.')
     state = json.loads((ROOT / 'validation/native-source.json').read_text())
     patches = sorted((ROOT / 'engine-patches').glob('*.patch'))
-    assert len(patches) == state['engine_patches'] == 28
+    assert len(patches) == state['engine_patches']
     assert (ROOT / 'engine-patches/base.txt').read_text().strip() == state['base_commit']
     build = ROOT / 'build'
     build.mkdir(exist_ok=True)
