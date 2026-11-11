@@ -4,6 +4,8 @@ Four-player co-op prototype for **Skyward Sword HD** on SkyRecomp 2.0.2.
 
 [Published downloads](https://github.com/EpicCargo/skyward-sword-together-updates/releases) · [Current source](source/) · [Recent fixes and validation](source/CHANGES-2026-11-08.md)
 
+[Remaining bugs and gameplay checks, in priority order](source/COOP-REMAINING.md)
+
 [![Source and co-op checks](https://github.com/EpicCargo/skyward-sword-together-updates/actions/workflows/source-checks.yml/badge.svg)](https://github.com/EpicCargo/skyward-sword-together-updates/actions/workflows/source-checks.yml)
 
 ## Latest source update — November 11, 2026
