@@ -48,6 +48,23 @@ jobs:
             "client/build/$check"
           done
           python3 client/tests/session_host_test.py client/build/sst-session-host
+      - name: Check the actual engine bridge and object-capacity regressions
+        env:
+          ASAN_OPTIONS: detect_leaks=1:halt_on_error=1
+          UBSAN_OPTIONS: halt_on_error=1:print_stacktrace=1
+        run: |
+          mkdir -p build/source-checks
+          flags=(-O1 -g -Wall -Wextra -std=c11 -D_GNU_SOURCE
+            -fsanitize=address,undefined -fno-omit-frame-pointer)
+          clang "${flags[@]}" -Wno-unused-function -ffunction-sections -fdata-sections \
+            -Wl,--gc-sections -I engine/runtime tests/prop_bridge_roster_test.c \
+            client/src/sst_props.c client/src/sst_world.c -lpthread -lm \
+            -o build/source-checks/prop-bridge
+          build/source-checks/prop-bridge
+          clang "${flags[@]}" -I client/src validation/prop_capacity_test.c \
+            client/src/sst_props.c -lm -o build/source-checks/prop-capacity
+          for mode in 1 2 3; do build/source-checks/prop-capacity "$mode"; done
+          clang "${flags[@]}" -fsyntax-only -I engine/runtime engine/runtime/hle/sst_world.c
       - name: Check the launcher and actual local HTTP and TLS networking
         run: python3 -m unittest discover -s launcher/tests -v
       - name: Check build and packaging tools

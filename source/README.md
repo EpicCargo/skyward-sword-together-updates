@@ -40,6 +40,6 @@ GitHub's [source and co-op checks](../.github/workflows/source-checks.yml) build
 - `tests/`: actual bridge CPU fixture; `validation/`: extra capacity regressions and evidence.
 - `docs/`: existing protocol, hosting and world-sync reference material. Older platform-validation statements there are superseded by this snapshot's dated validation record.
 
-The complete portable candidate remains capacity8. Publishing this source does not change the release feed or install a runtime. Separate-PC/campaign readiness, other carryable classes, throws, and the WSL software-Vulkan rendering issue remain open.
+The local travel9 portable candidate now passed its final Windows package check; the earlier capacity8 candidate is preserved. Publishing this source does not change the release feed or install a runtime. Separate-PC/campaign readiness, other carryable classes, throws, and the WSL software-Vulkan rendering issue remain open.
 
 Upstream engine licensing is preserved in `ENGINE-LICENSE`; third-party source licenses remain alongside their respective files.

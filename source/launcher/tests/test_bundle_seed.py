@@ -2,6 +2,7 @@
 import hashlib
 import json
 import os
+import subprocess
 from pathlib import Path
 import sys
 import tempfile
@@ -131,6 +132,53 @@ class BundleSeedTests(unittest.TestCase):
         self.assertEqual((folder / 'skyrecomp').stat().st_mode & 0o777, 0o755)
         self.assertEqual((folder / 'sst-session-host').stat().st_mode & 0o777, 0o755)
         self.assertEqual((folder / 'online/helper.py').stat().st_mode & 0o777, 0o644)
+
+
+class PortableOutputTests(unittest.TestCase):
+    def setUp(self):
+        temporary = tempfile.TemporaryDirectory(prefix='sst-portable-output-')
+        self.addCleanup(temporary.cleanup)
+        self.root = Path(temporary.name)
+        self.stage = self.root / 'stage'
+        self.stage.mkdir()
+        (self.stage / 'README.txt').write_bytes(b'public portable fixture')
+        self.target = self.root / 'portable.zip'
+
+    def test_existing_portable_is_preserved(self):
+        self.target.write_bytes(b'previous portable')
+        with self.assertRaises(sst_launcher.UpdateError):
+            build_bundle.zip_stage(self.stage, self.target)
+        self.assertEqual(self.target.read_bytes(), b'previous portable')
+
+    def test_dangling_output_link_is_preserved_without_creating_its_target(self):
+        other = self.root / 'missing-target'
+        self.target.symlink_to(other)
+        with self.assertRaises(sst_launcher.UpdateError):
+            build_bundle.zip_stage(self.stage, self.target)
+        self.assertTrue(self.target.is_symlink())
+        self.assertFalse(other.exists())
+
+    def test_optimized_python_also_preserves_an_existing_portable(self):
+        self.target.write_bytes(b'previous portable')
+        code = (
+            "import sys;from pathlib import Path;sys.path.insert(0,sys.argv[1]);"
+            "import build_bundle,sst_launcher\n"
+            "try:build_bundle.zip_stage(Path(sys.argv[2]),Path(sys.argv[3]))\n"
+            "except sst_launcher.UpdateError:sys.exit(0)\n"
+            "sys.exit(3)\n"
+        )
+        result = subprocess.run([sys.executable, '-O', '-c', code,
+                                 str(Path(build_bundle.__file__).parent), str(self.stage), str(self.target)],
+                                capture_output=True, text=True, timeout=10)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(self.target.read_bytes(), b'previous portable')
+
+    def test_fresh_portable_retains_its_expected_layout(self):
+        build_bundle.zip_stage(self.stage, self.target)
+        with zipfile.ZipFile(self.target) as archive:
+            self.assertIsNone(archive.testzip())
+            self.assertEqual(archive.namelist(), ['SST/README.txt'])
+            self.assertEqual(archive.read('SST/README.txt'), b'public portable fixture')
 
 
 if __name__ == '__main__':

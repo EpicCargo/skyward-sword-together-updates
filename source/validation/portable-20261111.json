@@ -36,8 +36,7 @@
   "native_windows_job_memory_cap_mib": 256,
   "minimum_windows_free_bytes": 2064793600,
   "windows_memory_reserve_mib": 2048,
-  "short_check_preflight": "refused before worker start; Windows reserve unavailable",
-  "candidate_accepted": false,
+  "candidate_accepted": true,
   "installed": false,
   "published": false,
   "producer_fix_tests": {
@@ -46,5 +45,80 @@
     "optimized_seeding": 9,
     "old_source_failures_reproduced": true
   },
-  "game_run_this_continuation": false
+  "game_run_this_continuation": false,
+  "prior_short_check_preflight": "refused before worker start; Windows reserve unavailable",
+  "windows_final_package_check": {
+    "passed": true,
+    "bundle_sha256": "01b301a7f92a1d7e04e7395dabcf36f4e7b4ff2ab26fd86226efe4e2d439d2fb",
+    "tls": {
+      "passed": true,
+      "elapsed_seconds": 180.07,
+      "pose_cycles": 5400,
+      "prop_roundtrips": 1792,
+      "replacements": 17,
+      "area_returns": 8,
+      "pose_pacing_resets": 1,
+      "verified_tls": true,
+      "actual_windows_native_host_and_receiver": true,
+      "refused_guest_preserved_teammates": true,
+      "game_run": false
+    },
+    "clean_channel": {
+      "passed": true,
+      "local_channel_verified": true,
+      "update_behavior": "same-accepted-version",
+      "all_bundle_hashes_verified": true,
+      "cli_status_verified": true,
+      "default_data_dir_verified": true,
+      "original_config_preserved": true,
+      "game_run": false
+    },
+    "bootstrap": {
+      "passed": true,
+      "bootstrap_exit": 0,
+      "local_auth_checked": true,
+      "manifest_files": 5198,
+      "entrypoint_verified": true,
+      "online_modules_verified": true,
+      "private_fixture_preserved": true,
+      "owned_server_exit_verified": true,
+      "game_run": false
+    },
+    "startup_regressions": {
+      "passed": true,
+      "before": {
+        "returncode": 1,
+        "tests": 10
+      },
+      "current": {
+        "returncode": 0,
+        "tests": 10
+      }
+    },
+    "startup_socket_cancellation": {
+      "passed": true,
+      "host_tls_cancellations": 5,
+      "guest_bound_socket_cancellations": 5
+    },
+    "windows_owned_children_final": 0,
+    "windows_peak_job_commit_bytes": 54345728,
+    "minimum_windows_free_bytes": 7015952384,
+    "relay_final": {
+      "retained_endpoints": 0,
+      "retained_tags": 0,
+      "active_endpoints": 0,
+      "open_network_sockets": 0,
+      "pending_worker_events": 0,
+      "worker_event_errors": 0
+    },
+    "relay_returncode": 0,
+    "game_run": false
+  },
+  "producer_output_fix_tests": {
+    "bundle_and_seeding": 13,
+    "publishing": 11,
+    "optimized_bundle_and_seeding": 13,
+    "zip_stage_unchanged_between_baselines": true
+  },
+  "new_full_hour_retry": "running in a separate preserved fixture after fresh Windows snapshot above 6 GiB; not yet accepted as a completed hour"
 }

@@ -50,10 +50,12 @@ def seed_version(stage,feed,manifest,source_zip):
     updater.atomic_json(stage/'launcher-state.json',{'active':{'id':rid,'sequence':feed['release']['sequence'],'protocol':feed['release']['protocol'],'entrypoint':manifest['entrypoint']},'previous':None})
 
 def zip_stage(stage,target):
-    assert not target.exists()
-    with zipfile.ZipFile(target,'w',zipfile.ZIP_DEFLATED,compresslevel=6) as z:
-        for p in sorted(stage.rglob('*')):
-            if p.is_file():z.write(p,Path('SST')/p.relative_to(stage))
+    try:
+        with zipfile.ZipFile(target,'x',zipfile.ZIP_DEFLATED,compresslevel=6) as z:
+            for p in sorted(stage.rglob('*')):
+                if p.is_file():z.write(p,Path('SST')/p.relative_to(stage))
+    except FileExistsError:
+        raise updater.UpdateError('Portable ZIP already exists; choose a new output path.') from None
 
 def main():
     p=argparse.ArgumentParser();p.add_argument('--out',type=Path,required=True);p.add_argument('--windows',type=Path,default=ROOT/'build/dist/SST-Windows-coop-protocol45-scenes48.zip');p.add_argument('--linux',type=Path,default=ROOT/'engine/build/skyrecomp');p.add_argument('--id',default=RELEASE);p.add_argument('--sequence',type=int,default=SEQUENCE);p.add_argument('--protocol',type=int,default=45);p.add_argument('--previous',type=Path);a=p.parse_args();out=a.out.absolute();out.mkdir(parents=True,exist_ok=True)
