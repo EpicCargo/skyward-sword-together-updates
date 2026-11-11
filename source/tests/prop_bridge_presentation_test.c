@@ -53,6 +53,8 @@ static void put8(uint64_t at, uint8_t v) { assert(arena_range(at, 1)); *(uint8_t
 SstSettings g_sst = {.sync_props = true};
 const SstGameLayout SST_LAYOUT_SSHD_100 = {0};
 static uint64_t now_ms;
+static uint16_t local_player_id = 1;
+static bool network_online = true, remote_connected = true;
 static SstLocal local;
 static SstPose displayed;
 static bool body_visible;
@@ -81,9 +83,10 @@ bool sst_remote_carry_displayed(const SstScene *scene, uint16_t id, uint32_t pre
 }
 uint64_t sst_now_ms(void) { return now_ms; }
 uint32_t sst_net_generation(void) { return 1; }
-uint16_t sst_net_my_id(void) { return 1; }
-SstStatus sst_net_status(char *why, int bytes) { if (why && bytes > 0) *why = 0; return SST_ONLINE; }
+uint16_t sst_net_my_id(void) { return local_player_id; }
+SstStatus sst_net_status(char *why, int bytes) { if (why && bytes > 0) *why = 0; return network_online ? SST_ONLINE : SST_OFFLINE; }
 int sst_net_players(SstPlayer *out, int capacity) {
+    if (!remote_connected) return 0;
     assert(capacity >= 1); out[0] = (SstPlayer){.active=true, .id=2, .presence_generation=7, .scene=area}; return 1;
 }
 void sst_net_poll_props(SstPropFn fn, void *user) {
@@ -123,6 +126,7 @@ static void send_remote(uint32_t sequence, SstPropPhase phase) {
     assert(sst_prop_valid(&pending)); have_pending = true; tick();
 }
 static void setup(const SstPropNativeDescriptor *d) {
+    network_online = remote_connected = true;
     sst_prop_bridge_reset(); memset(&sst_prop_presentation_stats, 0, sizeof sst_prop_presentation_stats);
     arena=calloc(1,0x10000);assert(arena);arena_lo=(uint64_t)(uintptr_t)arena;arena_hi=arena_lo+0x10000;
     player=arena_lo+0x1000;actor=arena_lo+0x4000;model=arena_lo+0x8000;

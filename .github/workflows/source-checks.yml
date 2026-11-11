@@ -67,6 +67,11 @@ jobs:
             -o build/source-checks/prop-presentation
           build/source-checks/prop-presentation
           clang "${flags[@]}" -Wno-unused-function -ffunction-sections -fdata-sections \
+            -Wl,--gc-sections -I engine/runtime tests/prop_bridge_handoff_test.c \
+            client/src/sst_props.c client/src/sst_world.c -lpthread -lm \
+            -o build/source-checks/prop-handoff
+          build/source-checks/prop-handoff
+          clang "${flags[@]}" -Wno-unused-function -ffunction-sections -fdata-sections \
             -Wl,--gc-sections -I engine/runtime tests/prop_bridge_binding_test.c \
             client/src/sst_props.c client/src/sst_world.c -lpthread -lm \
             -o build/source-checks/prop-bindings

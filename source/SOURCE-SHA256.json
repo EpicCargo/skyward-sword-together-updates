@@ -1,7 +1,7 @@
 {
   ".gitignore": "208125964c666dae7b7742d6ccf5f14c615d4629e589349a904ac5a7801b79b2",
   "CHANGES-2026-11-08.md": "6d1c8b97257b9b5007078a92a389d2e7f9537f3675c7711777462a6dcacb8a30",
-  "CHANGES-2026-11-11.md": "271fa2e1ea61165128beada9f055eb7b2e505cf4b3fcd4b02caaabf9451776f3",
+  "CHANGES-2026-11-11.md": "261fb82001edc31139e98327563b3271f877393f958d2ded2838a0c0b2d422f5",
   "DEVELOPMENT-RESOURCE-POLICY.md": "84d169cce1770a5289ddf67da926cbbb99df5535211897ab25cfa28590a88145",
   "ENGINE-LICENSE": "82366d6b052c2608d7458b81a869249abed63932bd88fa03ca8f7a136f8602e3",
   "README.md": "4e27a5fb3ac0bb9257596ed7ab6a381507f7fa9e038a2a5bccf8f80657329321",
@@ -241,7 +241,8 @@
   "server/rooms/wrangler.toml": "e3e8e652ce9f1652df63da6874e77eab6d1247375a8740200edcc451d7946c8b",
   "tests/owned_prop_census_test.c": "7f589ccc2592ad925cdf4f5c70031a0c6adcfe25312b778aa42d787c8b5c89c8",
   "tests/prop_bridge_binding_test.c": "d2c8d9c608754fea9c98fb832e20a5ee5345c970ff6dc45c832056b8ea4d07ec",
-  "tests/prop_bridge_presentation_test.c": "e167eab211e53b89035fd5847c214db377bfaa8246b00d1728621d59443df9da",
+  "tests/prop_bridge_handoff_test.c": "62fbc0f7f4084d28add21968702c293b0276b0137a0393050c132d725355db7a",
+  "tests/prop_bridge_presentation_test.c": "5eecdaa1b54a87063819d38ab28c9af804b970635147d3de6f48f11c1d6482fb",
   "tests/prop_bridge_roster_test.c": "8bf4ad3d7212a02460f65291b1da54df302d01394573b1e550865fcc6e0ecbc6",
   "tests/test_census_scene.py": "f0084937d707c4366786a82e849ed8a98f14fd3bc5a767385e29d6479bf3e3a9",
   "third_party/SST-HANDOFF-20261030/NOTICE.txt": "dafb9d782334963b7d12a98848296825ed78aa45af27811f74857825f987cf35",
