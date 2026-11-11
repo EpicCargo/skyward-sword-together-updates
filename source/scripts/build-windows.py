@@ -6,6 +6,7 @@ build machine. Builds the runtime only; first-run setup builds the player's DLL.
 """
 import argparse
 import hashlib
+import json
 import os
 from pathlib import Path
 import re
@@ -81,8 +82,54 @@ def publish_archive(temporary, target):
     temporary.unlink()
 
 
+def snapshot_source_records():
+    """Freeze a published snapshot's complete, checksum-verified file inventory."""
+    manifest = ROOT / "SOURCE-SHA256.json"
+    if not manifest.exists() and not manifest.is_symlink():
+        return None
+    if manifest.is_symlink() or not manifest.is_file():
+        raise ValueError("Source manifest must be a regular file")
+    data = manifest.read_bytes()
+    def unique(pairs):
+        result = {}
+        for name, value in pairs:
+            if name in result:
+                raise ValueError("Duplicate source manifest name: " + name)
+            result[name] = value
+        return result
+    inventory = json.loads(data, object_pairs_hook=unique)
+    if not isinstance(inventory, dict) or not inventory:
+        raise ValueError("Source manifest must contain a nonempty file inventory")
+    records = [("SOURCE-SHA256.json", data)]
+    for name, expected in sorted(inventory.items()):
+        if not isinstance(name, str) or "\\" in name or ":" in name or "\0" in name or \
+                any(part in ("", ".", "..") for part in name.split("/")) or name == "SOURCE-SHA256.json":
+            raise ValueError("Invalid source manifest path: " + repr(name))
+        if not isinstance(expected, str) or not re.fullmatch(r"[0-9a-f]{64}", expected):
+            raise ValueError("Invalid source checksum: " + name)
+        path = ROOT
+        for part in name.split("/"):
+            path = path / part
+            if path.is_symlink():
+                raise ValueError("Source snapshot paths must be regular files: " + name)
+        if not path.is_file():
+            raise ValueError("Missing source snapshot file: " + name)
+        content = path.read_bytes()
+        if hashlib.sha256(content).hexdigest() != expected:
+            raise ValueError("Source checksum mismatch: " + name)
+        # Archive these exact verified bytes; do not reread a changing source.
+        records.append((name, content))
+    return records
+
+
 def write_coop_source(target):
-    """Archive the selected reproducible sources without inactive patch series."""
+    """Archive a frozen snapshot exactly, or the active legacy source recipe."""
+    records = snapshot_source_records()
+    if records is not None:
+        with zipfile.ZipFile(target, "x", zipfile.ZIP_DEFLATED) as archive:
+            for name, content in records:
+                archive.writestr(name, content)
+        return
     patchset = active_patchset(ROOT)
     paths = set()
     excluded = {"__pycache__", ".git", ".venv", "node_modules", ".wrangler", "build", "dist", "cache"}

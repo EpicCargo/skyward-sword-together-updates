@@ -10,6 +10,7 @@ Four-player co-op prototype for **Skyward Sword HD** on SkyRecomp 2.0.2.
 
 - Reject incomplete, duplicate or mismatched portable runtime archives before activating a version.
 - Preserve existing Windows release manifests and leave no partial version after a failed copy.
+- Include the complete verified source inventory in default Windows source archives.
 - Run native prop/carry/session, launcher/networking and relay checks automatically on GitHub.
 - Reject ambiguous prop discovery beyond the 32-object capacity, reuse retired binding slots immediately, and discard bindings when an actor's identity changes.
 

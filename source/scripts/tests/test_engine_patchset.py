@@ -1,4 +1,5 @@
 import importlib.util
+import hashlib
 import json
 from pathlib import Path
 import tempfile
@@ -20,6 +21,87 @@ def load_script(name, filename):
 patchsets = load_script("sst_patchset_tests", "engine_patchset.py")
 builder = load_script("sst_patchset_builder_tests", "build-windows.py")
 checker = load_script("sst_patchset_checker_tests", "check-engine-patches.py")
+
+
+class SnapshotArchiveTests(unittest.TestCase):
+    def setUp(self):
+        self.temp = tempfile.TemporaryDirectory(prefix="sst-source-snapshot-")
+        self.addCleanup(self.temp.cleanup)
+        self.root = Path(self.temp.name)
+        self.manifest = self.root / "SOURCE-SHA256.json"
+        self.target = self.root / "source.zip"
+        self.content = {
+            "scripts/restore-engine.py": b"# exact restoration fixture\r\n",
+            "validation/native-source.json": b'{"engine_patches":29}\n',
+            "tests/prop_bridge_binding_test.c": b"/* source regression */\n",
+        }
+        for name, data in self.content.items():
+            path = self.root / name;path.parent.mkdir(parents=True, exist_ok=True);path.write_bytes(data)
+        self.inventory = {name:hashlib.sha256(data).hexdigest() for name,data in self.content.items()}
+        self.manifest.write_text(json.dumps(self.inventory))
+
+    def produce(self):
+        with mock.patch.object(builder, "ROOT", self.root):
+            builder.write_coop_source(self.target)
+
+    def test_complete_inventory_is_archived_with_metadata_and_raw_bytes(self):
+        (self.root / "personal-save.sav").write_bytes(b"DO_NOT_PACKAGE")
+        self.produce()
+        with zipfile.ZipFile(self.target) as archive:
+            self.assertEqual(set(archive.namelist()), set(self.content) | {"SOURCE-SHA256.json"})
+            self.assertEqual(len(archive.namelist()), len(self.content)+1)
+            for name,data in self.content.items():self.assertEqual(archive.read(name),data)
+            self.assertEqual(archive.read("SOURCE-SHA256.json"),self.manifest.read_bytes())
+
+    def test_missing_or_modified_file_refuses_before_output_creation(self):
+        path=self.root / "tests/prop_bridge_binding_test.c"
+        for change in (lambda:path.write_bytes(b"changed"),path.unlink):
+            change()
+            with self.assertRaises(ValueError):self.produce()
+            self.assertFalse(self.target.exists())
+
+    def test_duplicate_invalid_paths_and_checksums_are_rejected(self):
+        digest=next(iter(self.inventory.values()))
+        bad=[{},[],{"../outside.c":digest},{"/absolute.c":digest},{"a//b.c":digest},
+             {"a/./b.c":digest},{"C:relative.c":digest},{"a\\b.c":digest},
+             {"SOURCE-SHA256.json":digest},{"scripts/restore-engine.py":"bad"}]
+        for inventory in bad:
+            with self.subTest(inventory=inventory):
+                self.manifest.write_text(json.dumps(inventory))
+                with self.assertRaises(ValueError):self.produce()
+                self.assertFalse(self.target.exists())
+        self.manifest.write_text('{"same.c":"'+digest+'","same.c":"'+digest+'"}')
+        with self.assertRaisesRegex(ValueError,"Duplicate"):self.produce()
+        self.assertFalse(self.target.exists())
+
+    def test_manifest_and_parent_symlinks_are_rejected(self):
+        original=self.manifest.read_bytes();self.manifest.unlink()
+        self.manifest.symlink_to("missing.json")
+        with self.assertRaises(ValueError):self.produce()
+        self.manifest.unlink();self.manifest.write_bytes(original)
+        with tempfile.TemporaryDirectory(prefix="sst-other-source-") as folder:
+            outside=Path(folder);(outside / "external.c").write_bytes(b"external")
+            (self.root / "linked").symlink_to(outside,target_is_directory=True)
+            self.manifest.write_text(json.dumps({"linked/external.c":hashlib.sha256(b"external").hexdigest()}))
+            with self.assertRaises(ValueError):self.produce()
+        self.assertFalse(self.target.exists())
+
+    def test_existing_archive_and_dangling_output_are_preserved(self):
+        self.target.write_bytes(b"existing")
+        with self.assertRaises(FileExistsError):self.produce()
+        self.assertEqual(self.target.read_bytes(),b"existing")
+        self.target.unlink();self.target.symlink_to("missing.zip")
+        with self.assertRaises(FileExistsError):self.produce()
+        self.assertTrue(self.target.is_symlink());self.assertFalse((self.root / "missing.zip").exists())
+
+    def test_bytes_verified_before_archive_open_are_the_bytes_written(self):
+        actual_zip=zipfile.ZipFile
+        def changing_open(*args,**kwargs):
+            (self.root / "scripts/restore-engine.py").write_bytes(b"changed after validation")
+            return actual_zip(*args,**kwargs)
+        with mock.patch.object(builder.zipfile,"ZipFile",side_effect=changing_open):self.produce()
+        with actual_zip(self.target) as archive:
+            self.assertEqual(archive.read("scripts/restore-engine.py"),self.content["scripts/restore-engine.py"])
 
 
 class EnginePatchsetTests(unittest.TestCase):
