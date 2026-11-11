@@ -1,0 +1,157 @@
+{
+  "overall_gameplay_acceptance": false,
+  "scope": "One full patch30 Windows game with three lightweight peers; stopped by memory guard after planned replay phases.",
+  "runtime_sha256": "3a40abc9848b24f3e5fc89b4c8fced2b5546b908ac579e96e2c2d1bf899937a8",
+  "engine_tree": "7112f66f7cf19b9afeec131568813cdd475ff6b6",
+  "completed_replay_phases": 8,
+  "read_only_census_complete_samples": 46,
+  "stable_hall_samples": 40,
+  "hall_target_counts": [
+    1
+  ],
+  "actor_lifetimes": [
+    {
+      "actor_token": 102693920,
+      "instance": 2074
+    }
+  ],
+  "native_held_samples": 3,
+  "malformed_records_rejected": [
+    {
+      "last_logged_present_frame": 15901,
+      "error": "Expecting ':' delimiter: line 1 column 335 (char 334)",
+      "line_sha256": "7ef47f0416e58333e3358483e9f1e878c30a5bb2705d3a608b4e0583b48997a5"
+    }
+  ],
+  "phase_statistics": {
+    "remote-pot-carry": {
+      "samples": 2,
+      "median_position": [
+        3158.03369,
+        128.277893,
+        -2993.92188
+      ]
+    },
+    "remote-pot-moved": {
+      "samples": 2,
+      "median_position": [
+        3208.03369,
+        128.277893,
+        -3093.92188
+      ]
+    },
+    "remote-pot-expired": {
+      "samples": 2,
+      "median_position": [
+        3382.63745,
+        1.5,
+        -2999.06909
+      ]
+    },
+    "remote-pot-resumed": {
+      "samples": 1,
+      "median_position": [
+        3208.03369,
+        128.277893,
+        -3093.92188
+      ]
+    },
+    "remote-pot-invalid-context": {
+      "samples": 3,
+      "median_position": [
+        3382.63745,
+        1.5,
+        -2999.06909
+      ]
+    },
+    "remote-pot-valid-again": {
+      "samples": 2,
+      "median_position": [
+        3208.03369,
+        128.277893,
+        -3093.92188
+      ]
+    },
+    "remote-pot-placed": {
+      "samples": 2,
+      "median_position": [
+        3205.69458,
+        1.5,
+        -3129.97705
+      ]
+    },
+    "remote-place-settled": {
+      "samples": 2,
+      "median_position": [
+        3203.16504,
+        1.5,
+        -3128.66748
+      ]
+    }
+  },
+  "genuine_native_descriptors": 389,
+  "replayed_descriptors": 1472,
+  "cold_import_used": false,
+  "observed_place_sent": 0,
+  "reviewed_images": {
+    "genuine-pickup.png": {
+      "sha256": "4073783bc7aed9032ac4ffdae7fa677712092cb8bb566e3bd4b44d4d4008b1f3",
+      "review": "Native local player visibly holds the pot; Put down prompt."
+    },
+    "genuine-putdown.png": {
+      "sha256": "9bbfe51caf857f863eda235b1c39a2dc4d6f14fa6b7fa947715be3b53d8eadb1",
+      "review": "Native pot at floor; player unheld with Pick up prompt."
+    },
+    "navigation-target.png": {
+      "sha256": "89e7f650f1a0ca88f90a0252bc85d5f2a6065074e0e312b7d1e72b26c9301e9c",
+      "review": "Selected F001r room0 layer1 entrance2 arrival through native menu."
+    },
+    "academy-hall-arrival.png": {
+      "sha256": "0fe55365408308f35cce1fd81d2cc8632871fca37e08992a4b93d2dbf232033e",
+      "review": "Native hall and three visible peer avatars."
+    },
+    "remote-pot-carry.png": {
+      "sha256": "e69921431e516cc1bbccae0f3c46ac6cabda72d06bec51728cc186c68af5c1d5",
+      "review": "Peer1 holds elevated pot; original native floor spot vacated."
+    },
+    "remote-pot-moved.png": {
+      "sha256": "2d5710a9addc1c19f846e9774194c4fb5f144dfef575a1bc837d10e854aab6b7",
+      "review": "Same visible pot follows moved peer1."
+    },
+    "remote-pot-expired.png": {
+      "sha256": "c797cb99c555b854d34f272ca40a1e3cd99d120342aec5cdd5f5276fc5176c12",
+      "review": "Pot restored to original floor while peer pose remains carrying."
+    },
+    "remote-pot-resumed.png": {
+      "sha256": "d2818ec31dddabe45b82f68fd5c47b463b44aa64b2ee883728e80e76d8fc5742",
+      "review": "Valid remote carry resumes."
+    },
+    "remote-pot-invalid-context.png": {
+      "sha256": "b40b28cf258bb26b51b8694a08c0c3ca12e1ab5b7c0bab328a96c366f3eeb22a",
+      "review": "Invalid drawn-plus-carry peer restored pot to original floor."
+    },
+    "remote-pot-valid-again.png": {
+      "sha256": "f4357f282ced333cc6b19c26c9a235b96e6d51b605ba2c9eb8641069bd15ad3c",
+      "review": "Valid body/carry restores moving pot presentation."
+    },
+    "remote-pot-placed.png": {
+      "sha256": "65697fba423302531356af14ef2574e2c41bdea7d6f5fe0677cda2622d8dbd60",
+      "review": "Remote PLACE moves pot to the floor near peer1."
+    },
+    "remote-place-settled.png": {
+      "sha256": "a628754c4adfbdca57ef79a2bdc070036deca03bf5b3ba7e735e54a47d422fc8",
+      "review": "Same floor placement remains after replay stops."
+    }
+  },
+  "stop_reason": "windows_memory_reserve",
+  "minimum_windows_free_bytes": 3218788352,
+  "reserve_mib": 3072,
+  "owned_children_final": 0,
+  "native_deactivation_or_local_repickup_tested": false,
+  "placed_to_settled_shift_native_units": 2.848428724138926,
+  "prior_one_unit_placement_tolerance_met": false,
+  "settling_shift_requires_followup": true,
+  "private_stage_restored": true,
+  "installed": false,
+  "published": false
+}

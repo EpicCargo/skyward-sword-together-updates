@@ -2,7 +2,7 @@
 
 This snapshot contains the capacity8 client, relay and launcher sources, the gameplay9 travel UI fixes, and additional native prop-binding fixes. Patch29 passed CPU checks, an isolated Windows runtime cross-build and one native Windows game with three scalar peers and an independent pot census. Protocol **45**, Launcher **5**, SkyRecomp **2.0.2**.
 
-The current source candidate is represented by 30 patches against upstream commit `506a9bc5aead5fc9598bb8f4a521f3b26f8897e8`. Patch30 addresses deactivation cleanup and passed 114 local CPU regression cases plus the existing bridge checks under sanitizers; its full runtime build and gameplay acceptance remain pending. The latest hardware-tested runtime remains patch29. The accepted local travel9 portable remains pinned to its earlier 28-patch source and runtime. Generated game code and upstream build dependencies are not included.
+The current source candidate is represented by 30 patches against upstream commit `506a9bc5aead5fc9598bb8f4a521f3b26f8897e8`. Patch30 passed 114 local CPU regression cases, the existing bridge checks under sanitizers and an isolated Windows runtime build. A subsequent native run completed eight planned replay phases before a memory-reserve stop; full gameplay acceptance remains pending. The latest fully accepted gameplay evidence remains patch29. The accepted local travel9 portable remains pinned to its earlier 28-patch source and runtime. Generated game code and upstream build dependencies are not included.
 
 ## Reconstruct the engine
 
