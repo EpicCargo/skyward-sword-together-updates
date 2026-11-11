@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Package verified SST runtimes with the portable updater. No user data is read."""
 from pathlib import Path
-import argparse,json,os,shutil,subprocess,sys,tempfile,zipfile,hashlib
+import argparse,json,os,re,shutil,subprocess,sys,tempfile,zipfile,hashlib
 sys.path.insert(0,str(Path(__file__).resolve().parent))
 import sst_launcher as updater
 from publish import windows_release,linux_release
@@ -10,17 +10,43 @@ RELEASE='2026.10.29-scenes48'
 SEQUENCE=202610290048
 
 def seed_version(stage,feed,manifest,source_zip):
-    rid=feed['release']['id'];folder=stage/'versions'/rid;folder.mkdir(parents=True)
+    updater.validate_manifest(manifest)
+    rid=feed['release']['id']
+    if not isinstance(rid,str) or not re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9._-]{0,95}',rid) or manifest.get('release_id')!=rid:
+        raise updater.UpdateError('Portable release identity does not match its runtime manifest.')
+    folder=stage/'versions'/rid
+    if folder.exists() or folder.is_symlink():
+        raise updater.UpdateError('Portable runtime already exists; choose a fresh destination.')
     prefix=feed['release']['platforms'][manifest['platform']].get('prefix','')
+    if not isinstance(prefix,str) or (prefix and not prefix.endswith('/')):
+        raise updater.UpdateError('Invalid portable runtime prefix.')
+    if prefix:updater.safe_name(prefix[:-1])
     with zipfile.ZipFile(source_zip) as z:
+        members={}
         for info in z.infolist():
             if info.is_dir():continue
+            if not info.filename.startswith(prefix):
+                raise updater.UpdateError('Unexpected portable runtime root.')
             name=info.filename[len(prefix):] if prefix else info.filename;updater.safe_name(name)
-            path=folder/name;path.parent.mkdir(parents=True,exist_ok=True)
-            with z.open(info) as src,path.open('wb') as dst:shutil.copyfileobj(src,dst,1024*1024)
-            assert updater.digest(path)==manifest['files'][name]['sha256']
-            if manifest['platform'].startswith('linux'):path.chmod(updater.runtime_file_mode(name,manifest['entrypoint']))
-    updater.atomic_json(folder/'installed-manifest.json',manifest)
+            if name in members:
+                raise updater.UpdateError('Duplicate portable runtime member.')
+            members[name]=info
+        if members.keys()!=manifest['files'].keys():
+            raise updater.UpdateError('Portable runtime does not contain the complete manifest file set.')
+        if any(info.file_size!=manifest['files'][name]['size'] for name,info in members.items()):
+            raise updater.UpdateError('Portable runtime file size differs from its manifest.')
+        folder.parent.mkdir(parents=True,exist_ok=True)
+        # Failed copies/checksums leave no partial version or active launcher state.
+        with tempfile.TemporaryDirectory(prefix='.seed-',dir=folder.parent) as temporary:
+            staged=Path(temporary)/'runtime';staged.mkdir()
+            for name,info in members.items():
+                path=staged/name;path.parent.mkdir(parents=True,exist_ok=True)
+                with z.open(info) as src,path.open('wb') as dst:shutil.copyfileobj(src,dst,1024*1024)
+                if updater.digest(path)!=manifest['files'][name]['sha256']:
+                    raise updater.UpdateError('Portable runtime checksum differs from its manifest.')
+                if manifest['platform'].startswith('linux'):path.chmod(updater.runtime_file_mode(name,manifest['entrypoint']))
+            updater.atomic_json(staged/'installed-manifest.json',manifest)
+            staged.rename(folder)
     updater.atomic_json(stage/'launcher-state.json',{'active':{'id':rid,'sequence':feed['release']['sequence'],'protocol':feed['release']['protocol'],'entrypoint':manifest['entrypoint']},'previous':None})
 
 def zip_stage(stage,target):

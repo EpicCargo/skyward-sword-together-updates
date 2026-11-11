@@ -9,18 +9,21 @@ from sst_launcher import APP_ID,UpdateError,atomic_json,safe_name,digest,validat
 def windows_release(source: Path,out:Path,rid:str,platform='windows-x86_64',previous:Path|None=None):
     out.mkdir(parents=True,exist_ok=True);prefix='Skyward Sword Together/'
     name=f'SST-runtime-{platform}-{rid}.zip';archive=out/name
-    if archive.exists():raise UpdateError('Output already exists; choose a new release ID/directory.')
+    manifest_name=f'sst-manifest-{platform}-{rid}.json'
+    if archive.exists() or archive.is_symlink() or (out/manifest_name).exists() or (out/manifest_name).is_symlink():
+        raise UpdateError('Output already exists; choose a new release ID/directory.')
     files={}
     with zipfile.ZipFile(source) as z:
         for info in z.infolist():
             if info.is_dir():continue
             if not info.filename.startswith(prefix):raise UpdateError('Unexpected source package root.')
             relative=safe_name(info.filename[len(prefix):])
+            if relative in files:raise UpdateError('Duplicate filenames in source package.')
             with z.open(info) as f:sha=hashlib.file_digest(f,'sha256').hexdigest()
             files[relative]={'sha256':sha,'size':info.file_size}
     manifest={'schema':1,'app':APP_ID,'release_id':rid,'platform':platform,'entrypoint':'skyrecomp.exe','files':files}
     validate_manifest(manifest);shutil.copyfile(source,archive)
-    manifest_name=f'sst-manifest-{platform}-{rid}.json';atomic_json(out/manifest_name,manifest)
+    atomic_json(out/manifest_name,manifest)
     entry={'url':archive.name,'size':archive.stat().st_size,'sha256':digest(archive),'prefix':prefix,'kind':'full',
            'manifest':manifest_name,'manifest_sha256':digest(out/manifest_name)}
     if previous:

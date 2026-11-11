@@ -1,0 +1,50 @@
+{
+  "release_id": "2026.11.11-travel9",
+  "portable_sha256": "01b301a7f92a1d7e04e7395dabcf36f4e7b4ff2ab26fd86226efe4e2d439d2fb",
+  "portable_bytes": 243191326,
+  "source_commit": "1fc4be07de22db6ba14564b80c73fcd1b46ac9f4",
+  "native_runtime_sha256": "2f9f58d82851478620474f5125498b518c1b250030874d73b81c38c970daa6a7",
+  "engine_tree": "8e0368f43c1bba58897a379167f8f90db927b558",
+  "assembly_passed": true,
+  "source_restore_passed": true,
+  "engine_patches": 28,
+  "native_source_files_verified": 253,
+  "packaged_source_python_tests": {
+    "launcher": 129,
+    "scripts": 66,
+    "skipped_prerequisites": 12
+  },
+  "windows_full_hour_passed": false,
+  "windows_stop_reason": "windows_memory_reserve",
+  "last_progress": {
+    "elapsed_seconds": 1113.37,
+    "pose_cycles": 33393,
+    "prop_roundtrips": 11101,
+    "replacements": 111,
+    "area_returns": 55,
+    "pose_pacing_resets": 2
+  },
+  "windows_owned_children_final": 0,
+  "relay_final": {
+    "retained_endpoints": 0,
+    "retained_tags": 0,
+    "active_endpoints": 0,
+    "open_network_sockets": 0,
+    "pending_worker_events": 0,
+    "worker_event_errors": 0
+  },
+  "native_windows_job_memory_cap_mib": 256,
+  "minimum_windows_free_bytes": 2064793600,
+  "windows_memory_reserve_mib": 2048,
+  "short_check_preflight": "refused before worker start; Windows reserve unavailable",
+  "candidate_accepted": false,
+  "installed": false,
+  "published": false,
+  "producer_fix_tests": {
+    "seeding": 9,
+    "publishing": 11,
+    "optimized_seeding": 9,
+    "old_source_failures_reproduced": true
+  },
+  "game_run_this_continuation": false
+}

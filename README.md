@@ -4,7 +4,17 @@ Four-player co-op prototype for **Skyward Sword HD** on SkyRecomp 2.0.2.
 
 [Published downloads](https://github.com/EpicCargo/skyward-sword-together-updates/releases) · [Current source](source/) · [Recent fixes and validation](source/CHANGES-2026-11-08.md)
 
-## Latest source update — November 8, 2026
+[![Source and co-op checks](https://github.com/EpicCargo/skyward-sword-together-updates/actions/workflows/source-checks.yml/badge.svg)](https://github.com/EpicCargo/skyward-sword-together-updates/actions/workflows/source-checks.yml)
+
+## Latest source update — November 11, 2026
+
+- Reject incomplete, duplicate or mismatched portable runtime archives before activating a version.
+- Preserve existing Windows release manifests and leave no partial version after a failed copy.
+- Run native prop/carry/session, launcher/networking and relay checks automatically on GitHub.
+
+[November 11 changes and validation](source/CHANGES-2026-11-11.md) also record the new travel9 portable's source restoration and its Windows networking run, which stopped on the RAM guard. Capacity8 remains the latest fully accepted local portable candidate; published downloads and the update feed are unchanged.
+
+## Co-op source update — November 8, 2026
 
 - Fix launcher startup/cancellation races and clean up partially started room workers.
 - Reclaim retired carried-object tracks and bind prop streams to the current authenticated player roster.

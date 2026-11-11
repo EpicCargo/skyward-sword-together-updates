@@ -71,6 +71,36 @@ class PublishTests(unittest.TestCase):
  def test_complete_verified_online_inputs_pass(self):
   self.assertTrue(release.verify_online_inputs(self.windows,self.binaries,self.root))
 
+ def test_windows_existing_manifest_and_dangling_outputs_are_preserved(self):
+  self.out.mkdir()
+  manifest=self.out/'sst-manifest-windows-x86_64-test.json'
+  manifest.write_bytes(b'previous published manifest')
+  with self.assertRaises(sst_launcher.UpdateError):
+   publish.windows_release(self.windows,self.out,'test')
+  self.assertEqual(manifest.read_bytes(),b'previous published manifest')
+  archive=self.out/'SST-runtime-windows-x86_64-test.zip'
+  self.assertFalse(archive.exists())
+  manifest.unlink()
+  for target in [archive,manifest]:
+   target.symlink_to(self.root/'missing-output')
+   with self.assertRaises(sst_launcher.UpdateError):
+    publish.windows_release(self.windows,self.out,'test')
+   self.assertTrue(target.is_symlink())
+   self.assertFalse((self.root/'missing-output').exists())
+   target.unlink()
+
+ def test_windows_duplicate_members_never_produce_a_release(self):
+  import warnings
+  with warnings.catch_warnings():
+   warnings.simplefilter('ignore',UserWarning)
+   with zipfile.ZipFile(self.windows,'w') as archive:
+    archive.writestr('Skyward Sword Together/skyrecomp.exe',b'first')
+    archive.writestr('Skyward Sword Together/skyrecomp.exe',b'second')
+  with self.assertRaises(sst_launcher.UpdateError):
+   publish.windows_release(self.windows,self.out,'test')
+  self.assertFalse((self.out/'SST-runtime-windows-x86_64-test.zip').exists())
+  self.assertFalse((self.out/'sst-manifest-windows-x86_64-test.json').exists())
+
  def test_each_changed_unrecorded_or_symlinked_input_blocks_online_release(self):
   for name in release.ONLINE_VERIFIED:
    with self.subTest(name=name):

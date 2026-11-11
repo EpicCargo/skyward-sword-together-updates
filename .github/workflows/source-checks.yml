@@ -1,0 +1,60 @@
+name: Source and co-op checks
+
+on:
+  push:
+    branches: [main]
+    paths: ['source/**', '.github/workflows/source-checks.yml']
+  pull_request:
+    paths: ['source/**', '.github/workflows/source-checks.yml']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  source-tests:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: source
+        shell: bash
+    env:
+      PYTHONDONTWRITEBYTECODE: '1'
+      MAKEFLAGS: ''
+      MFLAGS: ''
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: '26'
+      - name: Verify the source snapshot and restore the pinned engine
+        run: |
+          python3 scripts/verify-source.py
+          python3 scripts/restore-engine.py
+      - name: Build asset-free native checks and networking prerequisites
+        run: |
+          make -C client -j1 CC=clang \
+            build/prop_state_test build/prop_roster_test build/prop_net_test \
+            build/prop_host_test build/session_lifecycle_test \
+            build/carry_transport_test build/presence_frame_test \
+            build/sst-session-host build/host_fixture
+      - name: Check native prop, carry and session behavior
+        run: |
+          for check in prop_state_test prop_roster_test prop_net_test prop_host_test \
+            session_lifecycle_test carry_transport_test presence_frame_test; do
+            "client/build/$check"
+          done
+          python3 client/tests/session_host_test.py client/build/sst-session-host
+      - name: Check the launcher and actual local HTTP and TLS networking
+        run: python3 -m unittest discover -s launcher/tests -v
+      - name: Check build and packaging tools
+        run: |
+          python3 -m unittest discover -s scripts/tests -v
+          python3 -O -m unittest discover -s launcher/tests -p test_bundle_seed.py -v
+      - name: Check the room relay
+        run: node --experimental-loader ./server/rooms/test/cloudflare-loader.mjs --test server/rooms/test/worker.test.mjs
+      - name: Verify source files remain unchanged
+        run: python3 scripts/verify-source.py
