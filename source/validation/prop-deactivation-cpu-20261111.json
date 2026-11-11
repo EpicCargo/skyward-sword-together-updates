@@ -1,0 +1,66 @@
+{
+  "passed": true,
+  "scope": "Actual bridge over synthetic native memory/model/network stubs; CPU evidence only.",
+  "baseline_engine_tree": "687802ad93078709fb83d3b3a20d8ba015b39c35",
+  "baseline_header_sha256": "aa455512aba315d199af597bd278268c4b7ad88fabfaff34e887f5f68432652c",
+  "baseline_defects": [
+    {
+      "mode": 1,
+      "returncode": -6,
+      "assertion": "expect_position",
+      "description": "Local disconnect discards the saved floor before native execution resumes."
+    },
+    {
+      "mode": 4,
+      "returncode": -6,
+      "assertion": "sends == 0",
+      "description": "A native held callback announces CARRY after prop sync was disabled between periodic ticks."
+    }
+  ],
+  "candidate_engine_tree": "7112f66f7cf19b9afeec131568813cdd475ff6b6",
+  "candidate_header_sha256": "34c03cccaa1c58e5edd2b089136f2656e701f0c03e8cc62b5fa6d3c58103a045",
+  "patch_sha256": "d92d0a94152699452bdcf6441be5bbc9fe8ae50156f4fcb9abadee2b64f4cb35",
+  "engine_patches": 30,
+  "native_files_verified": 253,
+  "fixture_sha256": {
+    "tests/prop_bridge_binding_test.c": "d2c8d9c608754fea9c98fb832e20a5ee5345c970ff6dc45c832056b8ea4d07ec",
+    "tests/prop_bridge_presentation_test.c": "cec54deeba61e77c0f9105d0971d6e242a1ff09c4503db851d05c9f62286983e",
+    "tests/prop_bridge_handoff_test.c": "62fbc0f7f4084d28add21968702c293b0276b0137a0393050c132d725355db7a",
+    "tests/prop_bridge_disconnect_test.c": "4584015e0be6a150781455cecffcbb39855aec58e40f04d98e31766e5b9d3ee4",
+    "tests/prop_bridge_roster_test.c": "8bf4ad3d7212a02460f65291b1da54df302d01394573b1e550865fcc6e0ecbc6"
+  },
+  "deactivation_cases": 114,
+  "modes": 19,
+  "local_player_ids": [
+    1,
+    3
+  ],
+  "profiles": [
+    496,
+    497,
+    521
+  ],
+  "sanitizers": [
+    "AddressSanitizer",
+    "UndefinedBehaviorSanitizer"
+  ],
+  "original_bridge_checks_passed": [
+    "roster",
+    "presentation",
+    "handoff",
+    "binding modes1..7",
+    "world bridge syntax"
+  ],
+  "initial_harness_failures": [
+    "Existing native snapshot already contained tests directory.",
+    "Syntax-only command erroneously included a linker flag; successful matching fixture checks retained and syntax rerun correctly."
+  ],
+  "exact_offline_source_restoration": true,
+  "exact_default_source_archive_restoration": true,
+  "hosted_initial_runs": "Startup failure before any job; not a native test result.",
+  "full_runtime_build": false,
+  "full_runtime_preflight": "Stopped before compilation: Windows below6144MiB reserve.",
+  "game_tested": false,
+  "installed": false,
+  "published": false
+}
