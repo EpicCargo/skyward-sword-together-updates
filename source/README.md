@@ -1,6 +1,6 @@
 # SST source snapshot
 
-This snapshot contains the capacity8 client, relay and launcher sources, the hardware-validated gameplay9 travel UI fixes, and additional CPU-checked native prop-binding fixes. The binding fixes still need a full runtime build and hardware gameplay check. Protocol **45**, Launcher **5**, SkyRecomp **2.0.2**.
+This snapshot contains the capacity8 client, relay and launcher sources, the hardware-validated gameplay9 travel UI fixes, and additional native prop-binding fixes. The binding fixes passed CPU checks and an isolated Windows runtime cross-build; their hardware gameplay check remains pending. Protocol **45**, Launcher **5**, SkyRecomp **2.0.2**.
 
 The current engine is represented by 29 patches against upstream commit `506a9bc5aead5fc9598bb8f4a521f3b26f8897e8`. The accepted local travel9 portable remains pinned to its earlier 28-patch source and runtime. Generated game code and upstream build dependencies are not included.
 
@@ -43,5 +43,7 @@ The default Windows source ZIP includes this snapshot's complete checksum invent
 - `docs/`: existing protocol, hosting and world-sync reference material. Older platform-validation statements there are superseded by this snapshot's dated validation record.
 
 The local travel9 portable candidate now passed its final Windows package check; the earlier capacity8 candidate is preserved. Publishing this source does not change the release feed or install a runtime. Separate-PC/campaign readiness, other carryable classes, throws, and the WSL software-Vulkan rendering issue remain open.
+
+A later baseline Windows run independently sampled the same unique pot actor through genuine pickup/putdown, moving remote carry, expiry/context restoration and remote placement. Its 77 valid hall samples retained one actor lifetime. This used the earlier travel9 runtime and three scalar peers; it does not establish patch29 or separate-full-client gameplay acceptance.
 
 Upstream engine licensing is preserved in `ENGINE-LICENSE`; third-party source licenses remain alongside their respective files.

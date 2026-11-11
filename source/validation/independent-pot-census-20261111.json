@@ -1,0 +1,211 @@
+{
+  "passed": true,
+  "scope": "One actual Windows baseline game and three lightweight scalar TCP peers; successful sampled independent walks, not atomic game snapshots",
+  "runtime_sha256": "2f9f58d82851478620474f5125498b518c1b250030874d73b81c38c970daa6a7",
+  "new_patch29_runtime_hardware_tested": false,
+  "source_key": [
+    117,
+    496,
+    4294967280,
+    0,
+    1
+  ],
+  "valid_census_samples": 84,
+  "malformed_log_records_rejected": 2,
+  "malformed_log_policy": "Interleaved shared-stderr records retained by hash and excluded; never repaired or treated as empty",
+  "hall_successful_samples": 77,
+  "hall_target_counts": [
+    1
+  ],
+  "native_held_samples": 3,
+  "actor_lifetimes": [
+    {
+      "actor_token": 102693920,
+      "instance": 2077
+    }
+  ],
+  "native_stationary_position": [
+    3381.13696,
+    1.5,
+    -2997.76685
+  ],
+  "phase_statistics": {
+    "remote-pot-carry": {
+      "samples": 2,
+      "median_position": [
+        3155.82764,
+        128.303497,
+        -3005.24365
+      ],
+      "actor_lifetime": {
+        "actor_token": 102693920,
+        "instance": 2077
+      }
+    },
+    "remote-pot-moved": {
+      "samples": 3,
+      "median_position": [
+        3205.82764,
+        128.303497,
+        -3105.24365
+      ],
+      "actor_lifetime": {
+        "actor_token": 102693920,
+        "instance": 2077
+      }
+    },
+    "remote-pot-expired": {
+      "samples": 2,
+      "median_position": [
+        3381.13696,
+        1.5,
+        -2997.76685
+      ],
+      "actor_lifetime": {
+        "actor_token": 102693920,
+        "instance": 2077
+      }
+    },
+    "remote-pot-resumed": {
+      "samples": 2,
+      "median_position": [
+        3205.82764,
+        128.303497,
+        -3105.24365
+      ],
+      "actor_lifetime": {
+        "actor_token": 102693920,
+        "instance": 2077
+      }
+    },
+    "remote-pot-invalid-context": {
+      "samples": 2,
+      "median_position": [
+        3381.13696,
+        1.5,
+        -2997.76685
+      ],
+      "actor_lifetime": {
+        "actor_token": 102693920,
+        "instance": 2077
+      }
+    },
+    "remote-pot-valid-again": {
+      "samples": 2,
+      "median_position": [
+        3205.82764,
+        128.303497,
+        -3105.24365
+      ],
+      "actor_lifetime": {
+        "actor_token": 102693920,
+        "instance": 2077
+      }
+    },
+    "remote-pot-placed": {
+      "samples": 3,
+      "median_position": [
+        3197.55713,
+        1.5,
+        -3143.91748
+      ],
+      "actor_lifetime": {
+        "actor_token": 102693920,
+        "instance": 2077
+      }
+    },
+    "remote-place-settled": {
+      "samples": 2,
+      "median_position": [
+        3197.55713,
+        1.5,
+        -3143.91748
+      ],
+      "actor_lifetime": {
+        "actor_token": 102693920,
+        "instance": 2077
+      }
+    }
+  },
+  "same_pot_actor_independently_sampled": true,
+  "native_pickup_putdown": true,
+  "moving_remote_carry": true,
+  "stale_restoration": true,
+  "invalid_context_restoration": true,
+  "valid_recovery": true,
+  "remote_place_and_settled_floor": true,
+  "stale_descriptor_sender_stopped_while_poses_continued": true,
+  "genuine_native_descriptors": 495,
+  "replayed_descriptors": 1444,
+  "cold_import_used": false,
+  "observed_place_sent": 0,
+  "reviewed_images": {
+    "genuine-pickup.png": {
+      "sha256": "92fb86027c855cf5d275be9813fae3c597eb2b6f54fff991d97ef831aff17d47",
+      "review": "Native Link visibly supports the pot in raised hands; Put down prompt.",
+      "method": "Assistant viewed this exact PNG with view_image"
+    },
+    "genuine-putdown.png": {
+      "sha256": "56bec8fea305ef51f027f2fdb7493ab5cc503dc0f24418356195d5c06e59b150",
+      "review": "Native hands empty; grounded pot and Pick up prompt.",
+      "method": "Assistant viewed this exact PNG with view_image"
+    },
+    "navigation-target.png": {
+      "sha256": "1bb929a52f9eea501ead59ff4a6c39878b9f6201e217328659f326259d11783a",
+      "review": "Correct F001r room0/layer1/entry2 selected; enabled Teleport button focused.",
+      "method": "Assistant viewed this exact PNG with view_image"
+    },
+    "academy-hall-arrival.png": {
+      "sha256": "e4cba9a9c1cdcefa77ae571c823b6ac90e19e8a13f1260dc5900baff57d40250",
+      "review": "Native Academy hall with native Link and three complete named scalar-peer bodies.",
+      "method": "Assistant viewed this exact PNG with view_image"
+    },
+    "remote-pot-carry.png": {
+      "sha256": "352d986f41299f9b677a8b3558b8b875403a4b92c1f987fa8e0ce29115dd14cc",
+      "review": "Simulated1 supports the received pot in raised hands; native hands empty.",
+      "method": "Assistant viewed this exact PNG with view_image"
+    },
+    "remote-pot-moved.png": {
+      "sha256": "610ae838ca19eddefd7a2176cfa3254871fd871b21f84b4be469163626899050",
+      "review": "Received pot moves with Simulated1 to the second location and remains hand-supported.",
+      "method": "Assistant viewed this exact PNG with view_image"
+    },
+    "remote-pot-expired.png": {
+      "sha256": "a9df20f26e837ccbc924c8627a83e16ec7c34f136f5ef45a0bc7718c1e5501c5",
+      "review": "Remote raised hands empty; pot restored to native floor position while peer body remains visible.",
+      "method": "Assistant viewed this exact PNG with view_image"
+    },
+    "remote-pot-resumed.png": {
+      "sha256": "a87f09eb376071e793d610adbd084cb847bed58c5d0995c0b3ed0efdceccd59f",
+      "review": "Fresh descriptors restore pot to remote raised hands.",
+      "method": "Assistant viewed this exact PNG with view_image"
+    },
+    "remote-pot-invalid-context.png": {
+      "sha256": "bc03ed4cab76862f7b5341e40b8ae15cc42847ad1ce5fbe804b81959531e5ade",
+      "review": "Invalid drawn-plus-carry equipment leaves remote arms ordinary and pot on the original floor.",
+      "method": "Assistant viewed this exact PNG with view_image"
+    },
+    "remote-pot-valid-again.png": {
+      "sha256": "be42a6c9973e2acc2e75d42855c501712f889f9f943973fb699992d626c59e09",
+      "review": "Valid context restores the pot to remote raised hands.",
+      "method": "Assistant viewed this exact PNG with view_image"
+    },
+    "remote-pot-placed.png": {
+      "sha256": "58224e1e128ddea1864ac9599311443bb08172154a6cfb99c99e7acf3accaf37",
+      "review": "Remote arms idle; received PLACE leaves the pot grounded beside the remote player.",
+      "method": "Assistant viewed this exact PNG with view_image"
+    },
+    "remote-place-settled.png": {
+      "sha256": "4d9155ac6ea01c03e6d105bd04f8a3736c415e6044be12bdb83419685698fb59",
+      "review": "After replay stops, the same visible pot remains grounded at the remote placement.",
+      "method": "Assistant viewed this exact PNG with view_image"
+    }
+  },
+  "owned_children_final": 0,
+  "owned_sockets_final": 0,
+  "separate_full_clients_tested": false,
+  "internet_or_campaign_acceptance": false,
+  "other_real_carry_classes_or_throws_tested": false,
+  "installed": false,
+  "published": false
+}
