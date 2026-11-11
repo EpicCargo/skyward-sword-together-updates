@@ -14,6 +14,7 @@ Four-player co-op prototype for **Skyward Sword HD** on SkyRecomp 2.0.2.
 - Run native prop/carry/session, launcher/networking and relay checks automatically on GitHub.
 - Reject ambiguous prop discovery beyond the 32-object capacity, reuse retired binding slots immediately, and discard bindings when an actor's identity changes.
 - Check remote placement followed by a local pickup/putdown for both host and guest IDs, including delayed packets, floor restoration and a remote owner's departure.
+- Recover pinned engine restoration when the original upstream is unavailable, while retaining exact tree and native-file verification.
 
 [November 11 changes and validation](source/CHANGES-2026-11-11.md) also record the travel9 portable's successful final Windows package check and completed one-hour native Windows networking soak (359 player replacements). The earlier RAM-guard stop is retained in the history. The new local candidate includes the tested navigation runtime and complete matching source; published downloads and the update feed are unchanged.
 
