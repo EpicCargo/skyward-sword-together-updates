@@ -1,7 +1,7 @@
 {
   ".gitignore": "208125964c666dae7b7742d6ccf5f14c615d4629e589349a904ac5a7801b79b2",
   "CHANGES-2026-11-08.md": "6d1c8b97257b9b5007078a92a389d2e7f9537f3675c7711777462a6dcacb8a30",
-  "CHANGES-2026-11-11.md": "e4ced301659e21d9f25f569b7182773fcf8a70a8bcf3b1a20b15a1c37b263990",
+  "CHANGES-2026-11-11.md": "f6d570d3d4750873a7c535e9b5c81533a96b0372a4ad47db1c8aa81f2b98f3c7",
   "DEVELOPMENT-RESOURCE-POLICY.md": "84d169cce1770a5289ddf67da926cbbb99df5535211897ab25cfa28590a88145",
   "ENGINE-LICENSE": "82366d6b052c2608d7458b81a869249abed63932bd88fa03ca8f7a136f8602e3",
   "README.md": "bfe197bc2c364ec8d08d368ac4501949171d2f914b983f34cfca95cd2d04350c",
@@ -237,6 +237,7 @@
   "server/rooms/test/worker.test.mjs": "878af62a29fc56d483fd18191ba24961f44639b2d7d68c406822ba27d3b8a134",
   "server/rooms/worker.mjs": "34d2ee977eaa5d53dca23cb902eb5fcb9fc08848ff67cc31ae4f64a02ed713cd",
   "server/rooms/wrangler.toml": "e3e8e652ce9f1652df63da6874e77eab6d1247375a8740200edcc451d7946c8b",
+  "tests/prop_bridge_presentation_test.c": "e167eab211e53b89035fd5847c214db377bfaa8246b00d1728621d59443df9da",
   "tests/prop_bridge_roster_test.c": "8bf4ad3d7212a02460f65291b1da54df302d01394573b1e550865fcc6e0ecbc6",
   "third_party/SST-HANDOFF-20261030/NOTICE.txt": "dafb9d782334963b7d12a98848296825ed78aa45af27811f74857825f987cf35",
   "third_party/coop-anything-chaos/LICENSE": "62567d1cba1c47b7ce9455dbe028342b15a363f21482658b76744fed49968381",
