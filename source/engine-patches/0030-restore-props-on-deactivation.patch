@@ -1,0 +1,122 @@
+From 8c76ef51a146b027600355c584b46b88053c9efe Mon Sep 17 00:00:00 2001
+From: EpicCargo <149317426+EpicCargo@users.noreply.github.com>
+Date: Wed, 11 Nov 2026 15:37:22 -0500
+Subject: [PATCH] Restore remote props from live callbacks on local
+ deactivation
+
+---
+ runtime/hle/sst_prop_bridge.h | 58 ++++++++++++++++++++++++++++++-----
+ 1 file changed, 51 insertions(+), 7 deletions(-)
+
+diff --git a/runtime/hle/sst_prop_bridge.h b/runtime/hle/sst_prop_bridge.h
+index e9a56f9..98af946 100644
+--- a/runtime/hle/sst_prop_bridge.h
++++ b/runtime/hle/sst_prop_bridge.h
+@@ -10,7 +10,7 @@ typedef struct {
+     uint32_t instance, applied_sequence, applied_generation;
+     uint16_t applied_owner;
+     SstPropKey key;
+-    bool seen, local_held, local_placed, remote_held;
++    bool seen, local_held, local_placed, remote_held, restore_pending;
+     SstPropRest rest;
+ } PropBinding;
+ static struct {
+@@ -39,6 +39,22 @@ static void prop_clear(void) {
+     sst_props_reset(&props_bridge.state); props_bridge.enabled = false;
+ }
+ 
++static void prop_suspend(void) {
++    // No native reads/writes here. Retain only a previously presented carry's
++    // native floor sample, for validation by that exact actor's next execute.
++    for (unsigned i = 0; i < SST_PROPS; i++) {
++        PropBinding *b = &props_bridge.bindings[i];
++        if (b->remote_held && b->rest.ready) b->restore_pending = true;
++        if (!b->restore_pending) memset(b, 0, sizeof *b);
++        else {
++            b->local_held = b->local_placed = false;
++            b->applied_owner = 0;
++            b->applied_sequence = b->applied_generation = 0;
++        }
++    }
++    sst_props_reset(&props_bridge.state); props_bridge.enabled = false;
++}
++
+ static PropBinding *prop_binding(uint64_t actor) {
+     for (unsigned i = 0; i < SST_PROPS; i++) {
+         PropBinding *b = &props_bridge.bindings[i];
+@@ -135,12 +151,18 @@ static void prop_tick(SstLocal l, uint32_t load, bool allowed, bool pause) {
+     pthread_mutex_lock(&props_bridge.mu);
+     uint32_t gen = sst_net_generation();
+     if ((!allowed && !pause) || !g_sst.sync_props || sst_net_status(NULL, 0) != SST_ONLINE) {
+-        prop_clear(); sst_net_poll_props(NULL, NULL); goto done;
++        if (!g_sst.sync_props || sst_net_status(NULL, 0) != SST_ONLINE) prop_suspend();
++        else prop_clear();
++        sst_net_poll_props(NULL, NULL); goto done;
+     }
+-    if (props_bridge.load != load || props_bridge.generation != gen ||
++    if (props_bridge.load != load ||
+         !sst_world_same_area(&props_bridge.scene, &l.scene)) {
+         prop_clear(); props_bridge.scene = l.scene; props_bridge.load = load;
+         props_bridge.generation = gen;
++    } else if (props_bridge.generation != gen) {
++        // A new transport session in the same native player/scene must retire
++        // packet authority without losing an outstanding floor restoration.
++        prop_suspend(); props_bridge.generation = gen;
+     }
+     if (pause) { props_bridge.enabled = false; sst_net_poll_props(NULL, NULL); goto done; }
+     props_bridge.player = l.player_address;
+@@ -236,9 +258,30 @@ static bool prop_display_pose(const SstProp *p,SstPropNativePose *out) {
+ static GuestFn prop_original[SST_PROP_NATIVE_ADAPTERS];
+ static void prop_execute(Cpu *c, GuestFn original) {
+     uint64_t actor = c->x[0]; SstProp target = {0}; SstPropNativePose pose;
+-    uint32_t instance = 0, load = 0, gen = 0; bool candidate = false, parked=false;
++    uint32_t instance = 0, load = 0, gen = 0; bool candidate = false, parked=false, cleanup=false;
+     pthread_mutex_lock(&props_bridge.mu);
+-    PropBinding *b = props_bridge.enabled && g_sst.sync_props &&
++    // Settings/connection state can change between periodic input ticks.
++    if (props_bridge.enabled && (!g_sst.sync_props || sst_net_status(NULL, 0) != SST_ONLINE))
++        prop_suspend();
++    PropBinding *b = prop_binding(actor);
++    if (b && b->restore_pending) {
++        SstLocal current = sst_game_read_local(&SST_LAYOUT_SSHD_100, sst_game_pose_tick());
++        uint32_t state = r32(actor + 0x358);
++        cleanup = true;
++        if (current.valid && current.player_address == props_bridge.player &&
++            current.player_instance == props_bridge.load &&
++            sst_world_same_area(&current.scene, &props_bridge.scene) &&
++            !sst_prop_native_held(actor, props_bridge.player) && (state == 0 || state == 3) && b->rest.ready) {
++            pose = b->rest.pose; instance = b->instance;
++            load = props_bridge.load; gen = props_bridge.generation;
++            candidate = parked = true;
++        }
++        // Consume once even if native model validation later refuses the pose.
++        // Never retry an old floor after ordinary simulation has resumed.
++        b->restore_pending = b->remote_held = false;
++        sst_prop_rest_reset(&b->rest);
++    }
++    b = !cleanup && props_bridge.enabled && g_sst.sync_props &&
+         sst_net_status(NULL, 0) == SST_ONLINE ? prop_binding(actor) : NULL;
+     if (b && sst_prop_native_held(actor, props_bridge.player)) {
+         b->remote_held = false;sst_prop_rest_reset(&b->rest);
+@@ -281,7 +324,7 @@ static void prop_execute(Cpu *c, GuestFn original) {
+     if (presented) {
+         sst_prop_native_release_velocity(actor); c->x[0] = 1;
+         pthread_mutex_lock(&props_bridge.mu);
+-        b = props_bridge.enabled && props_bridge.load == load && props_bridge.generation == gen ?
++        b = (props_bridge.enabled || cleanup) && props_bridge.load == load && props_bridge.generation == gen ?
+             prop_binding(actor) : NULL;
+         if (b) {
+             if(parked) {
+@@ -306,7 +349,8 @@ static void prop_execute(Cpu *c, GuestFn original) {
+     }
+     if (original) original(c);
+     pthread_mutex_lock(&props_bridge.mu);
+-    b = props_bridge.enabled ? prop_binding(actor) : NULL;
++    b = !cleanup && props_bridge.enabled && g_sst.sync_props &&
++        sst_net_status(NULL, 0) == SST_ONLINE ? prop_binding(actor) : NULL;
+     if (b) {
+         if (candidate) prop_release(b);
+         prop_send(b, sst_prop_native_held(actor, props_bridge.player), sst_now_ms());
+-- 
+2.43.0
+

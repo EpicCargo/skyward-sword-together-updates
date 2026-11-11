@@ -1,7 +1,7 @@
 {
   "base_commit": "506a9bc5aead5fc9598bb8f4a521f3b26f8897e8",
-  "engine_tree": "687802ad93078709fb83d3b3a20d8ba015b39c35",
-  "engine_patches": 29,
+  "engine_tree": "7112f66f7cf19b9afeec131568813cdd475ff6b6",
+  "engine_patches": 30,
   "native_file_sha256": {
     "client/Makefile": "159a56bd89fc2b965bafade414ce6f1df9c7006c4f1f6964e32d434341bf75a3",
     "client/src/sst_animation.c": "94fd3e1703f99205624883bbb97964dcc4ed8dba73ef167b0bdbb527ae28f7e1",
@@ -170,7 +170,7 @@
     "engine/runtime/hle/sst_dev.c": "5560369f4b29f1aa81cc376e9497c6a4df23cb6e87165db345f2765ac9c81414",
     "engine/runtime/hle/sst_dev.h": "90c719f26f9466c4e0f8c39308caba7729f4239ba5326565da0dc99d6588c948",
     "engine/runtime/hle/sst_pickup_bridge.h": "9a4eb3b02fd24279195906b2b98ee3ecee9abccbea7c7183d5621bacecf88c6b",
-    "engine/runtime/hle/sst_prop_bridge.h": "aa455512aba315d199af597bd278268c4b7ad88fabfaff34e887f5f68432652c",
+    "engine/runtime/hle/sst_prop_bridge.h": "34c03cccaa1c58e5edd2b089136f2656e701f0c03e8cc62b5fa6d3c58103a045",
     "engine/runtime/hle/sst_prop_native.h": "3dc48fd44941c2fd1e4a452b7883ce2d321d298b53e98037ce4c56753bdbb200",
     "engine/runtime/hle/sst_prop_rest.h": "8ad670ae59d89d583fb23544aadbdb999398fe346b42e1c5bada33735109a975",
     "engine/runtime/hle/sst_prop_walk.h": "092ad1e499eaeaf16e66dcb2cc3eda6c72af720082e7f1c1694bea8bc4170a03",
@@ -263,6 +263,7 @@
     "build-runtime.py",
     "client-patches/0001-reclaim-retired-prop-tracks.patch"
   ],
-  "validation_scope": "CPU checks, isolated Windows cross-build and one native Windows game with three scalar peers and independent pot census passed; separate full clients/campaign remain untested",
-  "previous_hardware_engine_tree": "8e0368f43c1bba58897a379167f8f90db927b558"
+  "validation_scope": "Deferred prop cleanup source candidate; hosted CPU regression checks and a full runtime build/game test are separate gates.",
+  "previous_hardware_engine_tree": "687802ad93078709fb83d3b3a20d8ba015b39c35",
+  "previous_hardware_runtime_sha256": "410753d9ca080f44dbc523c253fa99752b503aa71fedc5478dbda3b12900e0be"
 }

@@ -55,6 +55,7 @@ const SstGameLayout SST_LAYOUT_SSHD_100 = {0};
 static uint64_t now_ms;
 static uint16_t local_player_id = 1;
 static bool network_online = true, remote_connected = true;
+static uint32_t network_generation = 1;
 static SstLocal local;
 static SstPose displayed;
 static bool body_visible;
@@ -66,6 +67,8 @@ static Cpu cpu;
 static const SstScene area = {.stage="F000", .room=1, .layer=1, .entrance=4};
 
 void guest_call(Cpu *c, uint64_t address) {
+    assert(pthread_mutex_trylock(&props_bridge.mu) == 0);
+    pthread_mutex_unlock(&props_bridge.mu);
     assert(c->x[0] == model);
     if (address == SST_PROP_MODEL_OPTIONS) assert(c->x[1] == 2 && c->x[2] <= 1);
     else { assert(address == SST_PROP_MODEL_PROCESS); assert(c->x[1] == 1 && !c->x[2] && !c->x[3]); }
@@ -82,7 +85,7 @@ bool sst_remote_carry_displayed(const SstScene *scene, uint16_t id, uint32_t pre
     *out = displayed; return true;
 }
 uint64_t sst_now_ms(void) { return now_ms; }
-uint32_t sst_net_generation(void) { return 1; }
+uint32_t sst_net_generation(void) { return network_generation; }
 uint16_t sst_net_my_id(void) { return local_player_id; }
 SstStatus sst_net_status(char *why, int bytes) { if (why && bytes > 0) *why = 0; return network_online ? SST_ONLINE : SST_OFFLINE; }
 int sst_net_players(SstPlayer *out, int capacity) {
@@ -127,6 +130,7 @@ static void send_remote(uint32_t sequence, SstPropPhase phase) {
 }
 static void setup(const SstPropNativeDescriptor *d) {
     network_online = remote_connected = true;
+    network_generation = 1;
     sst_prop_bridge_reset(); memset(&sst_prop_presentation_stats, 0, sizeof sst_prop_presentation_stats);
     arena=calloc(1,0x10000);assert(arena);arena_lo=(uint64_t)(uintptr_t)arena;arena_hi=arena_lo+0x10000;
     player=arena_lo+0x1000;actor=arena_lo+0x4000;model=arena_lo+0x8000;

@@ -75,15 +75,7 @@ jobs:
             -Wl,--gc-sections -I engine/runtime tests/prop_bridge_disconnect_test.c \
             client/src/sst_props.c client/src/sst_world.c -lpthread -lm \
             -o build/source-checks/prop-disconnect
-          python3 - <<'PY'
-          import subprocess
-          for mode, message in [(1, 'expect_position'), (4, 'sends == 0')]:
-              p = subprocess.run(['build/source-checks/prop-disconnect', str(mode)], capture_output=True, text=True)
-              print(p.stderr, end='')
-              if p.returncode != -6 or message not in p.stderr:
-                  raise SystemExit('Expected baseline defect was not reproduced: '+str(mode))
-              print('BASELINE DEFECT REPRODUCED:', mode, flush=True)
-          PY
+          for mode in {1..19}; do build/source-checks/prop-disconnect "$mode"; done
           clang "${flags[@]}" -Wno-unused-function -ffunction-sections -fdata-sections \
             -Wl,--gc-sections -I engine/runtime tests/prop_bridge_binding_test.c \
             client/src/sst_props.c client/src/sst_world.c -lpthread -lm \
