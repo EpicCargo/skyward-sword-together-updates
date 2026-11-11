@@ -1,7 +1,7 @@
 {
   ".gitignore": "208125964c666dae7b7742d6ccf5f14c615d4629e589349a904ac5a7801b79b2",
   "CHANGES-2026-11-08.md": "6d1c8b97257b9b5007078a92a389d2e7f9537f3675c7711777462a6dcacb8a30",
-  "CHANGES-2026-11-11.md": "177417ed0330506f1d103f377d3044001cd48fd3150efcd79409acd44549ff53",
+  "CHANGES-2026-11-11.md": "a62a896a599b62f0267abc96c45b55cd3dca6ec5c12800a52367ff6ddf3e66e4",
   "DEVELOPMENT-RESOURCE-POLICY.md": "84d169cce1770a5289ddf67da926cbbb99df5535211897ab25cfa28590a88145",
   "ENGINE-LICENSE": "82366d6b052c2608d7458b81a869249abed63932bd88fa03ca8f7a136f8602e3",
   "README.md": "bfe197bc2c364ec8d08d368ac4501949171d2f914b983f34cfca95cd2d04350c",
@@ -237,6 +237,7 @@
   "server/rooms/test/worker.test.mjs": "878af62a29fc56d483fd18191ba24961f44639b2d7d68c406822ba27d3b8a134",
   "server/rooms/worker.mjs": "34d2ee977eaa5d53dca23cb902eb5fcb9fc08848ff67cc31ae4f64a02ed713cd",
   "server/rooms/wrangler.toml": "e3e8e652ce9f1652df63da6874e77eab6d1247375a8740200edcc451d7946c8b",
+  "tests/owned_prop_census_test.c": "7f589ccc2592ad925cdf4f5c70031a0c6adcfe25312b778aa42d787c8b5c89c8",
   "tests/prop_bridge_presentation_test.c": "e167eab211e53b89035fd5847c214db377bfaa8246b00d1728621d59443df9da",
   "tests/prop_bridge_roster_test.c": "8bf4ad3d7212a02460f65291b1da54df302d01394573b1e550865fcc6e0ecbc6",
   "third_party/SST-HANDOFF-20261030/NOTICE.txt": "dafb9d782334963b7d12a98848296825ed78aa45af27811f74857825f987cf35",
@@ -252,6 +253,7 @@
   "validation/export-checks.json": "138e4b05707c1a34293c5d128aefd32cd0930b817950e2c028d3c3a9e2e5d4a0",
   "validation/gameplay-reviewed-images.json": "8ccb6d1712a66e7c698d00b11bb71fbc2e7f567c5cc251e345beaa94bdf2644a",
   "validation/native-source.json": "36260a6ea771f12a826da3a3f2c0762a3e7b36b3b5798ba0ccbd045ec90f7045",
+  "validation/owned_prop_census.h": "4bd64517448a1c071ef91843d87193d7fe086bf9a54a4a869b09166aca24455a",
   "validation/portable-20261111.json": "f6a57da5f9099538e580a11aa8954ca50631cf9beb17ef0e6ac70205fe5d0d7d",
   "validation/prop_capacity_test.c": "0e3b22e810dec2515498a54538e0dfd8ffc007b6f0e5315e859580c254d44621",
   "validation/windows-gameplay.json": "16c1eb09ea1e16fafc52986c84bff409de6f0ff94a6c75ab07e31db88357071d"

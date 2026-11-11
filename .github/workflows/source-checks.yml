@@ -70,6 +70,9 @@ jobs:
             client/src/sst_props.c -lm -o build/source-checks/prop-capacity
           for mode in 1 2 3; do build/source-checks/prop-capacity "$mode"; done
           clang "${flags[@]}" -fsyntax-only -I engine/runtime engine/runtime/hle/sst_world.c
+          clang "${flags[@]}" -Werror -I validation tests/owned_prop_census_test.c \
+            -lm -o build/source-checks/owned-prop-census
+          build/source-checks/owned-prop-census
       - name: Check the launcher and actual local HTTP and TLS networking
         run: python3 -m unittest discover -s launcher/tests -v
       - name: Check build and packaging tools
