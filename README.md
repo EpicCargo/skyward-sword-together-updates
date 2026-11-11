@@ -16,9 +16,9 @@ Four-player co-op prototype for **Skyward Sword HD** on SkyRecomp 2.0.2.
 
 [November 11 changes and validation](source/CHANGES-2026-11-11.md) also record the travel9 portable's successful final Windows package check and completed one-hour native Windows networking soak (359 player replacements). The earlier RAM-guard stop is retained in the history. The new local candidate includes the tested navigation runtime and complete matching source; published downloads and the update feed are unchanged.
 
-The latest native binding fixes passed seven focused cases, 1,000 actor replacements at full capacity and an isolated Windows runtime cross-build. Their hardware gameplay check remains pending: Windows Application Control blocked the new observer before execution. Security settings were preserved. The accepted travel9 portable keeps its earlier runtime and source identity.
+The latest native binding fixes passed seven focused cases, 1,000 actor replacements at full capacity, an isolated Windows runtime cross-build and a native Windows gameplay run. The new runtime completed all eight carry/restoration/placement phases; 97 stable hall samples retained one unique pot actor instance. Owned processes and sockets closed normally.
 
-A separate run with the unchanged allowed travel9 runtime completed all eight carry/restoration/placement phases. Independent read-only actor walks found exactly one matching pot in all 77 valid hall samples, retaining the same actor instance through native pickup/putdown and received replay. All owned processes and sockets closed normally. This remains one full game with three lightweight peers, rather than separate full game clients.
+An earlier baseline run independently passed with 77 valid hall samples. Each run used one full game with three lightweight peers. Separate full game clients remain untested. The accepted travel9 portable keeps its earlier runtime/source identity; the newly tested runtime has not been installed or publicly released.
 
 ## Co-op source update — November 8, 2026
 

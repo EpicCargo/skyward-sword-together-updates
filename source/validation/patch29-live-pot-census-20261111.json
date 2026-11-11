@@ -1,0 +1,241 @@
+{
+  "passed": true,
+  "scope": "One actual patch29 Windows game and three lightweight scalar TCP peers; successful sampled independent walks, not atomic game snapshots",
+  "runtime_sha256": "410753d9ca080f44dbc523c253fa99752b503aa71fedc5478dbda3b12900e0be",
+  "new_patch29_runtime_hardware_tested": true,
+  "source_key": [
+    117,
+    496,
+    4294967280,
+    0,
+    1
+  ],
+  "valid_census_samples": 105,
+  "malformed_log_records_rejected": 0,
+  "malformed_log_policy": "Interleaved shared-stderr records retained by hash and excluded; never repaired or treated as empty",
+  "hall_successful_samples": 97,
+  "hall_target_counts": [
+    1
+  ],
+  "transition_or_unbound_samples": [
+    {
+      "last_logged_present_frame": 6901,
+      "complete": true,
+      "nodes": 54,
+      "eligible_props": 0,
+      "player_instance": 1889,
+      "loads": 1,
+      "target_count": 0,
+      "target": null,
+      "source_scenes_in_frame_bucket": [
+        "054630303172000102",
+        "054630303172010105"
+      ],
+      "source_scene": null
+    }
+  ],
+  "scene_binding_method": "Classify using actual native-source scene history; mixed buckets remain transitional, without consulting target count",
+  "native_held_samples": 3,
+  "actor_lifetimes": [
+    {
+      "actor_token": 102693920,
+      "instance": 2078
+    }
+  ],
+  "native_stationary_position": [
+    3381.80566,
+    1.5,
+    -2998.37256
+  ],
+  "phase_statistics": {
+    "remote-pot-carry": {
+      "samples": 3,
+      "median_position": [
+        3156.79272,
+        129.038467,
+        -2995.78711
+      ],
+      "actor_lifetime": {
+        "actor_token": 102693920,
+        "instance": 2078
+      }
+    },
+    "remote-pot-moved": {
+      "samples": 2,
+      "median_position": [
+        3206.79272,
+        129.038467,
+        -3095.78711
+      ],
+      "actor_lifetime": {
+        "actor_token": 102693920,
+        "instance": 2078
+      }
+    },
+    "remote-pot-expired": {
+      "samples": 2,
+      "median_position": [
+        3381.80566,
+        1.5,
+        -2998.37256
+      ],
+      "actor_lifetime": {
+        "actor_token": 102693920,
+        "instance": 2078
+      }
+    },
+    "remote-pot-resumed": {
+      "samples": 2,
+      "median_position": [
+        3206.79272,
+        129.038467,
+        -3095.78711
+      ],
+      "actor_lifetime": {
+        "actor_token": 102693920,
+        "instance": 2078
+      }
+    },
+    "remote-pot-invalid-context": {
+      "samples": 2,
+      "median_position": [
+        3381.80566,
+        1.5,
+        -2998.37256
+      ],
+      "actor_lifetime": {
+        "actor_token": 102693920,
+        "instance": 2078
+      }
+    },
+    "remote-pot-valid-again": {
+      "samples": 2,
+      "median_position": [
+        3206.79272,
+        129.038467,
+        -3095.78711
+      ],
+      "actor_lifetime": {
+        "actor_token": 102693920,
+        "instance": 2078
+      }
+    },
+    "remote-pot-placed": {
+      "samples": 2,
+      "median_position": [
+        3201.16638,
+        1.5,
+        -3131.65259
+      ],
+      "actor_lifetime": {
+        "actor_token": 102693920,
+        "instance": 2078
+      }
+    },
+    "remote-place-settled": {
+      "samples": 2,
+      "median_position": [
+        3200.71045,
+        1.5,
+        -3131.44727
+      ],
+      "actor_lifetime": {
+        "actor_token": 102693920,
+        "instance": 2078
+      }
+    }
+  },
+  "same_pot_actor_independently_sampled": true,
+  "native_pickup_putdown": true,
+  "moving_remote_carry": true,
+  "stale_restoration": true,
+  "invalid_context_restoration": true,
+  "valid_recovery": true,
+  "remote_place_and_settled_floor": true,
+  "stale_descriptor_sender_stopped_while_poses_continued": true,
+  "genuine_native_descriptors": 554,
+  "replayed_descriptors": 1481,
+  "cold_import_used": false,
+  "observed_place_sent": 0,
+  "reviewed_images": {
+    "genuine-pickup.png": {
+      "sha256": "110b9d6845b395eb8a03addf1c8e32d3c138b17ee0c34b1942483c21ef756bfc",
+      "review": "Native Link holds the pot in raised hands with Put down prompt.",
+      "method": "Assistant viewed this exact PNG with view_image"
+    },
+    "genuine-putdown.png": {
+      "sha256": "50faad6c71b9aa81c4b13f385f949c779c9178138ba1f79b998ecfa20e06a445",
+      "review": "Native hands empty; pot grounded and Pick up prompt.",
+      "method": "Assistant viewed this exact PNG with view_image"
+    },
+    "navigation-target.png": {
+      "sha256": "3ccd7cb5c0e3fa162416c116730b065d9e1daa864c9e0cf60f2096d4d8952ae6",
+      "review": "Correct F001r room0/layer1/entry2 selected; enabled Teleport button focused.",
+      "method": "Assistant viewed this exact new-runtime PNG with view_image"
+    },
+    "academy-hall-arrival.png": {
+      "sha256": "c9975e64f7fd29cd23fb43a92686ca0af94a724243fea4cb98de31585067cb64",
+      "review": "Native Academy hall with native Link and three complete named scalar-peer bodies.",
+      "method": "Assistant viewed this exact new-runtime PNG with view_image"
+    },
+    "remote-pot-carry.png": {
+      "sha256": "181ee8e4a91ba38515927bee72396d903ee746083a07ce7b9023bdb3b38867b0",
+      "review": "Simulated1 supports the received pot in raised hands; native hands empty.",
+      "method": "Assistant viewed this exact new-runtime PNG with view_image"
+    },
+    "remote-pot-moved.png": {
+      "sha256": "286ffd3ca2e774e00cc0964cba310b57f7c07d310e72705d395b61c28c0b0aa7",
+      "review": "Received pot moves with Simulated1 to the second location and remains hand-supported.",
+      "method": "Assistant viewed this exact new-runtime PNG with view_image"
+    },
+    "remote-pot-expired.png": {
+      "sha256": "15761fd5ab2d04c15d41db9ae0fa83b1c0e3e3722e19afd3e84a2230e768e5b7",
+      "review": "Remote raised hands empty; pot restored to native floor position while peer body remains visible.",
+      "method": "Assistant viewed this exact new-runtime PNG with view_image"
+    },
+    "remote-pot-resumed.png": {
+      "sha256": "c3184e9a6367f84fdc55b5d6c907ebfb15176d2c1d2dfbf82e19e0cefc55308b",
+      "review": "Fresh descriptors restore pot to remote raised hands.",
+      "method": "Assistant viewed this exact new-runtime PNG with view_image"
+    },
+    "remote-pot-invalid-context.png": {
+      "sha256": "1a9b81f3c7910721d09cf56d160a70267501868fb77ed3eca8dbbe9d22cf983d",
+      "review": "Invalid drawn-plus-carry equipment leaves remote arms ordinary and pot on the original floor.",
+      "method": "Assistant viewed this exact new-runtime PNG with view_image"
+    },
+    "remote-pot-valid-again.png": {
+      "sha256": "afb666f6dd2f3cb379f812fa9d367d5fd82b7bf1ea581ae3be69ca1679d79620",
+      "review": "Valid context restores the pot to remote raised hands.",
+      "method": "Assistant viewed this exact new-runtime PNG with view_image"
+    },
+    "remote-pot-placed.png": {
+      "sha256": "946b7e4ec246cec4a6db7abf07ff7ddf013c16379e42550553c9b7caccc35e00",
+      "review": "Remote arms idle; received PLACE leaves the pot grounded beside the remote player.",
+      "method": "Assistant viewed this exact new-runtime PNG with view_image"
+    },
+    "remote-place-settled.png": {
+      "sha256": "72686fd47880be77935b643402694c98fb916575ee5e60a1bb3b0c0e3475c3af",
+      "review": "After replay stops, the same visible pot remains grounded at the remote placement.",
+      "method": "Assistant viewed this exact new-runtime PNG with view_image"
+    }
+  },
+  "owned_children_final": 0,
+  "owned_sockets_final": 0,
+  "separate_full_clients_tested": false,
+  "internet_or_campaign_acceptance": false,
+  "other_real_carry_classes_or_throws_tested": false,
+  "installed": false,
+  "published": false,
+  "engine_tree": "687802ad93078709fb83d3b3a20d8ba015b39c35",
+  "engine_patches": 29,
+  "unchanged_allowed_observer_reused": true,
+  "observer_rva_rederived_and_matched": true,
+  "blocked_new_observer_executed": false,
+  "security_settings_changed": false,
+  "first_attempt_guest_booted": false,
+  "bounded_fresh_owned_retry_count": 1,
+  "first_startup_failure": "Fixed guest virtual address range unavailable; retained failed result",
+  "guest_self_reexec_disabled_for_owned_job": true,
+  "hardware_eligible_prop_count": 7,
+  "overflow_and_actor_replacement_stress_scope": "CPU fixtures; this native hall contains seven eligible props"
+}

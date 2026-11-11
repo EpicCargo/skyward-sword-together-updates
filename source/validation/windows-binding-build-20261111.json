@@ -1,6 +1,6 @@
 {
   "passed": true,
-  "scope": "Cross-compiled and linked Windows runtime only; exact new runtime not launched or hardware-validated",
+  "scope": "Cross-compiled and linked Windows runtime; separate native gameplay record now passes",
   "source_commit": "df8bb068b025a66d5eff5215e348e1cb31e379f3",
   "engine_tree": "687802ad93078709fb83d3b3a20d8ba015b39c35",
   "engine_patches": 29,
@@ -24,5 +24,11 @@
   "security_settings_changed": false,
   "game_run": false,
   "installed": false,
-  "published": false
+  "published": false,
+  "separate_hardware_gameplay_passed": true,
+  "hardware_gameplay_record": "patch29-live-pot-census-20261111.json",
+  "existing_allowed_observer_reused_unchanged": true,
+  "normal_windows_runtime_launch_allowed": true,
+  "first_startup_guest_range_collision_observed": true,
+  "bounded_fresh_owned_retry_count": 1
 }

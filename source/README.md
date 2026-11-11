@@ -1,6 +1,6 @@
 # SST source snapshot
 
-This snapshot contains the capacity8 client, relay and launcher sources, the hardware-validated gameplay9 travel UI fixes, and additional native prop-binding fixes. The binding fixes passed CPU checks and an isolated Windows runtime cross-build; their hardware gameplay check remains pending. Protocol **45**, Launcher **5**, SkyRecomp **2.0.2**.
+This snapshot contains the capacity8 client, relay and launcher sources, the gameplay9 travel UI fixes, and additional native prop-binding fixes. Patch29 passed CPU checks, an isolated Windows runtime cross-build and one native Windows game with three scalar peers and an independent pot census. Protocol **45**, Launcher **5**, SkyRecomp **2.0.2**.
 
 The current engine is represented by 29 patches against upstream commit `506a9bc5aead5fc9598bb8f4a521f3b26f8897e8`. The accepted local travel9 portable remains pinned to its earlier 28-patch source and runtime. Generated game code and upstream build dependencies are not included.
 
@@ -45,5 +45,7 @@ The default Windows source ZIP includes this snapshot's complete checksum invent
 The local travel9 portable candidate now passed its final Windows package check; the earlier capacity8 candidate is preserved. Publishing this source does not change the release feed or install a runtime. Separate-PC/campaign readiness, other carryable classes, throws, and the WSL software-Vulkan rendering issue remain open.
 
 A later baseline Windows run independently sampled the same unique pot actor through genuine pickup/putdown, moving remote carry, expiry/context restoration and remote placement. Its 77 valid hall samples retained one actor lifetime. This used the earlier travel9 runtime and three scalar peers; it does not establish patch29 or separate-full-client gameplay acceptance.
+
+The newly built patch29 runtime subsequently passed the same full sequence: 97 stable hall samples retained one unique pot actor, all eight replay phases had independent position samples, and owned processes/sockets closed normally. See `validation/patch29-live-pot-census-20261111.json`. Separate full clients and campaign completion remain untested.
 
 Upstream engine licensing is preserved in `ENGINE-LICENSE`; third-party source licenses remain alongside their respective files.

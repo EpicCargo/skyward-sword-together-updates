@@ -263,6 +263,6 @@
     "build-runtime.py",
     "client-patches/0001-reclaim-retired-prop-tracks.patch"
   ],
-  "validation_scope": "Asset-free CPU-checked source and isolated Windows cross-build completed; patch29 hardware gameplay pending",
+  "validation_scope": "CPU checks, isolated Windows cross-build and one native Windows game with three scalar peers and independent pot census passed; separate full clients/campaign remain untested",
   "previous_hardware_engine_tree": "8e0368f43c1bba58897a379167f8f90db927b558"
 }

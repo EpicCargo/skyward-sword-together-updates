@@ -1,10 +1,10 @@
 {
   ".gitignore": "208125964c666dae7b7742d6ccf5f14c615d4629e589349a904ac5a7801b79b2",
   "CHANGES-2026-11-08.md": "6d1c8b97257b9b5007078a92a389d2e7f9537f3675c7711777462a6dcacb8a30",
-  "CHANGES-2026-11-11.md": "660f5a517c76ba6ab1fe723077c5e409f9f16952c4c6ea24d64423baab4716ed",
+  "CHANGES-2026-11-11.md": "9bef16acd19b7f86d081a10e419eae54e4c42c63be8dda0704bc4d97d631de94",
   "DEVELOPMENT-RESOURCE-POLICY.md": "84d169cce1770a5289ddf67da926cbbb99df5535211897ab25cfa28590a88145",
   "ENGINE-LICENSE": "82366d6b052c2608d7458b81a869249abed63932bd88fa03ca8f7a136f8602e3",
-  "README.md": "3af0eb194acf3d089e0d4012aa52ea78f32f3eaa7bcce3d69f49385cbd6e56a6",
+  "README.md": "4e27a5fb3ac0bb9257596ed7ab6a381507f7fa9e038a2a5bccf8f80657329321",
   "client/Makefile": "159a56bd89fc2b965bafade414ce6f1df9c7006c4f1f6964e32d434341bf75a3",
   "client/src/sst_animation.c": "94fd3e1703f99205624883bbb97964dcc4ed8dba73ef167b0bdbb527ae28f7e1",
   "client/src/sst_animation.h": "7e44e9235529fb4974a9c02084c0bedb8ea4613da52ba2a960965d9cc0b3ecf5",
@@ -256,11 +256,12 @@
   "validation/export-checks.json": "138e4b05707c1a34293c5d128aefd32cd0930b817950e2c028d3c3a9e2e5d4a0",
   "validation/gameplay-reviewed-images.json": "8ccb6d1712a66e7c698d00b11bb71fbc2e7f567c5cc251e345beaa94bdf2644a",
   "validation/independent-pot-census-20261111.json": "9c4e17a49320cff68c989551b02248969f1c732423d3074058c777a3de2accc3",
-  "validation/native-source.json": "09a8298a7449bbfe2145b845038617b8b2b50d80f3ecb5647db9cbaa9cad746c",
+  "validation/native-source.json": "9acbbbc8584faac8912368ce32b6c6cf8a5020d267363dc665b2d8e1eb586e3b",
   "validation/owned_prop_census.h": "4bd64517448a1c071ef91843d87193d7fe086bf9a54a4a869b09166aca24455a",
+  "validation/patch29-live-pot-census-20261111.json": "008329a6a4126a5cd2e874fe138af719b4a554567991ed6901bde8822a828fbe",
   "validation/portable-20261111.json": "f6a57da5f9099538e580a11aa8954ca50631cf9beb17ef0e6ac70205fe5d0d7d",
   "validation/prop-bindings-20261111.json": "c71fdfdb1745b9bf9598c6d71ff1fd5cf5ef4f0ff3dd591e1a5966fe2ed02f90",
   "validation/prop_capacity_test.c": "0e3b22e810dec2515498a54538e0dfd8ffc007b6f0e5315e859580c254d44621",
-  "validation/windows-binding-build-20261111.json": "fe64755dd6aeaf0d7907e19e37f273605c7b6a5e80cdf9f0ab9bbd126a011972",
+  "validation/windows-binding-build-20261111.json": "d9244f9756406de32d306204179493389f9d92b2acbd027fd18a6c5e0be2ab7a",
   "validation/windows-gameplay.json": "16c1eb09ea1e16fafc52986c84bff409de6f0ff94a6c75ab07e31db88357071d"
 }
