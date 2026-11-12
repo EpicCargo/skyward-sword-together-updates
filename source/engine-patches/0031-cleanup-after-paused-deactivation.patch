@@ -1,0 +1,25 @@
+From 285031b6b524970cde2f1c58d257b579d4ba7b57 Mon Sep 17 00:00:00 2001
+From: EpicCargo <149317426+EpicCargo@users.noreply.github.com>
+Date: Wed, 11 Nov 2026 20:04:08 -0500
+Subject: [PATCH] Consume deferred prop cleanup after paused deactivation
+
+---
+ runtime/hle/sst_prop_bridge.h | 5 +++--
+ 1 file changed, 3 insertions(+), 2 deletions(-)
+
+diff --git a/runtime/hle/sst_prop_bridge.h b/runtime/hle/sst_prop_bridge.h
+index 98af946..e3471bd 100644
+--- a/runtime/hle/sst_prop_bridge.h
++++ b/runtime/hle/sst_prop_bridge.h
+@@ -260,8 +260,9 @@ static void prop_execute(Cpu *c, GuestFn original) {
+     uint64_t actor = c->x[0]; SstProp target = {0}; SstPropNativePose pose;
+     uint32_t instance = 0, load = 0, gen = 0; bool candidate = false, parked=false, cleanup=false;
+     pthread_mutex_lock(&props_bridge.mu);
+-    // Settings/connection state can change between periodic input ticks.
+-    if (props_bridge.enabled && (!g_sst.sync_props || sst_net_status(NULL, 0) != SST_ONLINE))
++    // Deactivation can follow a pause, which already cleared enabled.
++    // Settings/connection changes still owe outstanding native floor cleanup.
++    if (!g_sst.sync_props || sst_net_status(NULL, 0) != SST_ONLINE)
+         prop_suspend();
+     PropBinding *b = prop_binding(actor);
+     if (b && b->restore_pending) {

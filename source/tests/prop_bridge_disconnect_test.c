@@ -40,7 +40,29 @@ static void check_mode(const SstPropNativeDescriptor *d, unsigned mode) {
     }
     begin_remote_carry(d);
     unsigned before = original_calls;
-    if (mode == 1) {
+    if (mode >= 20 && mode <= 23) {
+        // Pausing has already disabled ordinary packet presentation. A later
+        // setting/connection change still owes this executing actor cleanup.
+        prop_tick(local, 1, true, true);
+        assert(!props_bridge.enabled && prop_binding(actor)->remote_held);
+        if (mode == 21) network_online = false;
+        else g_sst.sync_props = false;
+        if (mode == 22) held_linkage();
+        if (mode == 23) { local.player_instance = 2; actual_pose(35, 1.5f, 45); }
+        execute();
+        if (mode == 22) {
+            expect_position(10, 101.5f, 20);
+            assert(sst_prop_native_held(actor, player) && original_calls == before + 1);
+        } else if (mode == 23) {
+            expect_position(35, 1.5f, 45);
+            assert(original_calls == before + 1);
+        } else {
+            expect_position(10, 1.5f, 20); expect_unheld();
+            assert(original_calls == before);
+            execute(); assert(original_calls == before + 1);
+        }
+        assert(!sends);
+    } else if (mode == 1) {
         // This is the actual world bridge's offline call, without local data.
         disconnect_tick(); disconnect_tick();
         expect_position(1000, 101.5f, -1000); // No writes outside actor execute.
@@ -117,8 +139,14 @@ static void check_mode(const SstPropNativeDescriptor *d, unsigned mode) {
 }
 
 int main(int argc, char **argv) {
-    assert(argc == 2);
+    assert(argc == 2 || argc == 4);
     unsigned mode = (unsigned)strtoul(argv[1], NULL, 10);
+    if (argc == 4) {
+        const SstPropNativeDescriptor *d = sst_prop_native_descriptor((uint16_t)strtoul(argv[2], NULL, 10));
+        local_player_id = (uint16_t)strtoul(argv[3], NULL, 10);
+        assert(d && (local_player_id == 1 || local_player_id == 3));
+        check_mode(d, mode); return 0;
+    }
     for (unsigned i = 0; i < SST_PROP_NATIVE_ADAPTERS; i++) {
         local_player_id = 1; check_mode(&sst_prop_native_descriptors[i], mode);
         local_player_id = 3; check_mode(&sst_prop_native_descriptors[i], mode);

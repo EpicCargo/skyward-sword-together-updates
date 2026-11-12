@@ -1,0 +1,22 @@
+{
+  "passed": true,
+  "scope": "File-only fixture reliability regressions; no new co-op gameplay acceptance.",
+  "observation_regression_cases": 9,
+  "telemetry_regression_cases": 8,
+  "optimized_cases": 17,
+  "baseline_truncated_record_failure_reproduced": true,
+  "baseline_rejected_sample_omission_reproduced": true,
+  "original_minimum_free_bytes": 8589934592,
+  "corrected_minimum_free_bytes": 2147483648,
+  "synthetic_pressure_sample_free_bytes": 2147483648,
+  "unchanged_windows_reserve_mib": 3072,
+  "invalid_or_stale_data_can_lower_minimum": false,
+  "actual_game_final_state_parsed": true,
+  "actual_game_last_preceding_renderer_frame": 15601,
+  "native_attempt_stopped_on_windows_reserve": true,
+  "native_prop_replay_reached": false,
+  "private_stage_three_files_restored": true,
+  "compiler_launched": false,
+  "windows_process_launched": false,
+  "game_launched": false
+}
