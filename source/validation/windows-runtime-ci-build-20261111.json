@@ -1,0 +1,42 @@
+{
+  "passed": true,
+  "scope": "Asset-free CI Windows runtime build only; not a portable package or gameplay acceptance.",
+  "source_commit": "7868eb5680deba100db40ecfc56e0008486d3026",
+  "source_inventory_sha256": "e128b51cd38a45d4bb12e5b48e3de91ec96be6162fcba2dba227b41533c426f5",
+  "source_files": 574,
+  "engine_tree": "ed7f0b1e22b70cd4dc7c6bf7f295a930d0ea40b1",
+  "engine_patches": 32,
+  "native_source_files": 253,
+  "compiler_archive_sha256": "55064b60b991a1e1e8090b8c2f84e82b22cfe5903d12c159d65064cf5e8ae335",
+  "public_sdk_files": 274,
+  "compiler_jobs": 1,
+  "machine": "AMD64",
+  "gamelib_id": "5e5bafbb450f894b",
+  "developer_counter": {
+    "symbol": "sst_dev_native_stats",
+    "rva": 10639896,
+    "bytes": 64,
+    "derivation": "llvm-nm and PE ImageBase; independently verify before memory observation"
+  },
+  "artifacts": {
+    "skyrecomp.exe": {
+      "sha256": "110a2e702e932f1fc9ca56ae3ae0aa2d58381dcab72930b2f8a80349cc6127f9",
+      "bytes": 15424000
+    },
+    "skyrecomp.dll.a": {
+      "sha256": "cfa83d4a90c1256274b025bc4a331fe54d94322c2d0c4feb6c3ee6fbc4c672a0",
+      "bytes": 742096
+    }
+  },
+  "game_library_built": false,
+  "game_files_used": false,
+  "game_launched": false,
+  "installed": false,
+  "release_feed_updated": false,
+  "github_run_url": "https://github.com/EpicCargo/skyward-sword-together-updates/actions/runs/43141898191",
+  "independent_pe_coff_verified": true,
+  "developer_counter_rva_independently_verified": 10639896,
+  "artifact_inventory_verified": true,
+  "external_backup_readback_verified": true,
+  "gameplay_accepted": false
+}
