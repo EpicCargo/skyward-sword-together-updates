@@ -1,0 +1,2 @@
+# Preserve the verified upstream source bytes, including original line endings.
+source/third_party/windows-build-headers-v202/** -text whitespace=-blank-at-eol,-blank-at-eof,-space-before-tab

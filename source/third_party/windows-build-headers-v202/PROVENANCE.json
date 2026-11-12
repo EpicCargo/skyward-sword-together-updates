@@ -1,0 +1,17 @@
+{
+  "scope": "Public C/C++ headers and generated import definitions used by the prior Windows runtime build. No DLLs/import-library binaries/tools/game files.",
+  "cached_source_archive_sha256": "d7feb9fec93fc1bd4ead0a87fd8df2bccde3d85ebe64bb268d67f8d0f68f9e85",
+  "prefix_source_files_verified_against_external_backup": true,
+  "projects": {
+    "SDL3": "https://github.com/libsdl-org/SDL",
+    "FFmpeg": "https://github.com/FFmpeg/FFmpeg",
+    "shaderc": "https://github.com/google/shaderc",
+    "Vulkan_Headers": "https://github.com/KhronosGroup/Vulkan-Headers",
+    "VMA": "https://github.com/GPUOpen-LibrariesAndSDKs/VulkanMemoryAllocator"
+  },
+  "definitions": "Text export catalogs generated from the previously verified support DLLs; import libraries are regenerated with LLVM-MinGW.",
+  "payload_files": 272,
+  "payload_bytes": 7123047,
+  "compiler_launched": false,
+  "game_files_included": false
+}

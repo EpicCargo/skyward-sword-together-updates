@@ -105,6 +105,7 @@ jobs:
           python3 -O -m unittest discover -s scripts/tests -p test_engine_patchset.py -v
           python3 -O -m unittest discover -s scripts/tests -p test_restore_engine.py -v
           python3 -O -m unittest discover -s scripts/tests -p test_support_import.py -v
+          python3 -O -m unittest discover -s scripts/tests -p test_windows_runtime_ci.py -v
           python3 -O -m unittest discover -s tests -p test_observation_stream.py -v
           python3 -O -m unittest discover -s tests -p test_windows_telemetry.py -v
           python3 -O -m unittest discover -s tests -p test_native_capture_gate.py -v
@@ -113,3 +114,39 @@ jobs:
         run: node --experimental-loader ./server/rooms/test/cloudflare-loader.mjs --test server/rooms/test/worker.test.mjs
       - name: Verify source files remain unchanged
         run: python3 scripts/verify-source.py
+
+  windows-runtime:
+    needs: source-tests
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: source
+        shell: bash
+    env:
+      PYTHONDONTWRITEBYTECODE: '1'
+      MAKEFLAGS: ''
+      MFLAGS: ''
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - name: Verify build sources and reconstruct the pinned engine
+        run: |
+          python3 scripts/verify-source.py
+          python3 scripts/build-windows-runtime-ci.py --validate-inputs
+          python3 scripts/restore-engine.py
+      - name: Cross-build only the Windows runtime with one compiler
+        run: |
+          python3 scripts/resource_runner.py --rss-mib 4096 --available-mib 6144 \
+            --nice 10 --lock build/developer-build.lock -- \
+            python3 scripts/build-windows-runtime-ci.py
+          python3 scripts/verify-source.py
+      - name: Preserve the asset-free runtime validation artifact
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: windows-runtime-${{ github.sha }}
+          path: source/build/windows-runtime-ci/artifacts/
+          if-no-files-found: error
+          retention-days: 7

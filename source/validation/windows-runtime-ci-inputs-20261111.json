@@ -1,0 +1,12 @@
+{
+  "passed": true,
+  "scope": "File-only build input checks; cross-build and gameplay acceptance remain separate.",
+  "normal_cases": 12,
+  "optimized_cases": 12,
+  "public_sdk_files_including_manifest": 275,
+  "real_public_sdk_verified": true,
+  "compiler_launched": false,
+  "windows_process_launched": false,
+  "network_used": false,
+  "game_launched": false
+}
