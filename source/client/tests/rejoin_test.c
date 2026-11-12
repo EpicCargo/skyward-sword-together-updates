@@ -143,4 +143,5 @@ int main(int argc, char **argv) {
     assert(sst_remote_network_sample(&area, remote, 4) == 1 && remote[0].pose.pos[0] == 250);
     close(original); close(replacement); sst_net_stop(); if(embedded) sst_host_stop();
     puts("rejoin: same-ID replacement, stale presence, restarted poses, enemy damage/movement and interpolation reset PASS");
+    return 0;
 }

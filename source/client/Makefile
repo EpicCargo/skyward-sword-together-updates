@@ -124,6 +124,8 @@ $(B)/scene_history_test: tests/scene_history_test.c $(LIB) $(HDR) | $(B)
 
 test: $(B)/prop_roster_test $(B)/origin_test $(B)/geometry_only_test $(B)/phase_admission_test $(B)/remote_frame_test $(B)/drawn_context_test $(B)/dev_tools_test $(B)/teleport_test $(B)/destinations_test $(B)/sword_state_test $(B)/carry_reader_test $(B)/carry_context_test $(B)/carry_cohort_test $(B)/carry_transport_test $(B)/carry_playout_test $(B)/render_local_test $(B)/pose_cadence_test $(B)/hand_offset_test $(B)/motion_queue_test $(B)/session_lifecycle_test $(B)/census_test $(B)/pickup_state_test $(B)/pickup_net_test $(B)/pickup_host_test $(B)/prop_state_test $(B)/prop_net_test $(B)/prop_host_test $(B)/scene_history_test $(B)/defeat_test $(B)/stream_test $(B)/spawn_test $(B)/unit $(B)/overlay_test $(B)/net_e2e $(B)/two_player_sim $(B)/host_fixture $(B)/remote_test $(B)/four_player $(B)/avatar_test $(B)/animation_test $(B)/world_test $(B)/motion_test $(B)/chest_test $(B)/diagnostics_test $(B)/rejoin_test $(B)/network_check $(B)/queue_fixture $(B)/udp_fixture $(B)/udp_queue_test
 	./$(B)/presence_frame_test
+	./$(B)/scene_incarnation_test
+	./$(B)/scene_transport_test
 	./$(B)/drawn_context_test
 	./$(B)/dev_tools_test
 	./$(B)/teleport_test
@@ -268,3 +270,12 @@ $(B)/presence_frame_test: tests/presence_frame_test.c $(LIB) $(HDR) | $(B)
 
 $(B)/roster_probe: tools/roster_probe.c $(LIB) $(HDR) | $(B)
 	$(CC) $(CFLAGS) -o $@ tools/roster_probe.c $(LIB) $(LDLIBS)
+
+# Same-area reload and unobserved scene departures must retire accepted state.
+test: $(B)/scene_incarnation_test $(B)/scene_transport_test
+
+$(B)/scene_incarnation_test: tests/scene_incarnation_test.c $(LIB) $(HDR) | $(B)
+	$(CC) $(CFLAGS) -fsanitize=address,undefined -o $@ tests/scene_incarnation_test.c $(filter-out src/sst_net.c,$(LIB)) $(LDLIBS)
+
+$(B)/scene_transport_test: tests/scene_transport_test.c tests/rejoin_test.c $(LIB) $(HDR) | $(B)
+	$(CC) $(CFLAGS) -Wno-unused-function -fsanitize=address,undefined -o $@ tests/scene_transport_test.c $(LIB) $(LDLIBS)

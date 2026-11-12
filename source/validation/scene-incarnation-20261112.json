@@ -1,0 +1,41 @@
+{
+  "passed": true,
+  "source_receiver_sha256": "53ff6efcf01d639cdf803a67a8048ab3999832e9469da17121e1221cc8176713",
+  "source_receiver_header_sha256": "171f21cfee1993434af59cefb6e4a7bf3323fc98100669f8208ad341cbdfe211",
+  "baseline_receiver_sha256": "9f4caedde6f8e0d37dc15e1ec06f0c118340609ec8d46cedbe43565181fdfb9d",
+  "scalar_cases": 36,
+  "baseline_intended_failures": 18,
+  "baseline_negative_controls": 18,
+  "baseline_failure_checks": [
+    "FAIL scene retires only the affected authenticated incarnation",
+    "FAIL accepted target cannot survive a scene incarnation",
+    "FAIL new scene does not interpolate through old pose history",
+    "FAIL new scene starts its own replay watermark",
+    "FAIL new scene target retains authenticated incarnation"
+  ],
+  "actual_tcp_cases": 18,
+  "actual_bridge_departure_cases": 54,
+  "prior_deactivation_cases": 138,
+  "prior_pause_cases": 42,
+  "presence_parser_checks": 86,
+  "pickup_commits_survive_remote_scene": true,
+  "fixture_sha256": {
+    "client/tests/scene_incarnation_test.c": "4c4d2c41f48301b9fb6ae12a4de974cdf53c3d30bd2d91175aa80c1b5c8c69a1",
+    "client/tests/scene_transport_test.c": "da0a4f44c6f4a1e92ead8fb6eb304b4d7191dad1011544401acc7a134ca84102",
+    "tests/prop_bridge_departure_test.c": "19e0ed12f14658221fbb22c8099fe7a5e2b35be428f8af28202dd8d16acd83a1",
+    "tests/prop_bridge_presentation_test.c": "353c570ab952db1f5d9c963b8d8eb3dc0d9883c458746afaeb27312398ee567e",
+    "validation/check_scene_baseline.py": "d7283903cecfa71cb9190c5d5a1c5d7472df3f50f95f9ab739f77ebf97650c07"
+  },
+  "compiler_jobs": 1,
+  "linux_group_rss_cap_mib": 512,
+  "both_os_memory_reserve_mib": 3072,
+  "sanitizers": [
+    "AddressSanitizer",
+    "UndefinedBehaviorSanitizer"
+  ],
+  "windows_child_launched": false,
+  "game_launched": false,
+  "gameplay_accepted": false,
+  "installed": false,
+  "release_feed_updated": false
+}

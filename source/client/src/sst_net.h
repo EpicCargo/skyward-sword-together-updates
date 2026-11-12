@@ -52,7 +52,7 @@ typedef enum { SST_OFFLINE, SST_CONNECTING, SST_ONLINE, SST_FAILED } SstStatus;
 typedef struct {
     bool active;
     uint16_t id;
-    uint32_t presence_generation; // changes on JOIN even when a returning player keeps the same ID
+    uint32_t presence_generation; // changes on JOIN/SCENE even when ID and area stay the same
     char name[SST_STR], team[SST_STR];
     SstScene scene;
     bool has_pose;

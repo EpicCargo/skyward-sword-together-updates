@@ -29,6 +29,8 @@ int main(void) {
     setup();incoming(c);Buf b={0};put16(&b,2);on_frame(T_PLAYER_LEAVE,b.b,b.n);drain(1);
     setup();incoming(c);b.n=0;put16(&b,2);putstr(&b,"Returned");putstr(&b,"team");
     on_frame(T_PLAYER_JOIN,b.b,b.n);drain(1);assert(delivered.presence_generation==7);
+    setup();incoming(c);b.n=0;put16(&b,2);put_scene(&b,&area);on_frame(T_SCENE,b.b,b.n);
+    assert(players[0].presence_generation!=7);drain(1);assert(delivered.presence_generation==7);
     setup();incoming(c);SstScene other=area;other.room=8;sst_net_send_scene(&other);drain(1);
     setup();incoming(c);in_pickups[0].received_ms=1;drain(1); // delay inventory grant safely
     setup();c.from=1;incoming(c);drain(1);assert(delivered.presence_generation==42);

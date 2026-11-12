@@ -67,8 +67,16 @@ int main(void) {
     CHECK("valid JOIN replaces incarnation and drains only retired props",players[0].id==2 && players[0].active &&
           !players[0].has_pose && players[0].presence_generation>7 && !prop_n && !strcmp(players[0].name,"Replacement"));
     setup();on_frame(T_SCENE,scene.b,scene.n);
-    CHECK("valid SCENE updates full area and clears old context",!players[0].has_pose && !players[0].udp_scene &&
+    CHECK("valid SCENE updates full area and clears old context",!players[0].has_pose && !players[0].udp_scene && players[0].presence_generation>7 &&
           !prop_n && !strcmp(players[0].scene.stage,"F002") && players[0].scene.room==3 && players[0].scene.layer==2 && players[0].scene.entrance==9);
+    // A valid frame renews only its source, including same-area reloads.
+    setup();players[1]=players[0];players[1].id=3;players[1].presence_generation=9;
+    SstPlayer stable=players[1];SstScene same=players[0].scene;Buf repeated={0};put16(&repeated,2);put_scene(&repeated,&same);
+    on_frame(T_SCENE,repeated.b,repeated.n);
+    CHECK("same-area scene renews presence without reconnect",players[0].presence_generation==11 && atomic_load(&generation)==3 && players[0].active && players[0].id==2);
+    CHECK("another player's presence and pose survive scene",!memcmp(&stable,&players[1],sizeof stable));
+    setup();before=snapshot();repeated.n=0;put16(&repeated,my_id);put_scene(&repeated,&same);on_frame(T_SCENE,repeated.b,repeated.n);
+    CHECK("local identity scene cannot replace a remote",unchanged(&before));
     setup();on_frame(T_PLAYER_LEAVE,left.b,left.n);CHECK("valid LEAVE retires peer",!players[0].active && !prop_n);
     setup();on_frame(T_ERROR,error.b,error.n);CHECK("valid ERROR remains terminal",status==SST_FAILED && !strcmp(last_error,"Host rejected the room"));
     setup();Buf maximum={0};put16(&maximum,65535);put8(&maximum,SST_MAX_PLAYERS);

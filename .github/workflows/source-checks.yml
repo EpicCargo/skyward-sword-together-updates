@@ -40,11 +40,16 @@ jobs:
             build/prop_state_test build/prop_roster_test build/prop_net_test \
             build/prop_host_test build/session_lifecycle_test \
             build/carry_transport_test build/presence_frame_test \
+            build/scene_incarnation_test build/scene_transport_test \
+            build/rejoin_test build/remote_frame_test build/motion_queue_test \
+            build/enemy_motion_merge_test build/pickup_net_test \
             build/sst-session-host build/host_fixture
       - name: Check native prop, carry and session behavior
         run: |
           for check in prop_state_test prop_roster_test prop_net_test prop_host_test \
-            session_lifecycle_test carry_transport_test presence_frame_test; do
+            session_lifecycle_test carry_transport_test presence_frame_test \
+            scene_incarnation_test scene_transport_test rejoin_test remote_frame_test \
+            motion_queue_test enemy_motion_merge_test pickup_net_test; do
             "client/build/$check"
           done
           python3 client/tests/session_host_test.py client/build/sst-session-host
@@ -56,6 +61,7 @@ jobs:
           mkdir -p build/source-checks
           python3 validation/check_paused_baseline.py
           python3 validation/check_pause_baseline.py
+          python3 validation/check_scene_baseline.py
           flags=(-O1 -g -Wall -Wextra -std=c11 -D_GNU_SOURCE
             -fsanitize=address,undefined -fno-omit-frame-pointer)
           clang "${flags[@]}" -Wno-unused-function -ffunction-sections -fdata-sections \
@@ -83,6 +89,11 @@ jobs:
             client/src/sst_props.c client/src/sst_world.c -lpthread -lm \
             -o build/source-checks/prop-pause
           for mode in {1..7}; do build/source-checks/prop-pause "$mode"; done
+          clang "${flags[@]}" -Wno-unused-function -ffunction-sections -fdata-sections \
+            -Wl,--gc-sections -I engine/runtime tests/prop_bridge_departure_test.c \
+            client/src/sst_props.c client/src/sst_world.c -lpthread -lm \
+            -o build/source-checks/prop-departure
+          for mode in {1..9}; do build/source-checks/prop-departure "$mode"; done
           clang "${flags[@]}" -Wno-unused-function -ffunction-sections -fdata-sections \
             -Wl,--gc-sections -I engine/runtime tests/prop_bridge_binding_test.c \
             client/src/sst_props.c client/src/sst_world.c -lpthread -lm \

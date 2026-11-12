@@ -496,6 +496,9 @@ static void on_frame_locked(uint8_t type, const uint8_t *body, size_t n) {
         SstPlayer *p = player(id, false);
         if (p) {
             forget_props(p->id);
+            // Consumers may miss an intermediate departure, or receive a
+            // same-area reload. Retire accepted targets and playout history too.
+            p->presence_generation = ++presence_serial;
             p->scene=scene;
             p->has_pose = false;  // a pose from the old stage must not be drawn in the new one
             p->udp_scene=0;
