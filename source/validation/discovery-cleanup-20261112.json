@@ -1,0 +1,61 @@
+{
+  "passed": true,
+  "scope": "Hosted actual bridge over synthetic native arena/model/network stubs; no game/GPU.",
+  "tested_source_commit": "132c8a1e494050c5fff870ea13190803d2d157a6",
+  "github_run_url": "https://github.com/EpicCargo/skyward-sword-together-updates/actions/runs/43157141454",
+  "tested_source_inventory_sha256": "f18ba4dc81eaa90056de87433a315e45dc3865299c563137b3405b17a436e741",
+  "engine_tree": "54794eeb92edc09b609e1f20d4d59b396dd6ff2a",
+  "engine_patches": 33,
+  "native_source_files": 253,
+  "candidate_header_sha256": "148bc6c90fd29c18b7ec53bb66637e6715400d5756b20940f2b7ed1969085f80",
+  "baseline_header_sha256": "d87e9743a7e94acb2afb3c824d84ef04ab3e0193976f7bd667dace4eb92e9820",
+  "baseline_failures": 36,
+  "baseline_controls": 48,
+  "baseline_failure_modes": [
+    1,
+    2,
+    3,
+    4,
+    5,
+    13
+  ],
+  "baseline_control_modes": [
+    6,
+    7,
+    8,
+    9,
+    10,
+    11,
+    12,
+    14
+  ],
+  "candidate_cases": 84,
+  "profiles": [
+    496,
+    497,
+    521
+  ],
+  "local_player_ids": [
+    1,
+    3
+  ],
+  "candidate_source_restored": true,
+  "sanitizers": [
+    "AddressSanitizer",
+    "UndefinedBehaviorSanitizer"
+  ],
+  "fixtures_sha256": {
+    "tests/prop_bridge_discovery_loss_test.c": "051b3f92c8004ef34ba83fbcee9a40855e5ea755a27551c8a69227b9e7869b4f",
+    "tests/prop_bridge_presentation_test.c": "d5ec81ff1f2f8cb2a23e5ed44f76fe38ce6e57e1eba8e8d72e0fa02d495a8c66",
+    "validation/check_discovery_baseline.py": "617eba1c66381d6be5525c94142841c31d534e2b17cbe6f03bcfcd3e97fc3e39"
+  },
+  "prior_deactivation_cases": 138,
+  "prior_pause_cases": 42,
+  "scene_departure_cases": 54,
+  "scene_scalar_cases": 36,
+  "actual_tcp_scene_cases": 18,
+  "game_launched": false,
+  "gameplay_accepted": false,
+  "installed": false,
+  "release_feed_updated": false
+}

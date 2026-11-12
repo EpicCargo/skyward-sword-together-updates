@@ -263,7 +263,7 @@
     "build-runtime.py",
     "client-patches/0001-reclaim-retired-prop-tracks.patch"
   ],
-  "validation_scope": "Discovery-loss source candidate. Hosted exact-baseline and candidate CPU checks are pending; native gameplay remains pending.",
+  "validation_scope": "Remote scene incarnation and discovery-loss source candidates passed hosted exact-baseline, CPU/TCP and Windows cross-build checks. Native gameplay for these changes remains pending.",
   "previous_hardware_engine_tree": "687802ad93078709fb83d3b3a20d8ba015b39c35",
   "previous_hardware_runtime_sha256": "410753d9ca080f44dbc523c253fa99752b503aa71fedc5478dbda3b12900e0be",
   "previous_partial_engine_tree": "7112f66f7cf19b9afeec131568813cdd475ff6b6",
