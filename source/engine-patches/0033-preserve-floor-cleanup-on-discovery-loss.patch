@@ -1,0 +1,26 @@
+From 52fcb283870c786ac1d656bcdaa8bc79f45acb5b Mon Sep 17 00:00:00 2001
+From: EpicCargo <149317426+EpicCargo@users.noreply.github.com>
+Date: Wed, 11 Nov 2026 23:47:11 -0500
+Subject: [PATCH] Preserve pending floor cleanup when actor discovery fails
+
+---
+ runtime/hle/sst_prop_bridge.h | 6 +++++-
+ 1 file changed, 5 insertions(+), 1 deletion(-)
+
+diff --git a/runtime/hle/sst_prop_bridge.h b/runtime/hle/sst_prop_bridge.h
+index cacaf32..18f350b 100644
+--- a/runtime/hle/sst_prop_bridge.h
++++ b/runtime/hle/sst_prop_bridge.h
+@@ -179,7 +179,11 @@ static void prop_tick(SstLocal l, uint32_t load, bool allowed, bool pause) {
+     props_bridge.player = l.player_address;
+     props_bridge.enabled = true;
+     sst_props_begin(&props_bridge.state, &l.scene, load);
+-    if (!prop_discover(l.player_address, &l.scene)) { prop_clear(); goto done; }
++    if (!prop_discover(l.player_address, &l.scene)) {
++        // Discovery has no packet authority. Preserve only an outstanding
++        // carry's cleanup for its exact, independently validated actor callback.
++        prop_suspend(); goto done;
++    }
+     SstPlayer players[SST_MAX_PLAYERS]; int count = sst_net_players(players, SST_MAX_PLAYERS);
+     SstPropPresence live[SST_MAX_PLAYERS]; unsigned live_count = 0;
+     uint16_t mine = sst_net_my_id();

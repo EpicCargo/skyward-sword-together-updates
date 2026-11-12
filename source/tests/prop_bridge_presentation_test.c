@@ -10,6 +10,9 @@
 #include "../client/src/sst_game.h"
 #include "../client/src/sst_world.h"
 
+#ifndef SST_PROP_FIXTURE_ARENA_SIZE
+#define SST_PROP_FIXTURE_ARENA_SIZE 0x10000
+#endif
 static unsigned char *arena;
 static uint64_t arena_lo, arena_hi;
 static uint64_t actor, player, model;
@@ -133,7 +136,7 @@ static void setup(const SstPropNativeDescriptor *d) {
     network_online = remote_connected = true;
     network_generation = 1; remote_presence = displayed_presence = 7; remote_scene = area;
     sst_prop_bridge_reset(); memset(&sst_prop_presentation_stats, 0, sizeof sst_prop_presentation_stats);
-    arena=calloc(1,0x10000);assert(arena);arena_lo=(uint64_t)(uintptr_t)arena;arena_hi=arena_lo+0x10000;
+    arena=calloc(1,SST_PROP_FIXTURE_ARENA_SIZE);assert(arena);arena_lo=(uint64_t)(uintptr_t)arena;arena_hi=arena_lo+SST_PROP_FIXTURE_ARENA_SIZE;
     player=arena_lo+0x1000;actor=arena_lo+0x4000;model=arena_lo+0x8000;
     put16(player+0x10,0xc8);put8(player+0x12,1);
     put64(player+0x18+0x20,player);put64(player+0x18+8,actor+0x18);
