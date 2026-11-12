@@ -10,7 +10,7 @@ Four-player co-op prototype for **Skyward Sword HD** on SkyRecomp 2.0.2.
 
 ## Latest source update — November 11, 2026
 
-Patch31 extends prop cleanup to sharing/disconnect changes after synchronization pauses. The regression workflow checks the exact patch30 baseline and 138 candidate deactivation cases across three object adapters and both host/guest IDs. The patch31 Windows runtime build and native gameplay checks remain pending. Earlier patch30 native runs stopped on memory pressure; pickup after remote placement and deactivation floor restoration remain unverified. The latest fully accepted gameplay evidence remains patch29.
+Patch32 parks a remotely carried prop before native simulation can resume between paused synchronization ticks, retaining packet replay protection. Its regression workflow checks the exact patch31 baseline and 42 pause/resume cases, alongside 138 deactivation cases across three object adapters and both host/guest IDs. The latest Windows runtime build and native gameplay checks remain pending. Earlier patch30 native runs stopped on memory pressure; pickup after remote placement and deactivation floor restoration remain unverified. The latest fully accepted gameplay evidence remains patch29.
 
 - Reject incomplete, duplicate or mismatched portable runtime archives before activating a version.
 - Preserve existing Windows release manifests and leave no partial version after a failed copy.

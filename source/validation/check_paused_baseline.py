@@ -26,17 +26,22 @@ def main():
     parser.add_argument('--output',type=Path,default=ROOT/'build/source-checks/paused-baseline')
     args=parser.parse_args();out=args.output.resolve();out.mkdir(parents=True,exist_ok=False)
     engine=ROOT/'engine';header=engine/'runtime/hle/sst_prop_bridge.h'
-    patch=ROOT/'engine-patches/0031-cleanup-after-paused-deactivation.patch'
+    patches=[p for p in sorted((ROOT/'engine-patches').glob('*.patch'))
+             if p.name >= '0031-cleanup-after-paused-deactivation.patch']
+    if not patches or patches[0].name!='0031-cleanup-after-paused-deactivation.patch':
+        raise RuntimeError('Missing paused-deactivation patch')
     native=json.loads((ROOT/'validation/native-source.json').read_text())
     candidate=native['native_file_sha256']['engine/runtime/hle/sst_prop_bridge.h']
     if digest(header)!=candidate:
         raise RuntimeError('Candidate bridge differs from its frozen native source')
     resource.setrlimit(resource.RLIMIT_CORE,(0,0))
-    reversed_patch=False;failures=[];controls=[]
+    reversed_patches=[];failures=[];controls=[]
     try:
-        subprocess.run(['git','-C',str(engine),'apply','--reverse','--check',str(patch)],check=True)
-        subprocess.run(['git','-C',str(engine),'apply','--reverse',str(patch)],check=True)
-        reversed_patch=True
+        # Later changes must not contaminate the exact patch30 baseline.
+        for patch in reversed(patches):
+            subprocess.run(['git','-C',str(engine),'apply','--reverse','--check',str(patch)],check=True)
+            subprocess.run(['git','-C',str(engine),'apply','--reverse',str(patch)],check=True)
+            reversed_patches.append(patch)
         if digest(header)!=BASELINE_HEADER:
             raise RuntimeError('Reversing the patch did not recover the exact patch30 bridge')
         executable=out/'prop-disconnect-baseline'
@@ -62,10 +67,10 @@ def main():
                             raise RuntimeError('Baseline negative control failed: '+label)
                         controls.append(dict(mode=mode,profile=profile,local_player_id=local_id,passed=True))
     finally:
-        if reversed_patch:
+        for patch in reversed(reversed_patches):
             subprocess.run(['git','-C',str(engine),'apply',str(patch)],check=True)
-            if digest(header)!=candidate:
-                raise RuntimeError('Candidate bridge was not restored after the baseline test')
+        if digest(header)!=candidate:
+            raise RuntimeError('Candidate bridge was not restored after the baseline test')
     report=dict(passed=True,scope='Actual bridge over synthetic native arena/model/network stubs; no game/GPU.',
         baseline_header_sha256=BASELINE_HEADER,candidate_header_sha256=candidate,
         reproduced_failures=failures,negative_controls=controls,candidate_source_restored=True,

@@ -1,0 +1,40 @@
+From 592793675a7cf98b2034bcfb80e4d26d5b82a649 Mon Sep 17 00:00:00 2001
+From: EpicCargo <149317426+EpicCargo@users.noreply.github.com>
+Date: Wed, 11 Nov 2026 20:30:35 -0500
+Subject: [PATCH] Park remote props before native simulation resumes from pause
+
+---
+ runtime/hle/sst_prop_bridge.h | 13 ++++++++++++-
+ 1 file changed, 12 insertions(+), 1 deletion(-)
+
+diff --git a/runtime/hle/sst_prop_bridge.h b/runtime/hle/sst_prop_bridge.h
+index e3471bd..cacaf32 100644
+--- a/runtime/hle/sst_prop_bridge.h
++++ b/runtime/hle/sst_prop_bridge.h
+@@ -55,6 +55,17 @@ static void prop_suspend(void) {
+     sst_props_reset(&props_bridge.state); props_bridge.enabled = false;
+ }
+
++static void prop_pause(void) {
++    // No native writes during the world tick. An executing actor must park its
++    // remote carry before ordinary simulation can resume between sync ticks.
++    // Retain packet watermarks and roster: pause is not a new transport session.
++    for (unsigned i = 0; i < SST_PROPS; i++) {
++        PropBinding *b = &props_bridge.bindings[i];
++        if (b->remote_held && b->rest.ready) b->restore_pending = true;
++    }
++    props_bridge.enabled = false;
++}
++
+ static PropBinding *prop_binding(uint64_t actor) {
+     for (unsigned i = 0; i < SST_PROPS; i++) {
+         PropBinding *b = &props_bridge.bindings[i];
+@@ -164,7 +175,7 @@ static void prop_tick(SstLocal l, uint32_t load, bool allowed, bool pause) {
+         // packet authority without losing an outstanding floor restoration.
+         prop_suspend(); props_bridge.generation = gen;
+     }
+-    if (pause) { props_bridge.enabled = false; sst_net_poll_props(NULL, NULL); goto done; }
++    if (pause) { prop_pause(); sst_net_poll_props(NULL, NULL); goto done; }
+     props_bridge.player = l.player_address;
+     props_bridge.enabled = true;
+     sst_props_begin(&props_bridge.state, &l.scene, load);
