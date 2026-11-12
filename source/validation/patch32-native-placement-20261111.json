@@ -1,0 +1,87 @@
+{
+  "passed": true,
+  "scope": "One patch32 Windows game with three scalar peers: genuine source capture, remote PLACE on clear floor, native same-actor re-pickup/putdown and new outgoing acquisition.",
+  "source_commit": "18fd2c82f575421218b9aadd730695139b2e3c41",
+  "runtime_sha256": "b0de2f99cb9ade054e230d8be9d06e0b973839ff9774a69ba55f9f7994f3826d",
+  "engine_tree": "ed7f0b1e22b70cd4dc7c6bf7f295a930d0ea40b1",
+  "engine_patches": 32,
+  "census_samples": 104,
+  "hall_samples": 97,
+  "unique_target_samples": 97,
+  "native_held_samples": 13,
+  "malformed_records_discarded": 0,
+  "native_actor_lifetime": {
+    "actor_token": 102693920,
+    "instance": 2068
+  },
+  "native_capture_gate_qualified": true,
+  "initial_neighbor_pickup_not_promoted": true,
+  "genuine_descriptors_captured": 2971,
+  "replayed_descriptors": 815,
+  "remote_clear_floor_placement": true,
+  "replay_stopped_before_settling": true,
+  "clear_floor_place_to_settled_shift_native_units": 0.0,
+  "unchanged_one_unit_tolerance_met": true,
+  "genuine_native_repickup_and_putdown": true,
+  "outgoing_native_carry_then_place": true,
+  "native_acquisition": 2,
+  "native_normal_exit": true,
+  "fixture_automatic_capture_limit_frames": 36000,
+  "owned_children_final": 0,
+  "owned_sockets_final": 0,
+  "owned_recorded_pids_absent": true,
+  "private_stage_three_files_restored": true,
+  "minimum_windows_free_bytes": 7693271040,
+  "cold_import_used": false,
+  "observed_place_sent": 0,
+  "reviewed_images": {
+    "arrival-review.png": {
+      "sha256": "a80e765f394d3a86121e83c2c597bcff3618737204c5e766f8404cc492cc9307",
+      "reviewed": true
+    },
+    "native-pickup-candidate.png": {
+      "sha256": "ea0c38ae2c1ff4ca38420b83ef820207167853413f2bbbba74b90dc9d0a8edfc",
+      "reviewed": true
+    },
+    "native-putdown-candidate.png": {
+      "sha256": "793ac67b5986bb2794aa8a8cc9b772acb27d29b7ffe9c534ed1f663f4ee89b79",
+      "reviewed": true
+    },
+    "remote-carry.png": {
+      "sha256": "85ea29b4768885dad532a03b6aedc167e69784c7d60a80745555d87ad3c8878e",
+      "reviewed": true
+    },
+    "remote-place.png": {
+      "sha256": "1ba75371359edd498cb265adbd70789c57f753fc617e5ee444da96977470310a",
+      "reviewed": true
+    },
+    "place-settled.png": {
+      "sha256": "df39bbc59d9bc19783c06c9fc74bf4ca1ca4efec9d73c77d23126bf31fb9d688",
+      "reviewed": true
+    },
+    "placed-pot-range.png": {
+      "sha256": "d4e385b97c98dc4a5b6844b01399fd2600faa350af1c4b9c6fcacef364ca3c35",
+      "reviewed": true
+    },
+    "native-repickup.png": {
+      "sha256": "c47712c4c39607a0aefb23beef49c50dca949a0694281c7b37975f44c6ae4af0",
+      "reviewed": true
+    },
+    "native-reputdown.png": {
+      "sha256": "f114a4e137149955eb8ce55c505707751de3d91356f5a051220c055027267d4f",
+      "reviewed": true
+    },
+    "window.png": {
+      "sha256": "4478523554211c7c4298abc1cd886955c6410a2e9eff8b333e2274a2b9daef9e",
+      "reviewed": true
+    }
+  },
+  "earlier_cluster_settling_shift_resolved": false,
+  "actual_pause_cutscene_tested": false,
+  "own_client_disconnect_tested": false,
+  "separate_full_clients_tested": false,
+  "campaign_readiness": false,
+  "overall_coop_acceptance": false,
+  "installed": false,
+  "published": false
+}

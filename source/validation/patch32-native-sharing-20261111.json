@@ -1,0 +1,78 @@
+{
+  "passed": true,
+  "scope": "One patch32 Windows game with three scalar peers: genuine pickup/putdown, remote carry and native sharing-off floor restoration only.",
+  "source_commit": "18fd2c82f575421218b9aadd730695139b2e3c41",
+  "runtime_sha256": "b0de2f99cb9ade054e230d8be9d06e0b973839ff9774a69ba55f9f7994f3826d",
+  "engine_tree": "ed7f0b1e22b70cd4dc7c6bf7f295a930d0ea40b1",
+  "engine_patches": 32,
+  "census_samples": 104,
+  "hall_samples": 97,
+  "unique_target_samples": 97,
+  "native_held_samples": 7,
+  "malformed_records_discarded": 1,
+  "native_actor_lifetime": {
+    "actor_token": 102693920,
+    "instance": 2072
+  },
+  "native_capture_gate_qualified": true,
+  "genuine_native_pickup_putdown": true,
+  "genuine_descriptors_captured": 944,
+  "replayed_descriptors": 1902,
+  "sharing_off_persisted": true,
+  "sharing_off_restored_floor": true,
+  "post_toggle_native_samples": 2,
+  "post_toggle_frames": [
+    35641,
+    35941
+  ],
+  "maximum_floor_restore_delta_native_units": 0.0,
+  "unchanged_one_unit_tolerance_met": true,
+  "peer_poses_continued": true,
+  "native_normal_exit": true,
+  "fixture_automatic_capture_limit_frames": 36000,
+  "owned_children_final": 0,
+  "owned_sockets_final": 0,
+  "owned_recorded_pids_absent": true,
+  "private_stage_three_files_restored": true,
+  "minimum_windows_free_bytes": 6399238144,
+  "cold_import_used": false,
+  "observed_place_sent": 0,
+  "reviewed_images": {
+    "arrival-review.png": {
+      "sha256": "0d51292f87ba98081b180f604ed433e3f10dde357f6814299425f326ecb916f0",
+      "reviewed": true
+    },
+    "native-pickup-candidate.png": {
+      "sha256": "6ac572211b2a8490fcef91fa23408fd61c538e1ee37a9bc350a5121888cce0b0",
+      "reviewed": true
+    },
+    "native-putdown-candidate.png": {
+      "sha256": "8242cca668d783b3cccaaf443e4889a12601c4ace25337550b0e620326d8b82a",
+      "reviewed": true
+    },
+    "focused-remote-carry.png": {
+      "sha256": "01c069304fd2ce8504bdc0ed833d57da903ed2dc60f826f6dcc0a87d6b1497d4",
+      "reviewed": true
+    },
+    "sharing-checkbox-focus.png": {
+      "sha256": "5bac68aea66c8f472f1f8dc2ba026dbb8acd1fba51f0848d1eff4b39396e4099",
+      "reviewed": true
+    },
+    "sharing-checkbox-off.png": {
+      "sha256": "721c86e72fb62f64f8db4bb4b9dd44220b0220b0bd6b7700312928eff9b3a358",
+      "reviewed": true
+    },
+    "window.png": {
+      "sha256": "afcc0f44bb2e73fb9d75347b71a8e6d878fee7bc2e43e9bde31c2fbd28251a9f",
+      "reviewed": true
+    }
+  },
+  "remote_place_local_repickup_tested": false,
+  "actual_pause_cutscene_tested": false,
+  "own_client_disconnect_tested": false,
+  "separate_full_clients_tested": false,
+  "campaign_readiness": false,
+  "overall_coop_acceptance": false,
+  "installed": false,
+  "published": false
+}
