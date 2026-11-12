@@ -1,0 +1,117 @@
+{
+  "passed": true,
+  "scope": "One Windows game with three scalar peers: native Gear pause, stop replay/resume to saved floor, fresh carry, then sharing-off while Gear-paused and resumed floor recovery. The exact between-tick race remains CPU-level evidence.",
+  "source_commit": "031d6e8d6a07f18584195a5e6586a7b58f3be2be",
+  "runtime_sha256": "4f3a88b6d54ef3f860d22a156eeb542ff03f1ec70c0b9da09aeef2e57ddf4cd1",
+  "engine_tree": "ed7f0b1e22b70cd4dc7c6bf7f295a930d0ea40b1",
+  "engine_patches": 32,
+  "native_actor_lifetime": {
+    "actor_token": 102693920,
+    "instance": 2076
+  },
+  "census_samples": 75,
+  "hall_unique_target_samples": 68,
+  "native_held_samples": 7,
+  "malformed_records_discarded": 1,
+  "native_pause_flags": [
+    1,
+    1,
+    1
+  ],
+  "native_pause_observations": 25,
+  "pause_snapshot_asserts_no_current_prop_census": true,
+  "first_resumed_floor": {
+    "frames": [
+      28141,
+      28441,
+      28741,
+      29041,
+      29341,
+      29641,
+      29941,
+      30241
+    ],
+    "maximum_floor_delta": 0.0
+  },
+  "second_resumed_floor": {
+    "frames": [
+      35341,
+      35641,
+      35941
+    ],
+    "maximum_floor_delta": 0.0
+  },
+  "sharing_off_while_native_paused": true,
+  "sharing_off_persisted": true,
+  "fresh_carry_after_resume": true,
+  "peer_ids_and_descriptor_generation_preserved": true,
+  "peer_poses_continued": true,
+  "exact_between_tick_race_observed": false,
+  "cutscene_room_death_tested": false,
+  "own_client_disconnect_tested": false,
+  "separate_full_clients_tested": false,
+  "campaign_readiness": false,
+  "overall_coop_acceptance": false,
+  "genuine_descriptors_captured": 739,
+  "replayed_descriptors": 2595,
+  "cold_import_used": false,
+  "observed_place_sent": 0,
+  "native_normal_exit": true,
+  "owned_children_final": 0,
+  "owned_sockets_final": 0,
+  "owned_recorded_pids_absent": true,
+  "private_stage_three_files_restored": true,
+  "minimum_windows_free_bytes": 6341406720,
+  "reviewed_images": {
+    "arrival-review.png": {
+      "sha256": "b4e58f67adf9412eedbff5215bd83105f3d7013f6f475f5105c505f3ec42a759",
+      "reviewed": true
+    },
+    "native-pickup-candidate.png": {
+      "sha256": "617d3e93a6196058dfd16d80c4d04b0dfa6d4437ca30844fa0cec6e7a9c94799",
+      "reviewed": true
+    },
+    "native-putdown-candidate.png": {
+      "sha256": "dd9ec830f77894c80044717d3811cd53f48888427dc3a2142da6bf19f97154bb",
+      "reviewed": true
+    },
+    "remote-carry.png": {
+      "sha256": "f674ffa3f8929afb77560dbb81c44e5b8e1197f2605dca053c41d4517d21a6a4",
+      "reviewed": true
+    },
+    "native-pause.png": {
+      "sha256": "54c9766ad5f81d7b3640a3c704db409be6aa810e0cfd3a1f76ccf8782d960c03",
+      "reviewed": true
+    },
+    "pause-resumed-floor.png": {
+      "sha256": "b9f5fdf5e9ff77df004ccc2b8d97ccdc29d5317d9699f5b044bd5509d0411f60",
+      "reviewed": true
+    },
+    "carry-after-resume.png": {
+      "sha256": "8aac98094fce05f09816cba69cb129356bb1d8623634245d2f2f92d580278ab6",
+      "reviewed": true
+    },
+    "native-pause-second.png": {
+      "sha256": "ce627d7bec6d4a43ffa66dc40fbadf81b4e6c3a26c048e7140f5d5de5f662872",
+      "reviewed": true
+    },
+    "paused-sharing-focus.png": {
+      "sha256": "180566bb1a576816b9e93f0e816d79a2b4be4ed46622465d6ccbe833560796d0",
+      "reviewed": true
+    },
+    "paused-sharing-off.png": {
+      "sha256": "e0b81768a421948a3209e9ec7c31a2b2fa7c3f4fa8fe8ba9b7e75ce394f9c6c7",
+      "reviewed": true
+    },
+    "paused-disable-resumed-floor.png": {
+      "sha256": "bef0d391c6d0e45889fd9306dd64658101a6530b5c8c9f446a6205e397f71f5b",
+      "reviewed": true
+    },
+    "window.png": {
+      "sha256": "454bb06cc2c528397baf2eb1dcbd5133e703895684e2650c31fac07c8c45b7e8",
+      "reviewed": true
+    }
+  },
+  "installed": false,
+  "published": false
+}

@@ -1,0 +1,93 @@
+{
+  "passed": true,
+  "scope": "One Windows game with three scalar peers: native own-client Disconnect while Gear-paused, then same-actor saved-floor recovery after native resume. Scalar peers close sockets and await the fresh final capture under an explicitly armed bounded fixture intent.",
+  "source_commit": "031d6e8d6a07f18584195a5e6586a7b58f3be2be",
+  "runtime_sha256": "4f3a88b6d54ef3f860d22a156eeb542ff03f1ec70c0b9da09aeef2e57ddf4cd1",
+  "engine_tree": "ed7f0b1e22b70cd4dc7c6bf7f295a930d0ea40b1",
+  "engine_patches": 32,
+  "peer_adapter_sha256": "f7630ff5f37118008352ac4763466031aa5c7bfdfb065e7a4d72030ee388003a",
+  "helper_sha256": "2b9a4a4d2a3cfa3a54d09a7a27485c2a2dfe622c6a62a9a9d5f425af1dc06e25",
+  "census_samples": 59,
+  "hall_unique_target_samples": 53,
+  "native_held_samples": 12,
+  "malformed_records_discarded": 0,
+  "native_actor_lifetime": {
+    "actor_token": 102693920,
+    "instance": 2074
+  },
+  "native_disconnect_ui_visually_verified": true,
+  "disconnected_while_native_paused": true,
+  "native_pause_flags": [
+    1,
+    1,
+    1
+  ],
+  "expected_eof_request": 33,
+  "expected_eof_seconds": 90,
+  "sockets_closed_before_final_capture": true,
+  "post_disconnect_native_frames": [
+    35281,
+    35581,
+    35881
+  ],
+  "maximum_floor_restore_delta_native_units": 0.0,
+  "unchanged_one_unit_tolerance_met": true,
+  "native_resumed": true,
+  "old_peer_pose_fields_after_eof_are_historical": true,
+  "genuine_descriptors_captured": 1360,
+  "replayed_descriptors": 4250,
+  "cold_import_used": false,
+  "observed_place_sent": 0,
+  "reviewed_images": {
+    "arrival-review.png": {
+      "sha256": "44bb1352f41a4c7ecc5c1666472ba42a9f5c608eedba74e3210d4f86d3c1bd61",
+      "reviewed": true
+    },
+    "native-pickup-candidate.png": {
+      "sha256": "4bf7bb4562168445583a437455dae53c0c2b118a7d5383545bc1219b06c458da",
+      "reviewed": true
+    },
+    "native-putdown-candidate.png": {
+      "sha256": "898bb6d78d6cf5295a1d1b66e18373afe77f3716afb1c7868c6917afad4c846a",
+      "reviewed": true
+    },
+    "remote-carry.png": {
+      "sha256": "49be974508edb25b83e736e14f019b9ca4f0e39af8e03c5921bb95b8014ce63b",
+      "reviewed": true
+    },
+    "native-pause.png": {
+      "sha256": "826441da8032b3e7fb58a24a3f1663c760aba86c9294b1ffd4546e7425d8429d",
+      "reviewed": true
+    },
+    "disconnect-focus.png": {
+      "sha256": "5ca6992866330be7fc5cbc9dcb51e6f83be52d272ccb754a8257f1aac2320343",
+      "reviewed": true
+    },
+    "disconnect-offline.png": {
+      "sha256": "fd60c33b09858a685f4fc84f53a41b0b66adfbd13bec32199ca7e7861dff12b6",
+      "reviewed": true
+    },
+    "disconnect-resumed-floor.png": {
+      "sha256": "d5ddb88b1ebf41acbb5af23326cc1a72fd096e6ab920178614d4466f3158816b",
+      "reviewed": true
+    },
+    "window.png": {
+      "sha256": "4e3b1296135c9d038700a617897744424079dc4469d074e2d4d0b33c7a24115d",
+      "reviewed": true
+    }
+  },
+  "native_normal_exit": true,
+  "owned_children_final": 0,
+  "owned_sockets_final": 0,
+  "owned_recorded_pids_absent": true,
+  "private_stage_four_files_restored": true,
+  "exclusive_helper_removed": true,
+  "minimum_windows_free_bytes": 11946721280,
+  "cutscene_room_death_tested": false,
+  "network_reconnect_tested": false,
+  "separate_full_clients_tested": false,
+  "campaign_readiness": false,
+  "overall_coop_acceptance": false,
+  "installed": false,
+  "published": false
+}

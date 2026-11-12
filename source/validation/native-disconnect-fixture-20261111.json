@@ -1,0 +1,19 @@
+{
+  "passed": true,
+  "contract_cases": 9,
+  "optimized_contract_cases": 9,
+  "actual_tcp_cases": 4,
+  "optimized_actual_tcp_cases": 4,
+  "real_tcp_connections_per_case": 3,
+  "source_sha256": {
+    "expected_disconnect.py": "2b9a4a4d2a3cfa3a54d09a7a27485c2a2dfe622c6a62a9a9d5f425af1dc06e25",
+    "test_expected_disconnect.py": "37a3bbb1fc55d958d50db465156e12c3feca1e84b4a945aa0768739efa1714c0",
+    "test_disconnect_adapter.py": "e777083ff3669c6efc8399b8aad0d13220c4ef2419b4d6dd2a225364c2029a27",
+    "disconnect-adapter/expected_disconnect.py": "2b9a4a4d2a3cfa3a54d09a7a27485c2a2dfe622c6a62a9a9d5f425af1dc06e25",
+    "disconnect-adapter/peer-adapter.py": "f7630ff5f37118008352ac4763466031aa5c7bfdfb065e7a4d72030ee388003a"
+  },
+  "compiler_launched": false,
+  "windows_child_launched": false,
+  "game_launched": false,
+  "gameplay_accepted": false
+}
