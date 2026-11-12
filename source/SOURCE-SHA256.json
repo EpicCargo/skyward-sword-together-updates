@@ -1,11 +1,11 @@
 {
   ".gitignore": "208125964c666dae7b7742d6ccf5f14c615d4629e589349a904ac5a7801b79b2",
   "CHANGES-2026-11-08.md": "6d1c8b97257b9b5007078a92a389d2e7f9537f3675c7711777462a6dcacb8a30",
-  "CHANGES-2026-11-11.md": "889f3ec653b25729cafaa2b0d3e5f9a2af392575f2fa87c8dae2e057a95ce615",
-  "COOP-REMAINING.md": "29c22533c0ab98ebc91c956d9cb530ecb24dbe6ab88781e7c450101343e28741",
+  "CHANGES-2026-11-11.md": "028957bbbebe8369c302b2beaf4a38e1f2ac1a8b8d1e4e24ab1cb70d3b17d23f",
+  "COOP-REMAINING.md": "d2f49048d3de06e0718c1a3e77731f17fc03abbe8cce1d965f0cb022dbaf5c68",
   "DEVELOPMENT-RESOURCE-POLICY.md": "84d169cce1770a5289ddf67da926cbbb99df5535211897ab25cfa28590a88145",
   "ENGINE-LICENSE": "82366d6b052c2608d7458b81a869249abed63932bd88fa03ca8f7a136f8602e3",
-  "README.md": "e8bae9afa90c9f866b6bbb3121b0f4093065d9041a32fd942f7678139028250d",
+  "README.md": "bbb93a6571ee0365ccb418709b7289dd1ddcda9d9dc6f9cbb286f290e370b9fd",
   "client/Makefile": "159a56bd89fc2b965bafade414ce6f1df9c7006c4f1f6964e32d434341bf75a3",
   "client/src/sst_animation.c": "94fd3e1703f99205624883bbb97964dcc4ed8dba73ef167b0bdbb527ae28f7e1",
   "client/src/sst_animation.h": "7e44e9235529fb4974a9c02084c0bedb8ea4613da52ba2a960965d9cc0b3ecf5",
@@ -580,6 +580,7 @@
   "validation/windows-gameplay.json": "16c1eb09ea1e16fafc52986c84bff409de6f0ff94a6c75ab07e31db88357071d",
   "validation/windows-runtime-ci-build-20261111.json": "0367d4365f5d6351b921fa2000ea760494c2457f68f250be21d298d34c1cbf81",
   "validation/windows-runtime-ci-inputs-20261111.json": "02a5dbe6a02c1aa3bc6c91a25d1a3bed20d09bd18b1367f4560b5da0a7067f04",
+  "validation/windows-runtime-execution-block-20261111.json": "6e4a23c690333a0a965117b91db82325d2c626908ac58602116438f022056476",
   "validation/windows-support-import-20261111.json": "9e84f94e863aef261e6f3e2dbd2c394482c66c8973eec8522e041aa1d87b3726",
   "validation/windows_telemetry.py": "b6ea9d3940ca8cc03c47ecb79b9e6dcf1391d3058f9eccbeef9c93ce3484f5cf"
 }

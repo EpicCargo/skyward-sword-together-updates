@@ -1,0 +1,32 @@
+{
+  "record_verified": true,
+  "scope": "Read-only confirmation of a Windows Smart App Control rejection before game child creation. This is not a runtime/gameplay pass.",
+  "source_commit": "6ff80f786f990d061c9ad08b12b8dd403b546943",
+  "engine_tree": "ed7f0b1e22b70cd4dc7c6bf7f295a930d0ea40b1",
+  "engine_patches": 32,
+  "runtime_sha256": "84c6cbbbbac16ae1e8ffb60f340d850f9065e1135a630fb5aa91b733b8464975",
+  "runtime_cross_build_passed": true,
+  "host_launch_succeeded": false,
+  "host_policy_block_confirmed": true,
+  "windows_code_integrity_events": [
+    {
+      "id": 3118,
+      "utc": "2026-11-12T04:06:04.2958637Z"
+    },
+    {
+      "id": 3077,
+      "utc": "2026-11-12T04:06:04.2958496Z"
+    }
+  ],
+  "game_child_launched": false,
+  "full_eight_phase_replay_reached": false,
+  "owned_children_final": 0,
+  "private_stage_three_files_restored": true,
+  "memory_stop": false,
+  "earlier_focused_native_results_retain_their_original_runtime_hashes": true,
+  "security_settings_changed": false,
+  "renamed_or_modified_retry_performed": false,
+  "new_portable_candidate_created": false,
+  "installed": false,
+  "release_feed_updated": false
+}
