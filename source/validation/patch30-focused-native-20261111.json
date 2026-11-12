@@ -1,0 +1,57 @@
+{
+  "overall_gameplay_acceptance": false,
+  "scope": "One native Windows game with three scalar peers; checkbox changed off but no post-toggle floor observation.",
+  "runtime_sha256": "3a40abc9848b24f3e5fc89b4c8fced2b5546b908ac579e96e2c2d1bf899937a8",
+  "engine_tree": "7112f66f7cf19b9afeec131568813cdd475ff6b6",
+  "completed_replay_phases": 1,
+  "full_eight_phase_replay": false,
+  "read_only_census_complete_samples": 40,
+  "stable_hall_samples": 33,
+  "hall_target_counts": [
+    1
+  ],
+  "actor_lifetimes": [
+    {
+      "actor_token": 102693920,
+      "instance": 2080
+    }
+  ],
+  "native_held_samples": 3,
+  "malformed_records_rejected": [],
+  "genuine_native_descriptors": 449,
+  "replayed_descriptors": 1034,
+  "cold_import_used": false,
+  "observed_place_sent": 0,
+  "reviewed_images": {
+    "genuine-pickup.png": {
+      "sha256": "132ca371c5c352ee9b3f01153b727dee086132968ba70b5b6a8ac1d1f3f8a0e3",
+      "review": "Visually reviewed native pickup/putdown and correct prompt."
+    },
+    "genuine-putdown.png": {
+      "sha256": "ba23128a15373e71d214d158b991942d6b97ebffa5dda220152f76a642c0616b",
+      "review": "Visually reviewed native pickup/putdown and correct prompt."
+    },
+    "focused-remote-carry.png": {
+      "sha256": "c293bcfdc2f4bdca446acf0f0c6933fee799a99a3e56a174d40bd85916f8c427",
+      "review": "Peer visibly carries the elevated pot while the local player is unheld."
+    },
+    "toggle-checkbox-focus.png": {
+      "sha256": "f729b6d6ee3b7e9dad0885c0b91367d1aa668656cb6ef264a4f67a4ff90e8a59",
+      "review": "Native Multiplayer menu focuses the checked Share carried pots and barrels checkbox before the scheduled Space input."
+    }
+  },
+  "ordinary_checkbox_input_scheduled_frame": 18301,
+  "final_sync_props_setting": 0,
+  "last_valid_census_preceding_frame": 18121,
+  "after_toggle_floor_observation": false,
+  "deactivation_floor_restoration_accepted": false,
+  "disconnect_tested": false,
+  "local_repickup_tested": false,
+  "stop_reason": "windows_memory_reserve",
+  "minimum_windows_free_bytes": 3175886848,
+  "reserve_mib": 3072,
+  "owned_children_final": 0,
+  "private_stage_three_files_restored": true,
+  "installed": false,
+  "published": false
+}

@@ -1,0 +1,17 @@
+{
+  "passed": true,
+  "scope": "Offline importer only; not a full build or game test.",
+  "regression_tests": 21,
+  "optimized_regression_tests": 21,
+  "real_cache_archive_sha256": "d7feb9fec93fc1bd4ead0a87fd8df2bccde3d85ebe64bb268d67f8d0f68f9e85",
+  "real_cache_verified_archive_members": 341,
+  "real_cache_support_files": 85,
+  "imported_files": 100,
+  "reused_files": 100,
+  "actual_fetcher_offline_reuse_passed": true,
+  "generated_prefix_imported": false,
+  "source_config_unchanged": true,
+  "network_used": false,
+  "compiler_launched": false,
+  "game_launched": false
+}

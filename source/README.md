@@ -17,7 +17,7 @@ Restoration tries the original upstream, then a public fork containing the exact
 
 `scripts/build-engine.sh` and `scripts/build-windows.py` provide guarded builds after their public prerequisites are installed. Windows compiler/support preparation is in `scripts/fetch-windows-compiler.py` and `scripts/fetch-windows-support.py`. Builds use one compiler and monitored memory reserves. See [development resource policy](DEVELOPMENT-RESOURCE-POLICY.md).
 
-The pinned upstream Windows support ZIP returned HTTP 404 during the latest continuation. Completed verified support caches remain reusable; fresh Windows prerequisite retrieval is an open blocker. The engine-source fallback above does not replace release DLLs or setup tools. See [remaining work](COOP-REMAINING.md).
+The pinned upstream Windows support ZIP returned HTTP 404 during the latest continuation. Completed verified support caches remain reusable. A new [offline cache importer](docs/windows-support-cache.md) restores a separately checksummed dependency backup into a matching checkout, verifies every archived file and preserves existing files. Its real-cache integration recovered all 85 support files without HTTP. Fresh prerequisite retrieval without such a backup remains an open blocker; the engine-source fallback above does not replace release DLLs or setup tools. See [remaining work](COOP-REMAINING.md).
 
 ## Tests and evidence
 

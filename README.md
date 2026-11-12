@@ -15,6 +15,7 @@ Patch30 addresses prop cleanup when disconnecting or disabling prop sync, includ
 - Reject incomplete, duplicate or mismatched portable runtime archives before activating a version.
 - Preserve existing Windows release manifests and leave no partial version after a failed copy.
 - Include the complete verified source inventory in default Windows source archives.
+- Restore a trusted Windows dependency-cache backup offline, with complete checksums and preservation of existing files.
 - Run native prop/carry/session, launcher/networking and relay checks automatically on GitHub.
 - Reject ambiguous prop discovery beyond the 32-object capacity, reuse retired binding slots immediately, and discard bindings when an actor's identity changes.
 - Check remote placement followed by a local pickup/putdown for both host and guest IDs, including delayed packets, floor restoration and a remote owner's departure.
