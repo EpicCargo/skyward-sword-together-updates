@@ -107,6 +107,7 @@ jobs:
           python3 -O -m unittest discover -s scripts/tests -p test_support_import.py -v
           python3 -O -m unittest discover -s tests -p test_observation_stream.py -v
           python3 -O -m unittest discover -s tests -p test_windows_telemetry.py -v
+          python3 -O -m unittest discover -s tests -p test_native_capture_gate.py -v
           python3 scripts/check-source-archive.py
       - name: Check the room relay
         run: node --experimental-loader ./server/rooms/test/cloudflare-loader.mjs --test server/rooms/test/worker.test.mjs

@@ -1,0 +1,24 @@
+{
+  "passed": true,
+  "scope": "File-only qualification for native pickup/putdown image candidates; prior recorded histories only, no new game acceptance.",
+  "regression_cases": 7,
+  "optimized_regression_cases": 7,
+  "accepted_native_history": {
+    "eligible": 97,
+    "native_held_samples": 3,
+    "pickup_ready": 3
+  },
+  "stopped_native_history": {
+    "eligible": 33,
+    "native_held_samples": 0,
+    "pickup_ready": 0
+  },
+  "stopped_dialog_attempt_cannot_emit_pickup_candidate": true,
+  "manual_image_review_still_required": true,
+  "future_controller_stops_blind_movement_at_arrival": true,
+  "new_controller_game_tested": false,
+  "compiler_launched": false,
+  "windows_process_launched": false,
+  "game_launched": false,
+  "gate_sha256": "a87601d2cdc08c98e4cb4333b5cd5b8f3126338a1ad819b57c85cad4c0f2329a"
+}
