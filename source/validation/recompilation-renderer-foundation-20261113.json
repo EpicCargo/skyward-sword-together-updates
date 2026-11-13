@@ -36,8 +36,15 @@
     "operand_boundary_cases": 12,
     "changed_runtime_objects_compiled": ["exec.c", "device.c", "shaders.c"]
   },
-  "engine_tree": "dec9431d196db828ead634e38ee93ac831197729",
-  "engine_patches": 39,
+  "manual_rebuild_recipe": {
+    "modules": ["main", "sdk", "subsdk0", "subsdk1"],
+    "bases": ["0x7000000000", "0x7030000000", "0x7032000000", "0x7034000000"],
+    "make_dry_run_commands": 4,
+    "build_tool_tests_passed": 3,
+    "generator_tests_passed": 6
+  },
+  "engine_tree": "30d7ec3069287eab3822b2cb7681510c7cbf2fb8",
+  "engine_patches": 40,
   "game_launched": false,
   "windows_hardware_tested": false,
   "wsl_visual_acceptance": false,

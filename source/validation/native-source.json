@@ -1,7 +1,7 @@
 {
   "base_commit": "506a9bc5aead5fc9598bb8f4a521f3b26f8897e8",
-  "engine_tree": "dec9431d196db828ead634e38ee93ac831197729",
-  "engine_patches": 39,
+  "engine_tree": "30d7ec3069287eab3822b2cb7681510c7cbf2fb8",
+  "engine_patches": 40,
   "native_file_sha256": {
     "client/Makefile": "c909d6794becd1904f63cb58d2fbbf47c5393a4624945bd25c3080cbb476e79c",
     "client/src/sst_animation.c": "94fd3e1703f99205624883bbb97964dcc4ed8dba73ef167b0bdbb527ae28f7e1",
@@ -264,7 +264,7 @@
     "build-runtime.py",
     "client-patches/0001-reclaim-retired-prop-tracks.patch"
   ],
-  "validation_scope": "Renderer foundation: private recompilation completeness audit and asset-free shader/runtime checks. Hosted runtime build, game visuals and native co-op gameplay are separate gates.",
+  "validation_scope": "Renderer foundation plus a complete four-module manual rebuild recipe: private recompilation completeness audit and asset-free shader/runtime/build-tool checks. Hosted runtime build, game visuals and native co-op gameplay are separate gates.",
   "previous_hardware_engine_tree": "687802ad93078709fb83d3b3a20d8ba015b39c35",
   "previous_hardware_runtime_sha256": "410753d9ca080f44dbc523c253fa99752b503aa71fedc5478dbda3b12900e0be",
   "previous_partial_engine_tree": "7112f66f7cf19b9afeec131568813cdd475ff6b6",
