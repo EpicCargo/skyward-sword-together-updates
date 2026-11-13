@@ -72,22 +72,28 @@ static bool get(unsigned key, SstProp *out) {
     SstProp p=prop(key,0,0,0); return sst_props_get(&props_bridge.state, &p.key, now_ms, out);
 }
 int main(void) {
-    arena=calloc(1,0x8000); assert(arena);
-    arena_lo=(uint64_t)(uintptr_t)arena; arena_hi=arena_lo+0x8000;
+    arena=calloc(1,0x10000); assert(arena);
+    arena_lo=(uint64_t)(uintptr_t)arena; arena_hi=arena_lo+0x10000;
     uint64_t player=arena_lo+0x1000, vase=arena_lo+0x4000;
     put16(player+0x10,0xc8); arena[player-arena_lo+0x12]=1;
     put64(player+0x18+0x20,player); put64(player+0x18+8,vase+0x18);
-    put64(vase+0x18,player+0x18); put64(vase+0x18+0x20,vase);
-    put64(vase,SST_PROP_TUBO_VTABLE); w32(vase+8,42); w32(vase+0xc,0xfffffff0);
-    put16(vase+0x10,SST_PROP_PROFILE); arena[vase-arena_lo+0x12]=1;
-    put16(vase+0x136,9); arena[vase-arena_lo+0x17c]=area.room;
+    // All four keys whose ownership/watermarks are checked below must have
+    // actual eligible native actors. Absent keys belong to admission tests.
+    for(unsigned i=0;i<4;i++) {
+        uint64_t a=vase+(uint64_t)i*0x2000;
+        put64(a+0x18,player+0x18);put64(a+0x38,a);
+        put64(a+0x30,i<3?a+0x2000+0x18:0);
+        put64(a,SST_PROP_TUBO_VTABLE);w32(a+8,42+i);w32(a+0xc,0xfffffff0);
+        put16(a+0x10,SST_PROP_PROFILE);arena[a-arena_lo+0x12]=1;
+        put16(a+0x136,(uint16_t)(9+i));arena[a-arena_lo+0x17c]=area.room;
+    }
     SstLocal local={.valid=true, .scene=area, .player_address=player, .player_instance=1};
     for (unsigned i=0;i<3;i++) current[i]=(SstPlayer){.active=true, .id=(uint16_t)(i+2),
         .presence_generation=i+7, .scene=area};
     current_count=3;
     for (unsigned i=0;i<3;i++) enqueue(prop(9+i,current[i].id,current[i].presence_generation,1));
     tick(local,1);
-    assert(props_bridge.enabled && sst_prop_discovery_stats.last_nodes==2 && sst_prop_discovery_stats.last_bindings==1);
+    assert(props_bridge.enabled && sst_prop_discovery_stats.last_nodes==5 && sst_prop_discovery_stats.last_bindings==4);
     SstProp out;
     assert(get(9,&out) && out.from==2);
     SstProp own=prop(12,1,1,1);

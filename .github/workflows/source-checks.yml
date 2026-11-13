@@ -63,6 +63,7 @@ jobs:
           python3 validation/check_pause_baseline.py
           python3 validation/check_scene_baseline.py
           python3 validation/check_discovery_baseline.py
+          python3 validation/check_admission_baseline.py
           flags=(-O1 -g -Wall -Wextra -std=c11 -D_GNU_SOURCE
             -fsanitize=address,undefined -fno-omit-frame-pointer)
           clang "${flags[@]}" -Wno-unused-function -ffunction-sections -fdata-sections \
@@ -100,6 +101,11 @@ jobs:
             client/src/sst_props.c client/src/sst_world.c -lpthread -lm \
             -o build/source-checks/prop-discovery-loss
           for mode in {1..14}; do build/source-checks/prop-discovery-loss "$mode"; done
+          clang "${flags[@]}" -Wno-unused-function -ffunction-sections -fdata-sections \
+            -Wl,--gc-sections -I engine/runtime tests/prop_bridge_admission_test.c \
+            client/src/sst_props.c client/src/sst_world.c -lpthread -lm \
+            -o build/source-checks/prop-admission
+          for mode in {1..12}; do build/source-checks/prop-admission "$mode"; done
           clang "${flags[@]}" -Wno-unused-function -ffunction-sections -fdata-sections \
             -Wl,--gc-sections -I engine/runtime tests/prop_bridge_binding_test.c \
             client/src/sst_props.c client/src/sst_world.c -lpthread -lm \

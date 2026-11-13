@@ -1,0 +1,111 @@
+From c06f85f550ba85eba582b80fac91fbd4a8e855d3 Mon Sep 17 00:00:00 2001
+From: EpicCargo <149317426+EpicCargo@users.noreply.github.com>
+Date: Thu, 12 Nov 2026 19:54:33 -0500
+Subject: [PATCH] Admit remote props only for current native actor lifetimes
+
+---
+ runtime/hle/sst_prop_bridge.h | 46 +++++++++++++++++++++++++++--------
+ 1 file changed, 36 insertions(+), 10 deletions(-)
+
+diff --git a/runtime/hle/sst_prop_bridge.h b/runtime/hle/sst_prop_bridge.h
+index 18f350b..97970a4 100644
+--- a/runtime/hle/sst_prop_bridge.h
++++ b/runtime/hle/sst_prop_bridge.h
+@@ -6,7 +6,7 @@
+ #include "../sst/sst_remote.h"
+ 
+ typedef struct {
+-    uint64_t actor, sent_at, settle_until;
++    uint64_t actor, sent_at, settle_until, admit_after;
+     uint32_t instance, applied_sequence, applied_generation;
+     uint16_t applied_owner;
+     SstPropKey key;
+@@ -15,7 +15,7 @@ typedef struct {
+ } PropBinding;
+ static struct {
+     pthread_mutex_t mu;
+-    bool enabled;
++    bool enabled, discovered;
+     uint64_t player, place_at;
+     unsigned place_cursor;
+     uint32_t load, generation, sequence;
+@@ -36,7 +36,7 @@ static void prop_clear(void) {
+     // Old heap bytes are not proof that a previous actor still lives. Only an
+     // executing exact actor callback may release native velocity.
+     memset(props_bridge.bindings, 0, sizeof props_bridge.bindings);
+-    sst_props_reset(&props_bridge.state); props_bridge.enabled = false;
++    sst_props_reset(&props_bridge.state); props_bridge.enabled = props_bridge.discovered = false;
+ }
+ 
+ static void prop_suspend(void) {
+@@ -126,7 +126,15 @@ static bool prop_discover(uint64_t player, const SstScene *scene) {
+             b->instance==context.live[j].instance && sst_prop_key_equal(&b->key,&context.live[j].key)) {
+             b->seen=true;break;
+         }
+-        if(!b->seen)memset(b,0,sizeof *b);
++        if(!b->seen) {
++            // A static placement key can outlive a local native actor. End its
++            // accepted transform while retaining current senders' watermarks.
++            if(b->actor)for(unsigned j=0;j<SST_PROPS;j++) {
++                SstPropTrack *track=&props_bridge.state.props[j];
++                if(track->used && sst_prop_key_equal(&track->target.key,&b->key))track->has_target=false;
++            }
++            memset(b,0,sizeof *b);
++        }
+     }
+     for(unsigned i=0;i<context.count;i++) {
+         bool bound=false;
+@@ -137,8 +145,19 @@ static bool prop_discover(uint64_t player, const SstScene *scene) {
+         for(unsigned j=0;j<SST_PROPS;j++)if(!props_bridge.bindings[j].actor){b=&props_bridge.bindings[j];break;}
+         if(!b)goto failed;
+         *b=(PropBinding){.actor=context.live[i].actor,.instance=context.live[i].instance,
+-            .key=context.live[i].key,.seen=true};
++            .key=context.live[i].key,.seen=true,
++            .admit_after=props_bridge.discovered?sst_now_ms():0};
++    }
++    // Unbound and retired keys must not consume the same bounded capacity used
++    // by the current native set. The complete successful walk is authoritative.
++    for(unsigned i=0;i<SST_PROPS;i++) {
++        SstPropTrack *track=&props_bridge.state.props[i];
++        if(!track->used)continue;
++        bool live=false;
++        for(unsigned j=0;j<context.count;j++)if(sst_prop_key_equal(&track->target.key,&context.live[j].key)){live=true;break;}
++        if(!live)memset(track,0,sizeof *track);
+     }
++    props_bridge.discovered=true;
+     sst_prop_discovery_stats.last_bindings=context.count;
+     return true;
+ failed:
+@@ -149,13 +168,20 @@ failed:
+ 
+ static void prop_incoming(const SstProp *p, void *unused) {
+     (void)unused;
+-    if (!props_bridge.enabled || !sst_props_update(&props_bridge.state, p->from,
+-            p->presence_generation, p, sst_now_ms())) return;
+-    sst_prop_presentation_stats.received++;
++    if (!p || !props_bridge.enabled) return;
++    PropBinding *binding=NULL;
+     for (unsigned i = 0; i < SST_PROPS; i++) {
+         PropBinding *b = &props_bridge.bindings[i];
+-        if (sst_prop_key_equal(&b->key, &p->key)) b->local_placed = false;
++        if (b->seen && sst_prop_key_equal(&b->key, &p->key) && prop_binding(b->actor)==b) { binding=b; break; }
+     }
++    if(!binding)return;
++    uint64_t now=sst_now_ms(),arrival=p->received_ms?p->received_ms:now;
++    // Conservatively reject a queued packet from before this replacement,
++    // including the same clock millisecond. Initial discovery has no fence.
++    if(binding->admit_after && arrival<=binding->admit_after)return;
++    if(!sst_props_update(&props_bridge.state,p->from,p->presence_generation,p,now))return;
++    sst_prop_presentation_stats.received++;
++    binding->local_placed=false;
+ }
+ 
+ static void prop_tick(SstLocal l, uint32_t load, bool allowed, bool pause) {
+@@ -393,6 +419,6 @@ RT_ON_RESET(sst_prop_bridge_reset) {
+     memset(&sst_prop_discovery_stats,0,sizeof sst_prop_discovery_stats);
+     // All guest threads stopped; guest memory is about to be discarded.
+     memset(props_bridge.bindings, 0, sizeof props_bridge.bindings);
+-    sst_props_reset(&props_bridge.state); props_bridge.enabled = false;
++    sst_props_reset(&props_bridge.state); props_bridge.enabled = props_bridge.discovered = false;
+     props_bridge.player = 0; props_bridge.load = props_bridge.generation = 0;
+ }

@@ -1,7 +1,7 @@
 {
   "base_commit": "506a9bc5aead5fc9598bb8f4a521f3b26f8897e8",
-  "engine_tree": "54794eeb92edc09b609e1f20d4d59b396dd6ff2a",
-  "engine_patches": 33,
+  "engine_tree": "45b8f354ff88318a233c2e5155f155318f4e6e08",
+  "engine_patches": 34,
   "native_file_sha256": {
     "client/Makefile": "c909d6794becd1904f63cb58d2fbbf47c5393a4624945bd25c3080cbb476e79c",
     "client/src/sst_animation.c": "94fd3e1703f99205624883bbb97964dcc4ed8dba73ef167b0bdbb527ae28f7e1",
@@ -170,7 +170,7 @@
     "engine/runtime/hle/sst_dev.c": "5560369f4b29f1aa81cc376e9497c6a4df23cb6e87165db345f2765ac9c81414",
     "engine/runtime/hle/sst_dev.h": "90c719f26f9466c4e0f8c39308caba7729f4239ba5326565da0dc99d6588c948",
     "engine/runtime/hle/sst_pickup_bridge.h": "9a4eb3b02fd24279195906b2b98ee3ecee9abccbea7c7183d5621bacecf88c6b",
-    "engine/runtime/hle/sst_prop_bridge.h": "148bc6c90fd29c18b7ec53bb66637e6715400d5756b20940f2b7ed1969085f80",
+    "engine/runtime/hle/sst_prop_bridge.h": "306cfff017e1bd649a8cfa79eb37ba409179474846599057674346f60600ee18",
     "engine/runtime/hle/sst_prop_native.h": "3dc48fd44941c2fd1e4a452b7883ce2d321d298b53e98037ce4c56753bdbb200",
     "engine/runtime/hle/sst_prop_rest.h": "8ad670ae59d89d583fb23544aadbdb999398fe346b42e1c5bada33735109a975",
     "engine/runtime/hle/sst_prop_walk.h": "092ad1e499eaeaf16e66dcb2cc3eda6c72af720082e7f1c1694bea8bc4170a03",
@@ -247,7 +247,7 @@
     "engine/runtime/ui/warp_data.h": "5ec5a54fe4e1b56590d9aa56070771dc47d91f4a0da0a4e103380ed4d52b3d9f",
     "server/relay.js": "45b9c6970583d2f56b41d2d62d74d80f89a3a62c669c0dbf9a59b4859b26cf72",
     "server/reward-catalogue.json": "1c15b806d7fdf86710291a36f84d27b8ae06e7ad3eb48ff80f931c8122e6afd1",
-    "tests/prop_bridge_roster_test.c": "8bf4ad3d7212a02460f65291b1da54df302d01394573b1e550865fcc6e0ecbc6",
+    "tests/prop_bridge_roster_test.c": "920f69e8acd0e58bfbb031f638fb964fbce0b1a77070b2bfd984ffca64ed0028",
     "third_party/coop-anything-chaos/LICENSE": "62567d1cba1c47b7ce9455dbe028342b15a363f21482658b76744fed49968381",
     "third_party/coop-anything-chaos/README.md": "52d98656030b3397fab22b8e1dc6881206c4403cf38e471b3f0b1dc80dfc2171",
     "third_party/coop-anything-chaos/UPSTREAM.json": "f1236f3873cff7bc7d36d53bdedebdc21c21cd701403d48c8a07be7be2df3888",
@@ -263,11 +263,11 @@
     "build-runtime.py",
     "client-patches/0001-reclaim-retired-prop-tracks.patch"
   ],
-  "validation_scope": "Remote scene incarnation and discovery-loss source candidates passed hosted exact-baseline, CPU/TCP and Windows cross-build checks. Native gameplay for these changes remains pending.",
+  "validation_scope": "Native key/lifetime admission passed72 local CPU cases,42 exact patch33 baseline failures/30 controls,600000 full-table replacements and prior lifecycle regressions. Hosted validation and native gameplay remain separate gates.",
   "previous_hardware_engine_tree": "687802ad93078709fb83d3b3a20d8ba015b39c35",
   "previous_hardware_runtime_sha256": "410753d9ca080f44dbc523c253fa99752b503aa71fedc5478dbda3b12900e0be",
   "previous_partial_engine_tree": "7112f66f7cf19b9afeec131568813cdd475ff6b6",
   "previous_partial_runtime_sha256": "3a40abc9848b24f3e5fc89b4c8fced2b5546b908ac579e96e2c2d1bf899937a8",
-  "previous_cpu_engine_tree": "ed7f0b1e22b70cd4dc7c6bf7f295a930d0ea40b1",
+  "previous_cpu_engine_tree": "54794eeb92edc09b609e1f20d4d59b396dd6ff2a",
   "previous_focused_native_runtime_sha256": "4f3a88b6d54ef3f860d22a156eeb542ff03f1ec70c0b9da09aeef2e57ddf4cd1"
 }
