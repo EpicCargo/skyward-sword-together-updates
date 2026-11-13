@@ -1,7 +1,7 @@
 {
   "base_commit": "506a9bc5aead5fc9598bb8f4a521f3b26f8897e8",
-  "engine_tree": "9aace6c2fd2b941c8c4945e468939680049ab91c",
-  "engine_patches": 41,
+  "engine_tree": "afc6c5f74a29d03bbea1193b669836f665cb9eb5",
+  "engine_patches": 42,
   "native_file_sha256": {
     "client/Makefile": "c909d6794becd1904f63cb58d2fbbf47c5393a4624945bd25c3080cbb476e79c",
     "client/src/sst_animation.c": "94fd3e1703f99205624883bbb97964dcc4ed8dba73ef167b0bdbb527ae28f7e1",
@@ -210,7 +210,8 @@
     "engine/runtime/nvn/tegra.h": "8de2762df66811f8cd27a5a72db5bc88d60e2866217fbef71ab2d84477c4487f",
     "engine/runtime/nvn/texpatch.c": "860ca410216048725151e7f63da8e1881db8c013b588beb70f1e9d13d17a9bd2",
     "engine/runtime/nvn/texpatch.h": "7747d5ff2f8fe5f311ebdde7cd2c034de77a69ff69303bfccca9909d2f726c70",
-    "engine/runtime/nvn/vulkan/device.c": "528d655b60e97bfee47fae4e99b3b63a0a91025c0915b2b9076945936218c61f",
+    "engine/runtime/nvn/vulkan/device.c": "54dc05e435c67187a93a28fee6b7820a758983986b86eedc27f00bf2c49f87c9",
+    "engine/runtime/nvn/vulkan/device_select.h": "b32236c719b811b8fe46a8ce5d615d98989481600b39b7e3ce274cab4e795cb2",
     "engine/runtime/nvn/vulkan/exec.c": "0f624f1c211bbd799a223d17e6b4bb6ec2b485a7dd90d254521da58847cac427",
     "engine/runtime/nvn/vulkan/guest_memory.h": "ab602110f2e1479666f404d4a21e706145a6a1229dcd41258ad43d6f38298341",
     "engine/runtime/nvn/vulkan/shaders.c": "13952ba8c1ba2576db3a5234da44a50f08250c8280af95a87fe6efeee94c074e",
@@ -264,7 +265,7 @@
     "build-runtime.py",
     "client-patches/0001-reclaim-retired-prop-tracks.patch"
   ],
-  "validation_scope": "Renderer foundation plus complete four-module manual rebuild and crash-symbolizer maps: private recompilation completeness audit and asset-free shader/runtime/build-tool checks. Hosted runtime build, game visuals and native co-op gameplay are separate gates.",
+  "validation_scope": "Renderer foundation, Vulkan adapter preflight and complete four-module manual rebuild/crash-symbolizer maps: private recompilation completeness audit and asset-free shader/runtime/build-tool checks. Hosted runtime build, game visuals and native co-op gameplay are separate gates.",
   "previous_hardware_engine_tree": "687802ad93078709fb83d3b3a20d8ba015b39c35",
   "previous_hardware_runtime_sha256": "410753d9ca080f44dbc523c253fa99752b503aa71fedc5478dbda3b12900e0be",
   "previous_partial_engine_tree": "7112f66f7cf19b9afeec131568813cdd475ff6b6",

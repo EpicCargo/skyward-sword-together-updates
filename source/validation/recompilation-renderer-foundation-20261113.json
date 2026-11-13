@@ -44,8 +44,15 @@
     "symbolizer_modules": ["main", "sdk", "subsdk0", "subsdk1"],
     "generator_tests_passed": 6
   },
-  "engine_tree": "9aace6c2fd2b941c8c4945e468939680049ab91c",
-  "engine_patches": 41,
+  "vulkan_device_selection": {
+    "selection_cases": 8,
+    "buffer_device_address_required": true,
+    "graphics_compute_present_queue_required": true,
+    "changed_device_source_compiled": true,
+    "logical_device_created": false
+  },
+  "engine_tree": "afc6c5f74a29d03bbea1193b669836f665cb9eb5",
+  "engine_patches": 42,
   "game_launched": false,
   "windows_hardware_tested": false,
   "wsl_visual_acceptance": false,

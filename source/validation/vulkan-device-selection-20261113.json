@@ -1,0 +1,21 @@
+{
+  "date": "2026-11-13",
+  "passed": true,
+  "scope": "Asset-free Vulkan adapter selection and read-only WSL capability checks; no logical device, window or game launch.",
+  "selection_cases": 8,
+  "selection_sanitizers": ["address", "undefined"],
+  "changed_device_source_compiled": true,
+  "compile_peak_rss_mib": 119.2,
+  "wsl_probe": {
+    "device": "llvmpipe (LLVM 20.1.2, 256 bits)",
+    "api_version": "1.4.318",
+    "buffer_device_address": true,
+    "max_storage_buffer_range": 134217728
+  },
+  "engine_tree": "afc6c5f74a29d03bbea1193b669836f665cb9eb5",
+  "engine_patches": 42,
+  "logical_device_created": false,
+  "window_created": false,
+  "game_launched": false,
+  "wsl_visual_acceptance": false
+}
