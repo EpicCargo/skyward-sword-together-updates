@@ -1,0 +1,25 @@
+From 45ae03ea9f7ddba8492c0885ab17ff2cb05a22fb Mon Sep 17 00:00:00 2001
+From: EpicCargo <149317426+EpicCargo@users.noreply.github.com>
+Date: Thu, 12 Nov 2026 20:39:32 -0500
+Subject: [PATCH] Retire stale prop sessions in the executing actor callback
+
+---
+ runtime/hle/sst_prop_bridge.h | 5 ++++-
+ 1 file changed, 4 insertions(+), 1 deletion(-)
+
+diff --git a/runtime/hle/sst_prop_bridge.h b/runtime/hle/sst_prop_bridge.h
+index 97970a4..3ade974 100644
+--- a/runtime/hle/sst_prop_bridge.h
++++ b/runtime/hle/sst_prop_bridge.h
+@@ -303,7 +303,10 @@ static void prop_execute(Cpu *c, GuestFn original) {
+     pthread_mutex_lock(&props_bridge.mu);
+     // Deactivation can follow a pause, which already cleared enabled.
+     // Settings/connection changes still owe outstanding native floor cleanup.
+-    if (!g_sst.sync_props || sst_net_status(NULL, 0) != SST_ONLINE)
++    // A successful reconnect can also precede the next periodic world tick.
++    // Retire the old session before this actor can use its packet authority.
++    if (!g_sst.sync_props || sst_net_status(NULL, 0) != SST_ONLINE ||
++        sst_net_generation() != props_bridge.generation)
+         prop_suspend();
+     PropBinding *b = prop_binding(actor);
+     if (b && b->restore_pending) {
