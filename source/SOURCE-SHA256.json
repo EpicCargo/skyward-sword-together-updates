@@ -3,11 +3,11 @@
   "CHANGES-2026-11-08.md": "6d1c8b97257b9b5007078a92a389d2e7f9537f3675c7711777462a6dcacb8a30",
   "CHANGES-2026-11-11.md": "028957bbbebe8369c302b2beaf4a38e1f2ac1a8b8d1e4e24ab1cb70d3b17d23f",
   "CHANGES-2026-11-12.md": "a3242c14829e6eff4cc2e3a1d834446e90e772f9ae6aab7593f20542534f6006",
-  "CHANGES-2026-11-13.md": "15eddc44446dd1f35bff4371482033d6a85f860b5731f63a9aa142518c204aa7",
-  "COOP-REMAINING.md": "2d982c82a7e7ad2bcfb192fa684a6cf3a0cf15158194089f5ec7c6641bd18d92",
+  "CHANGES-2026-11-13.md": "78b2978957d745311c247d1468bb15d28b7366591a1a3116d1f2619433b3fe42",
+  "COOP-REMAINING.md": "3e856eb3d6e8a74e423abf39bdeebc1d694e02e1827c4e1e334ae43e561bd433",
   "DEVELOPMENT-RESOURCE-POLICY.md": "84d169cce1770a5289ddf67da926cbbb99df5535211897ab25cfa28590a88145",
   "ENGINE-LICENSE": "82366d6b052c2608d7458b81a869249abed63932bd88fa03ca8f7a136f8602e3",
-  "README.md": "de3aa05797c097d94509bc7ee7ede4762b17fdc6058c049cb367c722639fe7de",
+  "README.md": "9123f976bc6a33149dcb2d4dd1dc13744eb2c3b0bb7252a526892ea2cbd894f1",
   "client/Makefile": "c909d6794becd1904f63cb58d2fbbf47c5393a4624945bd25c3080cbb476e79c",
   "client/src/sst_animation.c": "94fd3e1703f99205624883bbb97964dcc4ed8dba73ef167b0bdbb527ae28f7e1",
   "client/src/sst_animation.h": "7e44e9235529fb4974a9c02084c0bedb8ea4613da52ba2a960965d9cc0b3ecf5",
@@ -592,7 +592,7 @@
   "validation/native-admission-20261112.json": "6c5f4a80699a0171055043c07577ab9795ebae8d597b098a76c674b6fbd6a2cb",
   "validation/native-capture-gate-20261111.json": "07069f042aaa57d043f7b8e3bee55c94c715a4875bf2237efc885ea2ccfcefd8",
   "validation/native-disconnect-fixture-20261111.json": "112addfe05cc4fdf63f7e1c6cc2fc4fc3bbbe5ebb1a1e71cff8a91eacc674b0b",
-  "validation/native-source.json": "081a4e8c61465d8d4494956e80921341d18fe4e2a2271854fff4fa65f6b25d60",
+  "validation/native-source.json": "bda848e9e580231c9c7ab3fee003becce1e21f3652e3190143adceb9b3954d54",
   "validation/native_capture_gate.py": "a87601d2cdc08c98e4cb4333b5cd5b8f3126338a1ad819b57c85cad4c0f2329a",
   "validation/observation_stream.py": "0cb8fd8d7910269f534a6d2ee41a7983a78d4a5d5bf1d0f54b8f0f624b8c7454",
   "validation/owned_prop_census.h": "4bd64517448a1c071ef91843d87193d7fe086bf9a54a4a869b09166aca24455a",
@@ -622,5 +622,7 @@
   "validation/windows_telemetry.py": "b6ea9d3940ca8cc03c47ecb79b9e6dcf1391d3058f9eccbeef9c93ce3484f5cf",
   "docs/vulkan-guest-memory-test.md": "3e02007effd28a080600700fa07de54ec10cf7faba623e5beeb2649ccbe4c21c",
   "tests/vulkan_guest_memory_test.c": "08e343b44fba6b9604f76f2a837dbbc68918a8a2d6b791f980c279512dda77bb",
-  "validation/vulkan-guest-memory-readback-20261113.json": "bb0027479dbfc530a00fdbc29827d3e2b92d58ccaebb223443bd2e0d16b091cf"
+  "validation/vulkan-guest-memory-readback-20261113.json": "bb0027479dbfc530a00fdbc29827d3e2b92d58ccaebb223443bd2e0d16b091cf",
+  "engine-patches/0043-initialize-dynamic-stencil-state.patch": "fc7f60bb9224341ee089d7c2be7e981b605cb9be25d0ec4f221f0b8fda097e5e",
+  "validation/wsl-visual-stencil-20261113.json": "2a6be75787058f607e8b9e0f66d0b1fd83a3c38146d23a789b5ef75ee9cc4224"
 }

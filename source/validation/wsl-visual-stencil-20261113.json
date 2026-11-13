@@ -1,0 +1,21 @@
+{
+  "date": "2026-11-13",
+  "baseline_engine_patches": 42,
+  "baseline_runtime_sha256": "2e3c533a386609c7f3bc29ec8a1c154f985b965903dc7ba71c5982640be5b96e",
+  "baseline_native_runs": 2,
+  "frames_per_run": 1200,
+  "baseline_process_exit_passed": true,
+  "baseline_visual_acceptance": false,
+  "baseline_visual_observation": "Missing title UI and incomplete scenery remain in reviewed screenshots.",
+  "baseline_logged_stencil_errors": 500,
+  "baseline_validation_log_capped": true,
+  "validation_id": "VUID-vkCmdDrawIndexed-None-07848",
+  "fix": "Initialize dynamic per-face stencil operations and masks on disabled-stencil draws as well as enabled draws.",
+  "changed_actual_source_compiled": true,
+  "compile_peak_rss_mib": 148.8,
+  "engine_tree": "80d699a4c81035f6c5be4753d7e14cef2cece91b",
+  "engine_patches": 43,
+  "post_fix_native_game_tested": false,
+  "visual_acceptance": false,
+  "private_game_files_published": false
+}

@@ -1,0 +1,24 @@
+From a13730151723c451834c61124cba13621ac29b62 Mon Sep 17 00:00:00 2001
+From: SST continuation <sst-continuation@localhost>
+Date: Fri, 13 Nov 2026 18:18:28 -0500
+Subject: [PATCH] Initialize dynamic stencil state for every draw
+
+---
+ runtime/nvn/vulkan/exec.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/runtime/nvn/vulkan/exec.c b/runtime/nvn/vulkan/exec.c
+index 2df7d19..62e30a1 100644
+--- a/runtime/nvn/vulkan/exec.c
++++ b/runtime/nvn/vulkan/exec.c
+@@ -2967,7 +2967,7 @@ static void draw_(CmdRec *r, bool indexed,SstOriginMarker origin) {
+     if (ss_need(SS_DOP, ss.dop == dop)) { ss.dop = dop; vkCmdSetDepthCompareOp(cb, dop); }
+     bool sten = st.ds[3] && pass_stencil;
+     if (ss_need(SS_STEN, ss.sten == (VkBool32)sten)) { ss.sten = sten; vkCmdSetStencilTestEnable(cb, sten); }
+-    if (sten) {
++    {  // The pipeline declares dynamic stencil state even when this draw disables its stencil test.
+         uint32_t ops = st.ds[5] | st.ds[6] << 8 | st.ds[7] << 16;
+         for (int f = 0; f < 2; f++) {
+             uint32_t o = f ? ops >> 12 : ops;
+-- 
+2.43.0
