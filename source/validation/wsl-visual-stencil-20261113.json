@@ -15,7 +15,10 @@
   "compile_peak_rss_mib": 148.8,
   "engine_tree": "80d699a4c81035f6c5be4753d7e14cef2cece91b",
   "engine_patches": 43,
-  "post_fix_native_game_tested": false,
+  "post_fix_native_game_tested": true,
+  "post_fix_runtime_sha256": "07a3f5436d6a30f394e67e347fa7ecd08a40b3640ba6d676228ec3e7a8522076",
+  "post_fix_logged_stencil_errors": 0,
+  "post_fix_diagnostic_readback_errors": 1,
   "visual_acceptance": false,
   "private_game_files_published": false
 }

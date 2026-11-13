@@ -1,0 +1,25 @@
+From 82666ecf1b4b622689c2690adec54902a507b98d Mon Sep 17 00:00:00 2001
+From: SST continuation <sst-continuation@localhost>
+Date: Fri, 13 Nov 2026 18:44:07 -0500
+Subject: [PATCH 44/45] Allow depth snapshot diagnostic readback
+
+---
+ runtime/nvn/vulkan/exec.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/runtime/nvn/vulkan/exec.c b/runtime/nvn/vulkan/exec.c
+index 62e30a1..1414616 100644
+--- a/runtime/nvn/vulkan/exec.c
++++ b/runtime/nvn/vulkan/exec.c
+@@ -1717,7 +1717,7 @@ static TexBackend *snapshot_image(NvnTexture *t, TexBackend *src) {
+         VkImageCreateInfo ci = {.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO, .imageType = VK_IMAGE_TYPE_2D, .format = src->format,
+                                 .extent = {src->width, src->height, 1}, .mipLevels = 1, .arrayLayers = 1,
+                                 .samples = (VkSampleCountFlagBits)src->samples, .tiling = VK_IMAGE_TILING_OPTIMAL,
+-                                .usage = VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT};
++                                .usage = VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT};
+         VmaAllocationCreateInfo ai = {.usage = VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE};
+         VkResult vr = vmaCreateImage(g_vk.vma, &ci, &ai, &d->image, &d->mem, NULL);
+         if (vr != VK_SUCCESS) {
+-- 
+2.43.0
+

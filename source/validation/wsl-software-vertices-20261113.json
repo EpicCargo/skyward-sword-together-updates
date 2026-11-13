@@ -1,0 +1,73 @@
+{
+  "date": "2026-11-13",
+  "scope": "WSL llvmpipe title/file-selection rendering only",
+  "passed": true,
+  "engine_tree": "1e016acda509bec379f6b51db54a8f0524c3b119",
+  "engine_patches": 45,
+  "runs": [
+    {
+      "run": "20261113T234158",
+      "patches": 43,
+      "runtime_sha256": "07a3f5436d6a30f394e67e347fa7ecd08a40b3640ba6d676228ec3e7a8522076",
+      "frames": 1200,
+      "copy_override": false,
+      "cache_disabled": false,
+      "validation_errors": 1,
+      "validation_warnings": 0,
+      "process_exit_passed": true,
+      "owned_games_remaining": 0,
+      "screenshot_sha256": "06171b3b8151c800ff554613866cec2ded1760a0b99002f344c93cec40a87c3f"
+    },
+    {
+      "run": "20261113T234322",
+      "patches": 43,
+      "runtime_sha256": "07a3f5436d6a30f394e67e347fa7ecd08a40b3640ba6d676228ec3e7a8522076",
+      "frames": 1200,
+      "copy_override": true,
+      "cache_disabled": false,
+      "validation_errors": 1,
+      "validation_warnings": 0,
+      "process_exit_passed": true,
+      "owned_games_remaining": 0,
+      "screenshot_sha256": "bb715bff599e45ce783970db840f6c8419410e92e7f66a2f8451088b524b7278"
+    },
+    {
+      "run": "20261113T234518",
+      "patches": 44,
+      "runtime_sha256": "95ee017d11b7ddee996108457c9085b982684db808e3337e19ee1cacd8907560",
+      "frames": 1200,
+      "copy_override": false,
+      "cache_disabled": true,
+      "validation_errors": 0,
+      "validation_warnings": 0,
+      "process_exit_passed": true,
+      "owned_games_remaining": 0,
+      "screenshot_sha256": "078eff9531c294974e30fbec43b42d5a6998cc45063079068e64f45744cde147"
+    },
+    {
+      "run": "20261113T234701",
+      "patches": 45,
+      "runtime_sha256": "f2fbc4dba1b65348bb7ef2d3819af6733846b62d0c7fc4645f4e09b95b80f66b",
+      "frames": 1200,
+      "copy_override": false,
+      "cache_disabled": false,
+      "validation_errors": 0,
+      "validation_warnings": 0,
+      "process_exit_passed": true,
+      "owned_games_remaining": 0,
+      "screenshot_sha256": "a286cfc5581810c91d1ab91a588a8d2adeeb80af08e01c35010fba11cc0960d4"
+    }
+  ],
+  "reviewed_visuals": [
+    "Direct imported vertex/index reads: missing menu UI and incomplete scenery, including with cache disabled.",
+    "Explicit copied vertices: visible file-selection UI and textured scenery.",
+    "Patch45 default on CPU Vulkan: same restored file-selection UI and scenery without copy override."
+  ],
+  "default_run_peak_rss_mib": 1815,
+  "default_run_validation_errors": 0,
+  "default_run_validation_warnings": 0,
+  "hardware_gpu_tested": false,
+  "controllable_scene_tested": false,
+  "coop_gameplay_accepted": false,
+  "private_game_files_published": false
+}

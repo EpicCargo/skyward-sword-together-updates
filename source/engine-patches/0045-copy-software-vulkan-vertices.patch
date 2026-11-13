@@ -1,0 +1,29 @@
+From 9421f40e65575b82b03ecfd667c46d557392be30 Mon Sep 17 00:00:00 2001
+From: SST continuation <sst-continuation@localhost>
+Date: Fri, 13 Nov 2026 18:45:47 -0500
+Subject: [PATCH 45/45] Use copied vertex streams on software Vulkan devices
+
+---
+ runtime/nvn/vulkan/exec.c | 6 ++++++
+ 1 file changed, 6 insertions(+)
+
+diff --git a/runtime/nvn/vulkan/exec.c b/runtime/nvn/vulkan/exec.c
+index 1414616..e84359f 100644
+--- a/runtime/nvn/vulkan/exec.c
++++ b/runtime/nvn/vulkan/exec.c
+@@ -2423,6 +2423,12 @@ static bool guest_direct(uint64_t addr, uint64_t size, VkBuffer *buf, VkDeviceSi
+     static int copy = -1;
+     if (copy < 0) {
+         copy = getenv("LARECOMP_VK_COPY_VERTICES") != NULL;
++        // llvmpipe's imported guest vertex/index buffers lose UI and scene geometry.
++        // The ordinary transient-copy path restores both; keep direct reads for hardware GPUs.
++        if (!copy && g_vk.props.deviceType == VK_PHYSICAL_DEVICE_TYPE_CPU) {
++            copy = 1;
++            LOG("[vk] using copied vertices for software Vulkan\n");
++        }
+ #ifdef _WIN32
+         MEMORYSTATUSEX memory = {.dwLength = sizeof memory};
+         // WDDM charges another heap-sized commitment for this optional zero-copy import.
+-- 
+2.43.0
+
