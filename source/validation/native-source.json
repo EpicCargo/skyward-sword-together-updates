@@ -1,7 +1,7 @@
 {
   "base_commit": "506a9bc5aead5fc9598bb8f4a521f3b26f8897e8",
-  "engine_tree": "14f4f18fbb0417965cb2a009903a1dfd64b759ad",
-  "engine_patches": 38,
+  "engine_tree": "dec9431d196db828ead634e38ee93ac831197729",
+  "engine_patches": 39,
   "native_file_sha256": {
     "client/Makefile": "c909d6794becd1904f63cb58d2fbbf47c5393a4624945bd25c3080cbb476e79c",
     "client/src/sst_animation.c": "94fd3e1703f99205624883bbb97964dcc4ed8dba73ef167b0bdbb527ae28f7e1",
@@ -197,8 +197,8 @@
     "engine/runtime/nvn/custom_tex.c": "ab3c2d45d0ac9cd09f785e5f070ee4ad31009822270ba7f36f13806f6cf9042c",
     "engine/runtime/nvn/custom_tex.h": "bef7832a53560a6c6bb5451435827bf6fc450ccbd3131b30b2eecc3067051370",
     "engine/runtime/nvn/formats.c": "09347467c76e9e448e3a580eaf89091e8a884c84350625d5c6cbfbeef8c56801",
-    "engine/runtime/nvn/maxwell/shader.h": "280dc0e46792e589b0e0f548ac2e48d175b4079b9140211597fe4e0b093dfe48",
-    "engine/runtime/nvn/maxwell/translate.c": "8637fa2a3b1053970c8a22adddd59ec182eedd53bb4c65b175e0bb40fee6cd0b",
+    "engine/runtime/nvn/maxwell/shader.h": "07134d0b609eb819029a43086d27a3e9ef5f9ac9dd6d43053b05aaaa01fc1b68",
+    "engine/runtime/nvn/maxwell/translate.c": "ff07d2408d64e1f349dd7f0f0859d50ee47df1e486489351d5abbb4e6a706d74",
     "engine/runtime/nvn/nvn.h": "c321b5926d3eb972f0a35ac3f1f313d3abb6bdd44c9d34f4511a350d8b7aa79c",
     "engine/runtime/nvn/objects.c": "e70647f604c904558d12e3f4aad25b882d240895b5e2d360d6362a24d0d8494f",
     "engine/runtime/nvn/output_scale.c": "488cb6f9482bda91f575c9255c36fc3300624c47075970d9b930033fe7c254c5",
@@ -210,8 +210,9 @@
     "engine/runtime/nvn/tegra.h": "8de2762df66811f8cd27a5a72db5bc88d60e2866217fbef71ab2d84477c4487f",
     "engine/runtime/nvn/texpatch.c": "860ca410216048725151e7f63da8e1881db8c013b588beb70f1e9d13d17a9bd2",
     "engine/runtime/nvn/texpatch.h": "7747d5ff2f8fe5f311ebdde7cd2c034de77a69ff69303bfccca9909d2f726c70",
-    "engine/runtime/nvn/vulkan/device.c": "6618e80be31e2f16b14f1ab9bd9ef0bc0fc4698b51fb737c26e61a952ac3192b",
-    "engine/runtime/nvn/vulkan/exec.c": "903e79aedfadfbd3a47dc377bec249d7bbeb3826a332738c6710d84dc76b42e3",
+    "engine/runtime/nvn/vulkan/device.c": "528d655b60e97bfee47fae4e99b3b63a0a91025c0915b2b9076945936218c61f",
+    "engine/runtime/nvn/vulkan/exec.c": "0f624f1c211bbd799a223d17e6b4bb6ec2b485a7dd90d254521da58847cac427",
+    "engine/runtime/nvn/vulkan/guest_memory.h": "ab602110f2e1479666f404d4a21e706145a6a1229dcd41258ad43d6f38298341",
     "engine/runtime/nvn/vulkan/shaders.c": "13952ba8c1ba2576db3a5234da44a50f08250c8280af95a87fe6efeee94c074e",
     "engine/runtime/nvn/vulkan/shaders.h": "090eaf3ba517ba2db6921c19a28be7f50d78b9d8b0047c13806a454abe19336f",
     "engine/runtime/nvn/vulkan/textures.c": "f6c833b4fae504e99a9d854d306bf3ac56ee6993b4b576b50886956945fabd3b",
@@ -257,13 +258,13 @@
     "client/tests/prop_capacity_test.c": "0e3b22e810dec2515498a54538e0dfd8ffc007b6f0e5315e859580c254d44621",
     "engine/runtime/ui/developer_tab.mm": "ae23e4ca4a751fb6c6e1a025512d42b3b56d1fb3de4403c61b0e3d8dfa2b47d3"
   },
-  "original_frozen_entry_count": 256,
+  "original_frozen_entry_count": 257,
   "omitted_local_only_recipes": [
     "run.py",
     "build-runtime.py",
     "client-patches/0001-reclaim-retired-prop-tracks.patch"
   ],
-  "validation_scope": "Returning model callback guards: synthetic native/model/network CPU evidence only. Hosted runtime build and native gameplay are separate gates.",
+  "validation_scope": "Renderer foundation: private recompilation completeness audit and asset-free shader/runtime checks. Hosted runtime build, game visuals and native co-op gameplay are separate gates.",
   "previous_hardware_engine_tree": "687802ad93078709fb83d3b3a20d8ba015b39c35",
   "previous_hardware_runtime_sha256": "410753d9ca080f44dbc523c253fa99752b503aa71fedc5478dbda3b12900e0be",
   "previous_partial_engine_tree": "7112f66f7cf19b9afeec131568813cdd475ff6b6",

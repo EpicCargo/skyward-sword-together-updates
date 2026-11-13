@@ -1,0 +1,45 @@
+{
+  "date": "2026-11-13",
+  "passed": true,
+  "scope": "Private game-library completeness audit plus asset-free renderer source checks; no game launch.",
+  "recompilation": {
+    "modules": {
+      "main": {"functions": 45965, "chunks": 832},
+      "sdk": {"functions": 38289, "chunks": 179},
+      "subsdk0": {"functions": 14146, "chunks": 249},
+      "subsdk1": {"functions": 13689, "chunks": 157}
+    },
+    "generated_chunks": 1417,
+    "module_tables": 4,
+    "game_library_entry": 1,
+    "link_inputs": 1422,
+    "object_stamp_pairs": 1422,
+    "nonempty_compile_logs": 0,
+    "link_log_bytes": 0,
+    "library_bytes": 744059728,
+    "private_game_files_included": false
+  },
+  "renderer": {
+    "reported_max_storage_buffer_range": 134217728,
+    "fix": "Replace the whole-heap storage descriptor with a 16-byte address/size uniform and fully bounded addressable-buffer accesses.",
+    "msl_programs": 10000,
+    "msl_translated": 7882,
+    "msl_preexisting_failures": 1990,
+    "msl_malformed_rejected": 128,
+    "msl_differences": 0,
+    "glsl_programs": 2000,
+    "glsl_compiled": 1541,
+    "glsl_preexisting_rejections": 441,
+    "glsl_malformed_rejected": 18,
+    "glsl_new_failures": 0,
+    "guest_memory_programs": 156,
+    "operand_boundary_cases": 12,
+    "changed_runtime_objects_compiled": ["exec.c", "device.c", "shaders.c"]
+  },
+  "engine_tree": "dec9431d196db828ead634e38ee93ac831197729",
+  "engine_patches": 39,
+  "game_launched": false,
+  "windows_hardware_tested": false,
+  "wsl_visual_acceptance": false,
+  "coop_gameplay_acceptance": false
+}

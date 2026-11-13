@@ -1,0 +1,800 @@
+From d7ab396f85a35e6d88a4db0df83f051dd44390e3 Mon Sep 17 00:00:00 2001
+From: SST continuation <sst-continuation@localhost>
+Date: Fri, 13 Nov 2026 14:04:47 -0500
+Subject: [PATCH] Address large guest heaps without oversized descriptors
+
+---
+ runtime/nvn/maxwell/shader.h      |   7 +-
+ runtime/nvn/maxwell/translate.c   | 124 ++++++++++++++++----------
+ runtime/nvn/vulkan/device.c       |   1 +
+ runtime/nvn/vulkan/exec.c         |  58 ++++++------
+ runtime/nvn/vulkan/guest_memory.h | 142 ++++++++++++++++++++++++++++++
+ tools/test_shader_bounds.c        |  41 +++++++++
+ tools/test_translate.c            |  10 ++-
+ tools/test_vk_pipelines.c         |   3 +-
+ 8 files changed, 308 insertions(+), 78 deletions(-)
+ create mode 100644 runtime/nvn/vulkan/guest_memory.h
+ create mode 100644 tools/test_shader_bounds.c
+
+diff --git a/runtime/nvn/maxwell/shader.h b/runtime/nvn/maxwell/shader.h
+index efe7d40..f2c6168 100644
+--- a/runtime/nvn/maxwell/shader.h
++++ b/runtime/nvn/maxwell/shader.h
+@@ -7,8 +7,9 @@
+ //    (anonymous block). N = max(cbuf_size[k] / 16, highest constant-index vec4 + 1), and at least 4096 when
+ //    cbuf_dynamic has bit k (the renderer binds up to 64 KB). Register-indexed reads are clamped to N - 1.
+ //  - global memory (LDG/STG) -> binding GMEM_BUFFER_INDEX (17):
+-//    `layout(std430, set=S, binding=17) [readonly] buffer GMem { uint w[]; } gmem_;`, 32-bit words relative to
+-//    maxwell_gmem_base. `readonly` unless the shader stores (needs vertexPipeline/fragmentStoresAndAtomics then);
++//    binding 17 is a 16-byte uniform with the imported buffer's device address and live byte size.
++//    A GLSL buffer_reference accesses 32-bit words relative to maxwell_gmem_base, with full-access bounds.
++//    `readonly` unless the shader stores (needs vertexPipeline/fragmentStoresAndAtomics then);
+ //    byte / short stores are atomicAnd + atomicOr on the containing word.
+ //  - rscale table -> binding 18: `uniform RScale { vec4 rscale[65]; };` (std140, the MSL buffer 18 contents).
+ //  - per-draw tint -> binding 19: `uniform Tint { vec4 ltint[2]; };` (fragment, when uses_tint).
+@@ -81,7 +82,7 @@ typedef struct {
+     char error[256];        // set when translation fails
+ } ShaderInfo;
+ 
+-// Global memory (LDG/STG) is addressed through one buffer that wraps the guest heap.
++// Global memory (LDG/STG): GLSL uses an address/size uniform; MSL binds the guest heap directly.
+ #define GMEM_BUFFER_INDEX 17
+ // (GLSL compute, Vulkan) the fast copy of a dispatch's storage buffers: its address table and its data
+ #define GMAP_BUFFER_INDEX 20
+diff --git a/runtime/nvn/maxwell/translate.c b/runtime/nvn/maxwell/translate.c
+index 579f42e..ecd8f48 100644
+--- a/runtime/nvn/maxwell/translate.c
++++ b/runtime/nvn/maxwell/translate.c
+@@ -74,7 +74,7 @@ typedef struct {
+     bool branchy;  // program uses the pc state machine
+     int ipa_mode;  // interpolation mode of the IPA being translated (-1 for plain loads)
+     int ipa_mul;   // its multiplier register (mode 1: the result is the "pass" value attr/w times this register)
+-    // GLSL (fields kept last: the MSL path's layout, including its out-of-range reg_used writes, is unchanged)
++    // GLSL-specific state follows the shared translation state.
+     bool glsl;               // emit Vulkan GLSL: dialect-specific constructs here, the rest via glsl_rewrite()
+     bool uses_gmem_store;    // STG present: the gmem buffer is not readonly
+     uint32_t cbuf_need[18];  // highest constant vec4 index + 1 per cbuf (array size of the GLSL block)
+@@ -95,6 +95,16 @@ static void fail(Ctx *c, const char *fmt, ...) {
+     va_end(ap);
+ }
+ 
++static bool use_reg(Ctx *c, int r) {
++    if (r < 0 || r > RZ) {
++        c->fail = true;
++        snprintf(c->info->error, sizeof c->info->error, "register %d out of range", r);
++        return false;
++    }
++    c->reg_used[r] = 1;
++    return true;
++}
++
+ // Branch targets may point at a scheduling word; execution continues at the next instruction.
+ static uint32_t norm_target(int64_t t) {
+     if (t >= 0 && ((t / 8) % 4) == 0) t += 8;
+@@ -104,7 +114,7 @@ static uint32_t norm_target(int64_t t) {
+ // ------------------------------------------------------------------ operands
+ static const char *reg(Ctx *c, int r, char *buf) {
+     if (r == RZ) return "0u";
+-    c->reg_used[r] = 1;
++    if (!use_reg(c, r)) return "0u";
+     sprintf(buf, "r%d", r);
+     return buf;
+ }
+@@ -122,6 +132,11 @@ static const char *pred(Ctx *c, int p, bool neg, char *buf) {
+ #define P(p, n) pred(c, (p), (n), alloca(16))
+ 
+ static const char *cbuf_ref(Ctx *c, int idx, int64_t off, const char *dyn, char *buf) {
++    if (idx < 0 || idx >= 18) {
++        c->fail = true;
++        snprintf(c->info->error, sizeof c->info->error, "constant buffer %d out of range", idx);
++        return "0u";
++    }
+     c->info->cbuf_mask |= 1u << idx;
+     if (off + 16 > (int64_t)c->info->cbuf_size[idx]) c->info->cbuf_size[idx] = (uint32_t)((off + 16 + 255) & ~255);
+     if (dyn) c->info->cbuf_dynamic |= 1u << idx;
+@@ -169,7 +184,7 @@ static const char *operand_c_for_ffma(Ctx *c, uint64_t w, char *buf, const char
+ 
+ static void set_reg(Ctx *c, int r, const char *expr) {
+     if (r == RZ) return;
+-    c->reg_used[r] = 1;
++    use_reg(c, r);
+     sp(&c->body, "    r%d = %s;\n", r, expr);
+ }
+ 
+@@ -317,7 +332,7 @@ static void hstore(Ctx *c, int d, const char *expr, int merge, bool sat) {
+     char t[2048], e[1700];
+     if (sat) sprintf(e, "saturate(%s)", expr); else strcpy(e, expr);
+     if (d == RZ) return;
+-    c->reg_used[d] = 1;
++    use_reg(c, d);
+     sprintf(t, "hpack(%s, %du, r%d)", e, merge, d);
+     set_reg(c, d, t);
+ }
+@@ -435,7 +450,7 @@ static bool emit_half(Ctx *c, uint64_t w) {
+         } else {
+             bool bf = bits(w, 49, 1);
+             if (d != RZ) {
+-                c->reg_used[d] = 1;
++                use_reg(c, d);
+                 sp(&c->body, "      l = l %s pp; h = h %s pp;\n", bool_op(bop), bool_op(bop));
+                 sp(&c->body, bf ? "      r%d = (l ? 0x3c00u : 0u) | (h ? 0x3c000000u : 0u);\n"
+                                 : "      r%d = (l ? 0xFFFFu : 0u) | (h ? 0xFFFF0000u : 0u);\n", d);
+@@ -500,8 +515,8 @@ static void write_tex_result(Ctx *c, int slot, const char *call, uint32_t mask,
+         char v[4][16];
+         for (int i = 0; i < 4; i++) { if (i < n) sprintf(v[i], "t[%d]", comps[i]); else strcpy(v[i], "0.0f"); }
+         const char *pk = c->glsl ? "      r%d = packHalf2x16(vec2(%s, %s));\n" : "      r%d = as_type<uint>(half2(half(%s), half(%s)));\n";
+-        if (d0 != RZ) { c->reg_used[d0] = 1; sp(&c->body, pk, d0, v[0], v[1]); }
+-        if (d1 != RZ) { c->reg_used[d1] = 1; sp(&c->body, pk, d1, v[2], v[3]); }
++        if (d0 != RZ) { use_reg(c, d0); sp(&c->body, pk, d0, v[0], v[1]); }
++        if (d1 != RZ) { use_reg(c, d1); sp(&c->body, pk, d1, v[2], v[3]); }
+         sp(&c->body, "    }\n");
+         return;
+     }
+@@ -516,7 +531,7 @@ static void write_tex_result(Ctx *c, int slot, const char *call, uint32_t mask,
+     for (int comp = 0; comp < 4; comp++) {
+         if (!(mask & (1u << comp))) continue;
+         int r = regs[n++];
+-        if (r != RZ) { c->reg_used[r] = 1; sp(&c->body, "      r%d = as_type<uint>(t[%d]);\n", r, comp); }
++        if (r != RZ) { use_reg(c, r); sp(&c->body, "      r%d = as_type<uint>(t[%d]);\n", r, comp); }
+     }
+     sp(&c->body, "    }\n");
+ }
+@@ -768,10 +783,10 @@ static void emit_tex(Ctx *c, uint64_t w, bool bindless) {
+         char cs[3][40], lay[96], lodv[48], offv[96], drv[48], gcall[4096];
+         const char *co[3], *layp = NULL, *lodp = NULL, *offp = NULL, *drp = NULL;
+         int ar2 = a, p2 = b, lk = 0;
+-        if (array) { sprintf(lay, "min(uint(r%d), uint(tsize%d(0).z) - 1u)", a, slot); c->reg_used[a] = 1; ar2 = a + 1; layp = lay; }
+-        for (int i = 0; i < ncoord; i++) { sprintf(cs[i], "as_type<float>(r%d)", ar2 + i); c->reg_used[ar2 + i] = 1; co[i] = cs[i]; }
++        if (array) { sprintf(lay, "min(uint(r%d), uint(tsize%d(0).z) - 1u)", a, slot); use_reg(c, a); ar2 = a + 1; layp = lay; }
++        for (int i = 0; i < ncoord; i++) { sprintf(cs[i], "as_type<float>(r%d)", ar2 + i); use_reg(c, ar2 + i); co[i] = cs[i]; }
+         if (lod_mode == 2 || lod_mode == 3 || lod_mode == 6 || lod_mode == 7) {
+-            c->reg_used[p2] = 1;
++            use_reg(c, p2);
+             sprintf(lodv, "as_type<float>(r%d)", p2);
+             lodp = lodv;
+             lk = lod_mode == 2 || lod_mode == 6 ? 2 : 1;
+@@ -780,8 +795,8 @@ static void emit_tex(Ctx *c, uint64_t w, bool bindless) {
+             lk = 1;
+             lodp = "0.0f";
+         }
+-        if (aoffi) { c->reg_used[p2] = 1; sprintf(offv, "int2(int(r%d << 28) >> 28, int(r%d << 24) >> 28)", p2, p2); offp = offv; p2++; }
+-        if (dc) { c->reg_used[p2] = 1; sprintf(drv, "as_type<float>(r%d)", p2); drp = drv; p2++; }
++        if (aoffi) { use_reg(c, p2); sprintf(offv, "int2(int(r%d << 28) >> 28, int(r%d << 24) >> 28)", p2, p2); offp = offv; p2++; }
++        if (dc) { use_reg(c, p2); sprintf(drv, "as_type<float>(r%d)", p2); drp = drv; p2++; }
+         glsl_sample(c, gcall, slot, co, layp, drp, lk, lodp, offp);
+         write_tex_result(c, slot, gcall, mask, d, RZ, false, false);
+         return;
+@@ -789,27 +804,27 @@ static void emit_tex(Ctx *c, uint64_t w, bool bindless) {
+     char coords[256] = "", layer[64] = "", tmp[64];
+     int ar = a;
+     // the hardware clamps the array index to the layer count
+-    if (array) { sprintf(layer, "min(uint(r%d), t%d.get_array_size() - 1u)", a, slot); c->reg_used[a] = 1; ar = a + 1; }
++    if (array) { sprintf(layer, "min(uint(r%d), t%d.get_array_size() - 1u)", a, slot); use_reg(c, a); ar = a + 1; }
+     for (int i = 0; i < ncoord; i++) {
+         sprintf(tmp, "%sas_type<float>(r%d)", i ? ", " : "", ar + i);
+-        c->reg_used[ar + i] = 1;
++        use_reg(c, ar + i);
+         strcat(coords, tmp);
+     }
+     int pr = b;
+     char lod[96] = "", dref[64] = "", off[128] = "";
+     if (lod_mode == 2 || lod_mode == 3 || lod_mode == 6 || lod_mode == 7) {
+-        c->reg_used[pr] = 1;
++        use_reg(c, pr);
+         sprintf(lod, lod_mode == 2 || lod_mode == 6 ? ", bias(as_type<float>(r%d))" : ", level(as_type<float>(r%d))", pr);
+         pr++;
+     } else if (lod_mode == 1) {
+         strcpy(lod, ", level(0)");
+     }
+     if (aoffi) {
+-        c->reg_used[pr] = 1;
++        use_reg(c, pr);
+         sprintf(off, ", int2(int(r%d << 28) >> 28, int(r%d << 24) >> 28)", pr, pr);
+         pr++;
+     }
+-    if (dc) { c->reg_used[pr] = 1; sprintf(dref, "as_type<float>(r%d)", pr); pr++; }
++    if (dc) { use_reg(c, pr); sprintf(dref, "as_type<float>(r%d)", pr); pr++; }
+     const char *vec = ncoord == 1 ? "" : ncoord == 2 ? "float2" : "float3";
+     char call[1024];
+     if (dc)
+@@ -934,7 +949,7 @@ static void emit_insn(Ctx *c, uint64_t w, uint32_t pc) {
+             }
+             int n = 0;
+             for (int i = 0; i < 4; i++)
+-                if (mask & (1u << i)) { c->reg_used[d + n] = 1; sp(&c->body, "      r%d = q[%d];\n", d + n, i); n++; }
++                if (mask & (1u << i)) { use_reg(c, d + n); sp(&c->body, "      r%d = q[%d];\n", d + n, i); n++; }
+             sp(&c->body, "    }\n");
+         } else if (qt == 1) {  // dimension
+             if (c->stage != STAGE_VERTEX) {  // report the guest size of scaled allocations
+@@ -948,7 +963,7 @@ static void emit_insn(Ctx *c, uint64_t w, uint32_t pc) {
+             }
+             int n = 0;
+             for (int i = 0; i < 4; i++)
+-                if (mask & (1u << i)) { c->reg_used[d + n] = 1; sp(&c->body, "      r%d = q[%d];\n", d + n, i); n++; }
++                if (mask & (1u << i)) { use_reg(c, d + n); sp(&c->body, "      r%d = q[%d];\n", d + n, i); n++; }
+             sp(&c->body, "    }\n");
+         } else {
+             fail(c, "txq type %d", qt);
+@@ -1111,7 +1126,7 @@ static void emit_insn(Ctx *c, uint64_t w, uint32_t pc) {
+         if (bits(w, 47, 1)) {
+             sp(&c->body, "    { uint s = %s%s; uint t2 = %s%s; uint res = s + t2%s; cc = (res < s) ? 1u : 0u;\n", bits(w, 49, 1) ? "-" : "",
+                R(a), bits(w, 48, 1) ? "-" : "", B(false), bits(w, 43, 1) ? " + cc" : "");
+-            if (d != RZ) { c->reg_used[d] = 1; sp(&c->body, "      r%d = res;\n", d); }
++            if (d != RZ) { use_reg(c, d); sp(&c->body, "      r%d = res;\n", d); }
+             sp(&c->body, "    }\n");
+         } else {
+             set_reg(c, d, t);
+@@ -1121,7 +1136,7 @@ static void emit_insn(Ctx *c, uint64_t w, uint32_t pc) {
+         if (wcc || x) c->uses_cc = true;
+         sp(&c->body, "    { ulong sum = ulong(%s%s) + ulong(0x%08xu)%s;%s\n", bits(w, 56, 1) ? "-" : "", R(a), (uint32_t)bits(w, 20, 32),
+            x ? " + ulong(cc)" : "", wcc ? " cc = uint(sum >> 32) & 1u;" : "");
+-        if (d != RZ) { c->reg_used[d] = 1; sp(&c->body, "      r%d = uint(sum);\n", d); }
++        if (d != RZ) { use_reg(c, d); sp(&c->body, "      r%d = uint(sum);\n", d); }
+         sp(&c->body, "    }\n");
+     } else if (OPM(0x5cc0000000000000ull, 0xfff0000000000000ull) || OPM(0x4cc0000000000000ull, 0xfff0000000000000ull) ||
+                OPM(0x38c0000000000000ull, 0xfef0000000000000ull)) {  // IADD3
+@@ -1131,7 +1146,7 @@ static void emit_insn(Ctx *c, uint64_t w, uint32_t pc) {
+             sp(&c->body, "    { ulong sum = ulong(%s%s) + ulong(%s%s) + ulong(%s%s)%s;\n", bits(w, 51, 1) ? "-" : "", R(a),
+                bits(w, 50, 1) ? "-" : "", B(false), bits(w, 49, 1) ? "-" : "", R((int)bits(w, 39, 8)), x3 ? " + ulong(cc)" : "");
+             if (wcc3) sp(&c->body, "      cc = uint(sum >> 32) & 1u;\n");
+-            if (d != RZ) { c->reg_used[d] = 1; sp(&c->body, "      r%d = uint(sum);\n", d); }
++            if (d != RZ) { use_reg(c, d); sp(&c->body, "      r%d = uint(sum);\n", d); }
+             sp(&c->body, "    }\n");
+         } else {
+             sprintf(t, "(%s%s + %s%s + %s%s)", bits(w, 51, 1) ? "-" : "", R(a), bits(w, 50, 1) ? "-" : "", B(false),
+@@ -1146,7 +1161,7 @@ static void emit_insn(Ctx *c, uint64_t w, uint32_t pc) {
+             c->uses_cc = true;
+             sp(&c->body, "    { uint s = %s%s << %du; uint t2 = %s%s; uint res = s + t2; cc = (res < s) ? 1u : 0u;\n",
+                bits(w, 49, 1) ? "-" : "", R(a), (int)bits(w, 39, 5), bits(w, 48, 1) ? "-" : "", B(false));
+-            if (d != RZ) { c->reg_used[d] = 1; sp(&c->body, "      r%d = res;\n", d); }
++            if (d != RZ) { use_reg(c, d); sp(&c->body, "      r%d = res;\n", d); }
+             sp(&c->body, "    }\n");
+         } else {
+             set_reg(c, d, t);
+@@ -1205,7 +1220,7 @@ static void emit_insn(Ctx *c, uint64_t w, uint32_t pc) {
+             c->pred_used[pd] = 1;
+             int pop = (int)bits(w, 44, 2);
+             sp(&c->body, "    { uint res = %s;\n", t);
+-            if (d != RZ) { c->reg_used[d] = 1; sp(&c->body, "      r%d = res;\n", d); }
++            if (d != RZ) { use_reg(c, d); sp(&c->body, "      r%d = res;\n", d); }
+             sp(&c->body, "      p%d = %s; }\n", pd, pop == 2 ? "(res == 0u)" : pop == 3 ? "(res != 0u)" : pop == 1 ? "true" : "false");
+         } else {
+             set_reg(c, d, t);
+@@ -1298,7 +1313,7 @@ static void emit_insn(Ctx *c, uint64_t w, uint32_t pc) {
+         else sp(&c->body, "      uint res = prod + cc_;\n");
+         if (wcc) sp(&c->body, "      cc = (res < prod) ? 1u : 0u;\n");
+         if (mrg) sp(&c->body, "      res = (res & 0xFFFFu) | (xbu << 16);\n");
+-        if (d != RZ) { c->reg_used[d] = 1; sp(&c->body, "      r%d = res;\n", d); }
++        if (d != RZ) { use_reg(c, d); sp(&c->body, "      r%d = res;\n", d); }
+         sp(&c->body, "    }\n");
+     } else if (OPM(0x5090000000000000ull, 0xfff8000000000000ull)) {  // PSETP
+         const char *pa = P((int)bits(w, 12, 3), bits(w, 15, 1)), *pb = P((int)bits(w, 29, 3), bits(w, 32, 1));
+@@ -1395,8 +1410,14 @@ static void emit_insn(Ctx *c, uint64_t w, uint32_t pc) {
+         if (a == RZ) sprintf(addr, "ulong(%lld)", (long long)off);
+         else if (wide) sprintf(addr, "((ulong(%s) << 32 | ulong(%s)) + ulong(%lld))", R(a + 1), R(a), (long long)off);
+         else sprintf(addr, "(ulong(%s) + ulong(%lld))", R(a), (long long)off);
+-        sp(&c->body, "    { ulong ga = %s - 0x%llxul; bool ok = ga < 0x%llxul;\n", addr,
+-           (unsigned long long)maxwell_gmem_base, (unsigned long long)maxwell_gmem_size);
++        unsigned span = size < 2 ? 1u : size < 4 ? 2u : size == 4 ? 4u : size == 5 ? 8u : 16u;
++        if (c->glsl)
++            sp(&c->body, "    { ulong ga = %s - 0x%llxul; bool ok = gmem_address != 0ul && %uul <= 0x%llxul && ga <= 0x%llxul - %uul && %uul <= gmem_live_size && ga <= gmem_live_size - %uul;\n", addr,
++               (unsigned long long)maxwell_gmem_base, span, (unsigned long long)maxwell_gmem_size,
++               (unsigned long long)maxwell_gmem_size, span, span, span);
++        else
++            sp(&c->body, "    { ulong ga = %s - 0x%llxul; bool ok = ga < 0x%llxul;\n", addr,
++               (unsigned long long)maxwell_gmem_base, (unsigned long long)maxwell_gmem_size);
+         static const char *const ld_small[] = {"uint(gmem[ga])", "uint(int(char(gmem[ga])))",
+                                                "uint(*(device ushort *)(gmem + ga))", "uint(int(*(device short *)(gmem + ga)))"};
+         int nw = size == 5 ? 2 : size >= 6 ? 4 : 1;
+@@ -1410,22 +1431,22 @@ static void emit_insn(Ctx *c, uint64_t w, uint32_t pc) {
+             static const char *const gl_small[] = {
+                 "(%s >> (uint(ga & 3ul) * 8u)) & 0xFFu", "uint(sx8(%s >> (uint(ga & 3ul) * 8u)))",
+                 "(%s >> (uint(ga & 2ul) * 8u)) & 0xFFFFu", "uint(sx16(%s >> (uint(ga & 2ul) * 8u)))"};
+-            sp(&c->body, "      uint fw = ok ? gfind(uint(ga)) : 0xFFFFFFFFu;\n");
++            sp(&c->body, "      uint fw = ok ? gfind(uint(ga), %uu) : 0xFFFFFFFFu;\n", span);
+             if (!store) {
+                 if (size < 4) {
+                     if (d != RZ) {
+                         char fast[160], slow[160];
+                         snprintf(fast, sizeof fast, gl_small[size], "gfast_.w[fw]");
+                         snprintf(slow, sizeof slow, gl_small[size], "gmem_.w[uint(ga >> 2)]");
+-                        c->reg_used[d] = 1;
+-                        sp(&c->body, "      r%d = fw != 0xFFFFFFFFu ? %s : ok ? %s : 0u;\n", d, fast, slow);
++                        use_reg(c, d);
++                        sp(&c->body, "      if (fw != 0xFFFFFFFFu) r%d = %s; else if (ok) r%d = %s; else r%d = 0u;\n", d, fast, d, slow, d);
+                     }
+                 } else {
+                     for (int k = 0; k < nw; k++)
+                         if (d != RZ && d + k < RZ) {
+-                            c->reg_used[d + k] = 1;
+-                            sp(&c->body, "      r%d = fw != 0xFFFFFFFFu ? gfast_.w[fw + %du] : ok ? gmem_.w[uint(ga >> 2) + %du] : 0u;\n",
+-                               d + k, k, k);
++                            use_reg(c, d + k);
++                            sp(&c->body, "      if (fw != 0xFFFFFFFFu) r%d = gfast_.w[fw + %du]; else if (ok) r%d = gmem_.w[uint(ga >> 2) + %du]; else r%d = 0u;\n",
++                               d + k, k, d + k, k, d + k);
+                         }
+                 }
+             } else {
+@@ -1451,11 +1472,11 @@ static void emit_insn(Ctx *c, uint64_t w, uint32_t pc) {
+                 "uint(sx16(gmem_.w[uint(ga >> 2)] >> (uint(ga & 2ul) * 8u)))"};
+             if (!store) {
+                 if (size < 4) {
+-                    if (d != RZ) { c->reg_used[d] = 1; sp(&c->body, "      if (ok) r%d = %s; else r%d = 0u;\n", d, gl_small[size], d); }
++                    if (d != RZ) { use_reg(c, d); sp(&c->body, "      if (ok) r%d = %s; else r%d = 0u;\n", d, gl_small[size], d); }
+                 } else {
+                     for (int k = 0; k < nw; k++)
+                         if (d != RZ && d + k < RZ) {
+-                            c->reg_used[d + k] = 1;
++                            use_reg(c, d + k);
+                             sp(&c->body, "      if (ok) r%d = gmem_.w[uint(ga >> 2) + %du]; else r%d = 0u;\n", d + k, k, d + k);
+                         }
+                 }
+@@ -1471,10 +1492,10 @@ static void emit_insn(Ctx *c, uint64_t w, uint32_t pc) {
+             }
+         } else if (!store) {
+             if (size < 4) {
+-                if (d != RZ) { c->reg_used[d] = 1; sp(&c->body, "      r%d = ok ? %s : 0u;\n", d, ld_small[size]); }
++                if (d != RZ) { use_reg(c, d); sp(&c->body, "      r%d = ok ? %s : 0u;\n", d, ld_small[size]); }
+             } else {
+                 for (int k = 0; k < nw; k++)
+-                    if (d != RZ && d + k < RZ) { c->reg_used[d + k] = 1; sp(&c->body, "      r%d = ok ? *(device uint *)(gmem + ga + %du) : 0u;\n", d + k, k * 4); }
++                    if (d != RZ && d + k < RZ) { use_reg(c, d + k); sp(&c->body, "      r%d = ok ? *(device uint *)(gmem + ga + %du) : 0u;\n", d + k, k * 4); }
+             }
+         } else {
+             if (size == 0 || size == 1) sp(&c->body, "      if (ok) gmem[ga] = uchar(%s);\n", R(d));
+@@ -1524,10 +1545,10 @@ static void emit_insn(Ctx *c, uint64_t w, uint32_t pc) {
+             if (size < 4) {
+                 static const char *const ext[] = {"(v >> sh) & 0xFFu", "uint(int(char((v >> sh) & 0xFFu)))", "(v >> sh) & 0xFFFFu",
+                                                   "uint(int(short((v >> sh) & 0xFFFFu)))"};
+-                if (d != RZ) { c->reg_used[d] = 1; sp(&c->body, "      uint v = lmem[(la >> 2) & %du]; uint sh = (la & 3u) * 8u; r%d = %s;\n", LMEM_WORDS - 1, d, ext[size]); }
++                if (d != RZ) { use_reg(c, d); sp(&c->body, "      uint v = lmem[(la >> 2) & %du]; uint sh = (la & 3u) * 8u; r%d = %s;\n", LMEM_WORDS - 1, d, ext[size]); }
+             } else {
+                 for (int k = 0; k < nw; k++)
+-                    if (d != RZ && d + k < RZ) { c->reg_used[d + k] = 1; sp(&c->body, "      r%d = lmem[((la >> 2) + %du) & %du];\n", d + k, k, LMEM_WORDS - 1); }
++                    if (d != RZ && d + k < RZ) { use_reg(c, d + k); sp(&c->body, "      r%d = lmem[((la >> 2) + %du) & %du];\n", d + k, k, LMEM_WORDS - 1); }
+             }
+         } else {
+             if (size < 4) {
+@@ -1579,14 +1600,14 @@ static void emit_insn(Ctx *c, uint64_t w, uint32_t pc) {
+             c->uses_cc = true;
+             sp(&c->body, "    { uint pr = (ccz ? 1u : 0u) | (ccs ? 2u : 0u) | ((cc & 1u) << 2);\n");
+             sp(&c->body, "      uint m = (%s & 0xFu) << %du;\n", mask, shift);
+-            if (d != RZ) { c->reg_used[d] = 1; sp(&c->body, "      r%d = (%s & ~m) | ((pr << %du) & m);\n", d, R(a), shift); }
++            if (d != RZ) { use_reg(c, d); sp(&c->body, "      r%d = (%s & ~m) | ((pr << %du) & m);\n", d, R(a), shift); }
+             sp(&c->body, "    }\n");
+             goto p2r_done;
+         }
+         sp(&c->body, "    { uint pr = 0u;\n");
+         for (int i = 0; i < 7; i++) { c->pred_used[i] = 1; sp(&c->body, "      pr |= (p%d ? 1u : 0u) << %du;\n", i, i); }
+         sp(&c->body, "      uint m = (%s & 0x7Fu) << %du;\n", mask, shift);
+-        if (d != RZ) { c->reg_used[d] = 1; sp(&c->body, "      r%d = (%s & ~m) | ((pr << %du) & m);\n", d, R(a), shift); }
++        if (d != RZ) { use_reg(c, d); sp(&c->body, "      r%d = (%s & ~m) | ((pr << %du) & m);\n", d, R(a), shift); }
+         sp(&c->body, "    }\n");
+     p2r_done:;
+     } else if (OPM(0xe250000000000000ull, 0xfff0000000000020ull)) {  // BRX reg + imm (relative)
+@@ -1793,7 +1814,9 @@ static ShaderInfo *glsl_finish(Ctx *c, bool any_branch, bool dbg) {
+     if (c->fail) { free(body.buf); free(c->body.buf); free(c); return info; }
+     int set = stage == STAGE_FRAGMENT ? 1 : 0;
+     Str s = {0};
+-    sp(&s, "%s", glsl_prelude);
++    if (info->uses_gmem)
++        sp(&s, "#version 460\n#extension GL_EXT_buffer_reference : require\n%s", glsl_prelude + strlen("#version 460\n"));
++    else sp(&s, "%s", glsl_prelude);
+     for (int i = 0; i < 18; i++) {
+         if (!(info->cbuf_mask & (1u << i))) continue;
+         uint32_t n = info->cbuf_size[i] / 16;
+@@ -1802,15 +1825,20 @@ static ShaderInfo *glsl_finish(Ctx *c, bool any_branch, bool dbg) {
+         if (!n) n = 1;
+         sp(&s, "layout(std140, set = %d, binding = %d) uniform CB%d { uvec4 cb%d[%u]; };\n", set, i, i, i, n);
+     }
+-    if (info->uses_gmem)
+-        sp(&s, "layout(std430, set = %d, binding = %d) %sbuffer GMem { uint w[]; } gmem_;\n", set, GMEM_BUFFER_INDEX,
++    if (info->uses_gmem) {
++        sp(&s, "layout(buffer_reference, std430, buffer_reference_align = 4) %sbuffer GMem { uint w[]; };\n",
+            c->uses_gmem_store ? "" : "readonly ");
++        sp(&s, "layout(std140, set = %d, binding = %d) uniform GMemAddress { uvec4 gmem_meta; };\n", set, GMEM_BUFFER_INDEX);
++        sp(&s, "#define gmem_address ((uint64_t(gmem_meta.y) << 32) | uint64_t(gmem_meta.x))\n"
++               "#define gmem_live_size ((uint64_t(gmem_meta.w) << 32) | uint64_t(gmem_meta.z))\n"
++               "#define gmem_ GMem(gmem_address)\n");
++    }
+     if (info->uses_gmem_map) {  // (compute) the dispatch's storage buffers, device-local: gmap[i] = heap offset, size, word
+         sp(&s, "layout(std140, set = %d, binding = %d) uniform GMap { uvec4 gmap[%d]; };\n", set, GMAP_BUFFER_INDEX, GMAP_MAX + 1);
+         sp(&s, "layout(std430, set = %d, binding = %d) %sbuffer GFast { uint w[]; } gfast_;\n", set, GFAST_BUFFER_INDEX,
+            c->uses_gmem_store ? "" : "readonly ");
+-        sp(&s, "uint gfind(uint g) { uint n = gmap[%d].x; for (uint i = 0u; i < n; i++) { uint o = g - gmap[i].x; "
+-               "if (g >= gmap[i].x && o < gmap[i].y) return gmap[i].z + (o >> 2); } return 0xFFFFFFFFu; }\n", GMAP_MAX);
++        sp(&s, "uint gfind(uint g, uint bytes) { uint n = gmap[%d].x; for (uint i = 0u; i < n; i++) { uint o = g - gmap[i].x; "
++               "if (g >= gmap[i].x && bytes <= gmap[i].y && o <= gmap[i].y - bytes) return gmap[i].z + (o >> 2); } return 0xFFFFFFFFu; }\n", GMAP_MAX);
+     }
+     if (c->uses_rscale && stage != STAGE_VERTEX) {
+         sp(&s, "layout(std140, set = %d, binding = 18) uniform RScale { vec4 rscale[%d]; };\n", set,
+@@ -2005,7 +2033,7 @@ ShaderInfo *maxwell_translate(const uint8_t *blob, size_t max_size, int stage, c
+         emit_insn(c, ((const uint64_t *)code)[i], pc);
+         if (dbg && pc == maxwell_dbg_pc) {
+             int rr = maxwell_dbg_reg % 1000, half = maxwell_dbg_reg / 1000;  // +1000: low f16, +2000: high f16
+-            c->reg_used[rr] = 1;
++            use_reg(c, rr);
+             if (half) sp(&c->body, c->glsl ? "    dbgv = unpackHalf2x16(r%d)[%d];\n" : "    dbgv = float(as_type<half2>(r%d)[%d]);\n", rr, half - 1);
+             else sp(&c->body, "    dbgv = as_type<float>(r%d);\n", rr);
+         }
+diff --git a/runtime/nvn/vulkan/device.c b/runtime/nvn/vulkan/device.c
+index 5fdc81b..1df2c25 100644
+--- a/runtime/nvn/vulkan/device.c
++++ b/runtime/nvn/vulkan/device.c
+@@ -188,6 +188,7 @@ static void create_device(void) {
+                                             .maintenance4 = VK_TRUE,
+                                             .pNext = g_vk.custom_border ? (void *)&cbc : g_vk.divisor ? (void *)&div : NULL};
+     VkPhysicalDeviceVulkan12Features f12 = {.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES,
++                                            .bufferDeviceAddress = VK_TRUE,
+                                             .timelineSemaphore = VK_TRUE, .shaderInt8 = VK_TRUE, .samplerMirrorClampToEdge = VK_TRUE,
+                                             .uniformAndStorageBuffer8BitAccess = VK_TRUE, .storageBuffer8BitAccess = VK_TRUE,
+                                             .scalarBlockLayout = VK_TRUE, .pNext = &f13};
+diff --git a/runtime/nvn/vulkan/exec.c b/runtime/nvn/vulkan/exec.c
+index a7420e0..2df7d19 100644
+--- a/runtime/nvn/vulkan/exec.c
++++ b/runtime/nvn/vulkan/exec.c
+@@ -16,6 +16,7 @@
+ #include "../../kernel.h"
+ #include "shaders.h"
+ #include "vk.h"
++#include "guest_memory.h"
+ #include "../renderer.h"
+ #include "../source_policy.h"
+ #include "../../settings.h"
+@@ -2066,45 +2067,33 @@ static VkDescriptorBufferInfo cbuf_info(int stage, ShaderInfo *si, int k, uint32
+ static VkBuffer gmem_buf;
+ static VkDeviceMemory gmem_mem;
+ static uint64_t gmem_size;
++static VkDeviceAddress gmem_address;
++static GuestMemoryBuffer gmem_zero;
+ 
+ static bool gmem_import(uint64_t size) {
+     plat_commit(HEAP_BASE, size);  // An external host-memory import must cover committed pages.
+-    PFN_vkGetMemoryHostPointerPropertiesEXT props =
+-        (PFN_vkGetMemoryHostPointerPropertiesEXT)vkGetDeviceProcAddr(g_vk.dev, "vkGetMemoryHostPointerPropertiesEXT");
+-    VkMemoryHostPointerPropertiesEXT mp = {.sType = VK_STRUCTURE_TYPE_MEMORY_HOST_POINTER_PROPERTIES_EXT};
+-    if (!props || props(g_vk.dev, VK_EXTERNAL_MEMORY_HANDLE_TYPE_HOST_ALLOCATION_BIT_EXT, (void *)(uintptr_t)HEAP_BASE, &mp) != VK_SUCCESS ||
+-        !mp.memoryTypeBits)
++    GuestMemoryBuffer imported;
++    VkResult result = guest_memory_import(g_vk.phys, g_vk.dev, (void *)(uintptr_t)HEAP_BASE, size, &imported);
++    if (result != VK_SUCCESS) {
++        LOG("[vk] addressable guest heap import failed: %d\n", result);
+         return false;
+-    VkImportMemoryHostPointerInfoEXT imp = {.sType = VK_STRUCTURE_TYPE_IMPORT_MEMORY_HOST_POINTER_INFO_EXT,
+-                                            .handleType = VK_EXTERNAL_MEMORY_HANDLE_TYPE_HOST_ALLOCATION_BIT_EXT,
+-                                            .pHostPointer = (void *)(uintptr_t)HEAP_BASE};
+-    VkMemoryAllocateInfo ai = {.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO, .pNext = &imp, .allocationSize = size,
+-                               .memoryTypeIndex = (uint32_t)__builtin_ctz(mp.memoryTypeBits)};
+-    VkDeviceMemory mem;
+-    if (vkAllocateMemory(g_vk.dev, &ai, NULL, &mem) != VK_SUCCESS) return false;
+-    VkExternalMemoryBufferCreateInfo eb = {.sType = VK_STRUCTURE_TYPE_EXTERNAL_MEMORY_BUFFER_CREATE_INFO,
+-                                           .handleTypes = VK_EXTERNAL_MEMORY_HANDLE_TYPE_HOST_ALLOCATION_BIT_EXT};
+-    VkBufferCreateInfo bi = {.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO, .pNext = &eb, .size = size,
+-                             .usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_SRC_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT |
+-                                      VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT};
+-    VkBuffer buf;
+-    if (vkCreateBuffer(g_vk.dev, &bi, NULL, &buf) != VK_SUCCESS) { vkFreeMemory(g_vk.dev, mem, NULL); return false; }
+-    vkBindBufferMemory(g_vk.dev, buf, mem, 0);
++    }
+     if (gmem_buf) {  // the heap grew: the old import may still be in use by submitted work
+         vk_wait_seq(submit_seq);
+         vkDestroyBuffer(g_vk.dev, gmem_buf, NULL);
+         vkFreeMemory(g_vk.dev, gmem_mem, NULL);
+     }
+-    gmem_buf = buf;
+-    gmem_mem = mem;
++    gmem_buf = imported.buffer;
++    gmem_mem = imported.memory;
++    gmem_address = imported.address;
+     gmem_size = size;
+     LOG("[vk] guest heap imported for shader global memory: %llu MB\n", (unsigned long long)(size >> 20));
+     return true;
+ }
+ 
+-static uint64_t gmem_tried;  // heap size the import was last attempted for (gmem_info imports / re-imports)
++static uint64_t gmem_tried;  // heap size the import was last attempted for
+ 
+-static VkDescriptorBufferInfo gmem_info(void) {
++static void gmem_prepare(void) {
+     static int off = -1;
+     if (off < 0) off = getenv("LARECOMP_VK_NO_GMEM") != NULL || !g_vk.host_import;
+     uint64_t want = (kernel_heap_size() + 0xFFFF) & ~0xFFFFull;
+@@ -2113,12 +2102,23 @@ static VkDescriptorBufferInfo gmem_info(void) {
+         LOG("[vk] guest heap import failed (%llu MB): shader global memory reads return zero\n", (unsigned long long)(want >> 20));
+         off = 1;
+     }
++}
++
++static VkDescriptorBufferInfo gmem_info(void) {
++    gmem_prepare();
+     if (gmem_buf) return (VkDescriptorBufferInfo){gmem_buf, 0, gmem_size};
+     static uint32_t zero[1024];
+     VkSpan s = vk_transient_copy(zero, sizeof zero, 256);
+     return (VkDescriptorBufferInfo){s.buf, s.off, sizeof zero};
+ }
+ 
++static VkDescriptorBufferInfo gmem_address_info(void) {
++    gmem_prepare();
++    if (!gmem_address && !gmem_zero.address) VK_CHECK(guest_memory_zero(g_vk.phys, g_vk.dev, &gmem_zero));
++    uint64_t meta[2] = {gmem_address ? gmem_address : gmem_zero.address, gmem_address ? gmem_size : 0};
++    return ubo_span(vk_transient_copy(meta, sizeof meta, 256), sizeof meta);
++}
++
+ // Compute dispatches that use global memory: the imported heap is host memory across PCIe on a discrete GPU, and a
+ // shader storing to it in a loop crawls (the little chain chomps in Madam MeowMeow's house: ~8 ms a frame on a GTX 1660
+ // Super and on an RTX 3080 Ti alike, which the game then waits for on its fence - 49-53 fps there on the 1660). Before
+@@ -2457,7 +2457,12 @@ void vk_exec_reset(void) {
+         gmem_buf = VK_NULL_HANDLE;
+         gmem_mem = VK_NULL_HANDLE;
+     }
+-    gmem_size = gmem_tried = 0;
++    gmem_address = gmem_size = gmem_tried = 0;
++    if (gmem_zero.buffer) {
++        vkDestroyBuffer(g_vk.dev, gmem_zero.buffer, NULL);
++        vkFreeMemory(g_vk.dev, gmem_zero.memory, NULL);
++        gmem_zero = (GuestMemoryBuffer){0};
++    }
+     for (int i = 0; i < VC_TAB; i++)  // (the vertex cache: copies of the old pages)
+         if (vc_tab[i].buf) vmaDestroyBuffer(g_vk.vma, vc_tab[i].buf, vc_tab[i].mem);
+     memset(vc_tab, 0, sizeof vc_tab);
+@@ -2551,6 +2556,9 @@ static VkDescriptorSet stage_set(Prog *p, VkDescriptorSetLayout layout, uint32_t
+                 tex_wh[sg][ti][0] = wh[0]; tex_wh[sg][ti][1] = wh[1];
+             }
+             w[n].pImageInfo = &ii[n];
++        } else if (b->type == VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER && b->binding == GMEM_BUFFER_INDEX) {
++            bi[n] = gmem_address_info();
++            w[n].pBufferInfo = &bi[n];
+         } else if (b->type == VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER && b->binding < 17) {
+             bi[n] = cbuf_info(stage, si, (int)b->binding, gx, gy, gz);
+             w[n].pBufferInfo = &bi[n];
+diff --git a/runtime/nvn/vulkan/guest_memory.h b/runtime/nvn/vulkan/guest_memory.h
+new file mode 100644
+index 0000000..a5fe5d8
+--- /dev/null
++++ b/runtime/nvn/vulkan/guest_memory.h
+@@ -0,0 +1,142 @@
++// A guest heap can exceed maxStorageBufferRange. Import it as an addressable
++// buffer; shaders receive a small address/size uniform instead of a heap SSBO.
++#pragma once
++#include <stdbool.h>
++#include <stdint.h>
++#include <string.h>
++#include <vulkan/vulkan.h>
++
++typedef struct {
++    VkBuffer buffer;
++    VkDeviceMemory memory;
++    VkDeviceAddress address;
++    VkDeviceSize size;
++} GuestMemoryBuffer;
++
++// Physical GPU pointers always identify real memory, even when the live guest
++// heap is unavailable. A zero live size then disables accesses to this fallback.
++static inline VkResult guest_memory_zero(VkPhysicalDevice physical, VkDevice device, GuestMemoryBuffer *out) {
++    *out = (GuestMemoryBuffer){0};
++    VkBufferCreateInfo create = {.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
++                                 .size = 4096,
++                                 .usage = VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT};
++    VkBuffer buffer = VK_NULL_HANDLE;
++    VkDeviceMemory memory = VK_NULL_HANDLE;
++    VkResult result = vkCreateBuffer(device, &create, NULL, &buffer);
++    if (result != VK_SUCCESS) return result;
++    VkMemoryRequirements requirements;
++    vkGetBufferMemoryRequirements(device, buffer, &requirements);
++    VkPhysicalDeviceMemoryProperties properties;
++    vkGetPhysicalDeviceMemoryProperties(physical, &properties);
++    uint32_t compatible = requirements.memoryTypeBits;
++    for (uint32_t i = 0; i < properties.memoryTypeCount; i++)
++        if ((properties.memoryTypes[i].propertyFlags & (VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT)) !=
++            (VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT))
++            compatible &= ~(1u << i);
++    if (!compatible) {
++        result = VK_ERROR_FEATURE_NOT_PRESENT;
++        goto failed_zero;
++    }
++    VkMemoryAllocateFlagsInfo flags = {.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_FLAGS_INFO,
++                                       .flags = VK_MEMORY_ALLOCATE_DEVICE_ADDRESS_BIT};
++    VkMemoryAllocateInfo allocation = {.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO,
++                                       .pNext = &flags,
++                                       .allocationSize = requirements.size,
++                                       .memoryTypeIndex = (uint32_t)__builtin_ctz(compatible)};
++    result = vkAllocateMemory(device, &allocation, NULL, &memory);
++    if (result != VK_SUCCESS) goto failed_zero;
++    result = vkBindBufferMemory(device, buffer, memory, 0);
++    if (result != VK_SUCCESS) goto failed_zero;
++    void *mapped = NULL;
++    result = vkMapMemory(device, memory, 0, 4096, 0, &mapped);
++    if (result != VK_SUCCESS) goto failed_zero;
++    memset(mapped, 0, 4096);
++    vkUnmapMemory(device, memory);
++    VkBufferDeviceAddressInfo info = {.sType = VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO, .buffer = buffer};
++    VkDeviceAddress address = vkGetBufferDeviceAddress(device, &info);
++    if (!address) {
++        result = VK_ERROR_INITIALIZATION_FAILED;
++        goto failed_zero;
++    }
++    *out = (GuestMemoryBuffer){buffer, memory, address, 4096};
++    return VK_SUCCESS;
++failed_zero:
++    vkDestroyBuffer(device, buffer, NULL);
++    if (memory) vkFreeMemory(device, memory, NULL);
++    return result;
++}
++
++static inline VkResult guest_memory_import(VkPhysicalDevice physical, VkDevice device, void *pointer, VkDeviceSize size,
++                                           GuestMemoryBuffer *out) {
++    *out = (GuestMemoryBuffer){0};
++    VkPhysicalDeviceExternalMemoryHostPropertiesEXT host = {
++        .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_EXTERNAL_MEMORY_HOST_PROPERTIES_EXT};
++    VkPhysicalDeviceProperties2 properties = {.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2, .pNext = &host};
++    vkGetPhysicalDeviceProperties2(physical, &properties);
++    if (!pointer || !size || !host.minImportedHostPointerAlignment ||
++        (uintptr_t)pointer % host.minImportedHostPointerAlignment || size % host.minImportedHostPointerAlignment)
++        return VK_ERROR_INVALID_EXTERNAL_HANDLE;
++    PFN_vkGetMemoryHostPointerPropertiesEXT get =
++        (PFN_vkGetMemoryHostPointerPropertiesEXT)vkGetDeviceProcAddr(device, "vkGetMemoryHostPointerPropertiesEXT");
++    VkMemoryHostPointerPropertiesEXT types = {.sType = VK_STRUCTURE_TYPE_MEMORY_HOST_POINTER_PROPERTIES_EXT};
++    if (!get) return VK_ERROR_EXTENSION_NOT_PRESENT;
++    VkResult result = get(device, VK_EXTERNAL_MEMORY_HANDLE_TYPE_HOST_ALLOCATION_BIT_EXT, pointer, &types);
++    if (result != VK_SUCCESS) return result;
++    VkExternalMemoryBufferCreateInfo external = {.sType = VK_STRUCTURE_TYPE_EXTERNAL_MEMORY_BUFFER_CREATE_INFO,
++                                                 .handleTypes = VK_EXTERNAL_MEMORY_HANDLE_TYPE_HOST_ALLOCATION_BIT_EXT};
++    VkBufferCreateInfo create = {
++        .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO, .pNext = &external, .size = size,
++        .usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_SRC_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT |
++                 VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT};
++    VkBuffer buffer = VK_NULL_HANDLE;
++    VkDeviceMemory memory = VK_NULL_HANDLE;
++    result = vkCreateBuffer(device, &create, NULL, &buffer);
++    if (result != VK_SUCCESS) return result;
++    VkMemoryDedicatedRequirements dedicated = {.sType = VK_STRUCTURE_TYPE_MEMORY_DEDICATED_REQUIREMENTS};
++    VkMemoryRequirements2 requirements = {.sType = VK_STRUCTURE_TYPE_MEMORY_REQUIREMENTS_2, .pNext = &dedicated};
++    VkBufferMemoryRequirementsInfo2 query = {.sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_REQUIREMENTS_INFO_2, .buffer = buffer};
++    vkGetBufferMemoryRequirements2(device, &query, &requirements);
++    uint32_t compatible = types.memoryTypeBits & requirements.memoryRequirements.memoryTypeBits;
++    // Guest code writes the original allocation directly. This zero-copy path
++    // requires coherent host memory rather than unflushed noncoherent aliases.
++    VkPhysicalDeviceMemoryProperties memory_properties;
++    vkGetPhysicalDeviceMemoryProperties(physical, &memory_properties);
++    for (uint32_t i = 0; i < memory_properties.memoryTypeCount; i++)
++        if ((memory_properties.memoryTypes[i].propertyFlags &
++             (VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT)) !=
++            (VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT))
++            compatible &= ~(1u << i);
++    if (!compatible || requirements.memoryRequirements.size > size ||
++        (dedicated.requiresDedicatedAllocation && requirements.memoryRequirements.size != size)) {
++        result = VK_ERROR_INVALID_EXTERNAL_HANDLE;
++        goto failed;
++    }
++    VkImportMemoryHostPointerInfoEXT import = {.sType = VK_STRUCTURE_TYPE_IMPORT_MEMORY_HOST_POINTER_INFO_EXT,
++                                               .handleType = VK_EXTERNAL_MEMORY_HANDLE_TYPE_HOST_ALLOCATION_BIT_EXT,
++                                               .pHostPointer = pointer};
++    VkMemoryDedicatedAllocateInfo only = {
++        .sType = VK_STRUCTURE_TYPE_MEMORY_DEDICATED_ALLOCATE_INFO, .pNext = &import, .buffer = buffer};
++    VkMemoryAllocateFlagsInfo flags = {.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_FLAGS_INFO,
++                                       .flags = VK_MEMORY_ALLOCATE_DEVICE_ADDRESS_BIT,
++                                       .pNext = dedicated.requiresDedicatedAllocation ? (void *)&only : (void *)&import};
++    VkMemoryAllocateInfo allocation = {.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO,
++                                       .pNext = &flags,
++                                       .allocationSize = size,
++                                       .memoryTypeIndex = (uint32_t)__builtin_ctz(compatible)};
++    result = vkAllocateMemory(device, &allocation, NULL, &memory);
++    if (result != VK_SUCCESS) goto failed;
++    result = vkBindBufferMemory(device, buffer, memory, 0);
++    if (result != VK_SUCCESS) goto failed;
++    VkBufferDeviceAddressInfo address = {.sType = VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO, .buffer = buffer};
++    VkDeviceAddress location = vkGetBufferDeviceAddress(device, &address);
++    if (!location) {
++        result = VK_ERROR_INITIALIZATION_FAILED;
++        goto failed;
++    }
++    *out = (GuestMemoryBuffer){buffer, memory, location, size};
++    return VK_SUCCESS;
++failed:
++    vkDestroyBuffer(device, buffer, NULL);
++    if (memory) vkFreeMemory(device, memory, NULL);
++    return result;
++}
+diff --git a/tools/test_shader_bounds.c b/tools/test_shader_bounds.c
+new file mode 100644
+index 0000000..4659f94
+--- /dev/null
++++ b/tools/test_shader_bounds.c
+@@ -0,0 +1,41 @@
++// Boundary checks for the Maxwell translator's operand helpers. No game files are used.
++#include <assert.h>
++#include <stdlib.h>
++#include <string.h>
++
++#include "../runtime/nvn/maxwell/translate.c"
++
++int main(int argc, char **argv) {
++    assert(argc == 2);
++    unsigned mode = (unsigned)strtoul(argv[1], NULL, 10);
++    assert(mode >= 1 && mode <= 12);
++    Ctx *context = calloc(1, sizeof *context);
++    ShaderInfo info = {0};
++    context->info = &info;
++    char buffer[256];
++    if (mode <= 2)
++        reg(context, mode == 1 ? -1 : 256, buffer);
++    else if (mode <= 4)
++        set_reg(context, mode == 3 ? -1 : 256, "0u");
++    else if (mode <= 6)
++        cbuf_ref(context, mode == 5 ? -1 : 18, 0, NULL, buffer);
++    else if (mode == 7)
++        assert(!strcmp(reg(context, 0, buffer), "r0") && context->reg_used[0]);
++    else if (mode == 8)
++        assert(!strcmp(reg(context, 254, buffer), "r254") && context->reg_used[254]);
++    else if (mode == 9)
++        assert(!strcmp(reg(context, 255, buffer), "0u") && !context->reg_used[255]);
++    else if (mode == 10) {
++        set_reg(context, 0, "0u");
++        assert(context->reg_used[0]);
++    } else
++        cbuf_ref(context, mode == 11 ? 17 : 0, 0, NULL, buffer);
++    if (mode <= 6)
++        assert(context->fail && strstr(info.error, "out of range"));
++    else
++        assert(!context->fail);
++    free(context->body.buf);
++    free(context);
++    printf("shader operand mode %u PASS\n", mode);
++    return 0;
++}
+diff --git a/tools/test_translate.c b/tools/test_translate.c
+index e1fc122..46842bf 100644
+--- a/tools/test_translate.c
++++ b/tools/test_translate.c
+@@ -224,6 +224,7 @@ int main(int argc, char **argv) {
+     if (do_glsl) { fprintf(stderr, "built without WITH_GLSL: msl mode only\n"); do_glsl = false; }
+ #endif
+     static uint8_t prog[0x80 + 64 * 32 + 128];
++    long msl_invalid = 0;
+     long msl_ok = 0, msl_fail = 0, msl_diff = 0, gl_ok = 0, gl_tfail = 0, gl_tfail_only = 0, gl_cfail = 0, gl_vfail = 0;
+     long by_stage[3] = {0};
+     char reasons[64][96];
+@@ -237,6 +238,12 @@ int main(int argc, char **argv) {
+         bool msl_good = true;
+         if (do_msl) {
+             ShaderInfo *a = maxwell_translate(prog, len, stage, &key);
++            if (!a->msl && (!strncmp(a->error, "register ", 9) || !strncmp(a->error, "constant buffer ", 16)) &&
++                strstr(a->error, "out of range")) {
++                maxwell_free(a);
++                msl_invalid++;
++                continue;  // invalid vectors must not enter the unsafe old decoder
++            }
+             ShaderInfo *b = old_maxwell_translate(prog, len, stage, &key);
+             if (!same_info(a, b)) {
+                 if (msl_diff < 20) dump(dir, "msl_diff", n, a->msl, b->msl, prog, len);
+@@ -292,7 +299,8 @@ int main(int argc, char **argv) {
+         }
+ #endif
+     }
+-    if (do_msl) printf("MSL: %ld programs, %ld translated, %ld failed in both, %ld DIFFERENCES\n", count, msl_ok, msl_fail, msl_diff);
++    if (do_msl) printf("MSL: %ld programs, %ld translated, %ld failed in both, %ld malformed rejected, %ld DIFFERENCES\n",
++                       count, msl_ok, msl_fail, msl_invalid, msl_diff);
+     if (do_glsl) {
+         printf("GLSL: %ld compiled+validated (vs %ld / fs %ld / cs %ld), %ld compile failures, %ld validation failures, "
+                "%ld translation failures (%ld where MSL translated)\n",
+diff --git a/tools/test_vk_pipelines.c b/tools/test_vk_pipelines.c
+index 6027004..2748ec0 100644
+--- a/tools/test_vk_pipelines.c
++++ b/tools/test_vk_pipelines.c
+@@ -70,6 +70,7 @@ static void init_device(void) {
+                                             .synchronization2 = VK_TRUE, .maintenance4 = VK_TRUE,
+                                             .shaderDemoteToHelperInvocation = VK_TRUE, .shaderTerminateInvocation = VK_TRUE};
+     VkPhysicalDeviceVulkan12Features f12 = {.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES, .pNext = &f13,
++                                            .bufferDeviceAddress = VK_TRUE,
+                                             .timelineSemaphore = VK_TRUE, .shaderInt8 = VK_TRUE, .samplerMirrorClampToEdge = VK_TRUE,
+                                             .uniformAndStorageBuffer8BitAccess = VK_TRUE, .storageBuffer8BitAccess = VK_TRUE,
+                                             .scalarBlockLayout = VK_TRUE};
+@@ -99,7 +100,7 @@ static bool make_layout(Layout *l, const uint32_t *const *spv, const size_t *nw,
+     for (int i = 0; i < l->n; i++) {  // the binding numbers the renderer fills (exec.c stage_set)
+         VkBindingInfo *b = &l->b[i];
+         bool ok = b->binding >= 32 ? b->type == VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER
+-                : b->binding == 17 ? b->type == VK_DESCRIPTOR_TYPE_STORAGE_BUFFER
++                : b->binding == 17 ? b->type == VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER
+                 : b->binding <= 19 ? b->type == VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER : false;
+         if (!ok || (int)b->set >= nsets) { fprintf(stderr, "unexpected binding set %u binding %u type %d\n", b->set, b->binding, b->type); return false; }
+     }

@@ -139,6 +139,10 @@ jobs:
             client/src/sst_props.c -lm -o build/source-checks/prop-capacity
           for mode in 1 2 3; do build/source-checks/prop-capacity "$mode"; done
           clang "${flags[@]}" -fsyntax-only -I engine/runtime engine/runtime/hle/sst_world.c
+          clang "${flags[@]}" -Wno-unused-function -ffunction-sections -fdata-sections \
+            -Wl,--gc-sections engine/tools/test_shader_bounds.c -lm \
+            -o build/source-checks/shader-bounds
+          for mode in {1..12}; do build/source-checks/shader-bounds "$mode"; done
           clang "${flags[@]}" -Werror -I validation tests/owned_prop_census_test.c \
             -lm -o build/source-checks/owned-prop-census
           build/source-checks/owned-prop-census
