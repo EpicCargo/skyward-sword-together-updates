@@ -92,10 +92,12 @@ uint64_t sst_now_ms(void) { return now_ms; }
 uint32_t sst_net_generation(void) { return network_generation; }
 uint16_t sst_net_my_id(void) { return local_player_id; }
 SstStatus sst_net_status(char *why, int bytes) { if (why && bytes > 0) *why = 0; return network_online ? SST_ONLINE : SST_OFFLINE; }
+#ifndef SST_PROP_FIXTURE_CUSTOM_ROSTER
 int sst_net_players(SstPlayer *out, int capacity) {
     if (!remote_connected) return 0;
     assert(capacity >= 1); out[0] = (SstPlayer){.active=true, .id=2, .presence_generation=remote_presence, .scene=remote_scene}; return 1;
 }
+#endif
 void sst_net_poll_props(SstPropFn fn, void *user) {
     if (have_pending) { have_pending = false; if (fn) fn(&pending, user); }
 }

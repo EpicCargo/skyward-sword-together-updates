@@ -66,6 +66,7 @@ jobs:
           python3 validation/check_admission_baseline.py
           python3 validation/check_session_baseline.py
           python3 validation/check_context_baseline.py
+          python3 validation/check_owner_baseline.py
           flags=(-O1 -g -Wall -Wextra -std=c11 -D_GNU_SOURCE
             -fsanitize=address,undefined -fno-omit-frame-pointer)
           clang "${flags[@]}" -Wno-unused-function -ffunction-sections -fdata-sections \
@@ -118,6 +119,11 @@ jobs:
             client/src/sst_props.c client/src/sst_world.c -lpthread -lm \
             -o build/source-checks/prop-context
           for mode in {1..16}; do build/source-checks/prop-context "$mode"; done
+          clang "${flags[@]}" -Wno-unused-function -ffunction-sections -fdata-sections \
+            -Wl,--gc-sections -I engine/runtime tests/prop_bridge_owner_test.c \
+            client/src/sst_props.c client/src/sst_world.c -lpthread -lm \
+            -o build/source-checks/prop-owner
+          for mode in {1..18}; do build/source-checks/prop-owner "$mode"; done
           clang "${flags[@]}" -Wno-unused-function -ffunction-sections -fdata-sections \
             -Wl,--gc-sections -I engine/runtime tests/prop_bridge_binding_test.c \
             client/src/sst_props.c client/src/sst_world.c -lpthread -lm \

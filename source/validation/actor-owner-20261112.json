@@ -1,0 +1,56 @@
+{
+  "passed": true,
+  "scope": "Actual actor bridge with synthetic native arena/model/network stubs; no native game/GPU acceptance.",
+  "engine_patches": 37,
+  "engine_tree": "fa7dd3656f3c814176f492697a3c16b08ee4a567",
+  "candidate_header_sha256": "ab2572f5c7a36d0495990512607cd6ac3d3fd7a6b845e4890bd91d938a541514",
+  "baseline_header_sha256": "c4f93c4e21df8205228c3cd91dbf130a6a02dac6fb34df44547a341b8c70f835",
+  "candidate_cases": 108,
+  "baseline_failures": 69,
+  "baseline_controls": 39,
+  "baseline_failure_modes_all_roles": [
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+    7,
+    14,
+    15,
+    16,
+    18
+  ],
+  "baseline_failure_mode_guest_only": 17,
+  "profiles": [
+    496,
+    497,
+    521
+  ],
+  "local_player_ids": [
+    1,
+    3
+  ],
+  "previous_context_cases": 96,
+  "previous_session_cases": 60,
+  "previous_admission_cases": 72,
+  "previous_discovery_cases": 84,
+  "previous_departure_cases": 54,
+  "previous_deactivation_cases": 138,
+  "previous_pause_cases": 42,
+  "fixtures_sha256": {
+    "tests/prop_bridge_owner_test.c": "6afa7b411cd47bdabe729ee41eac95a130d80bccef785942df46a067c470b4ce",
+    "tests/prop_bridge_presentation_test.c": "4d0df5efb1aeec6793f4f67ed8477e0eba395babea06b9c8a484a7ae3222a06f",
+    "tests/prop_bridge_roster_test.c": "ad7583d48ac22bf987e23155461697d7569927e4ae618e1e3580475e3ad750a3",
+    "validation/check_owner_baseline.py": "9e5e63187ee363fd72ce0ef0493eea28805b71da729ad0e9a92ae4bfa28fe2ca"
+  },
+  "sanitizers": [
+    "AddressSanitizer",
+    "UndefinedBehaviorSanitizer"
+  ],
+  "game_launched": false,
+  "windows_child_launched": false,
+  "gameplay_accepted": false,
+  "installed": false,
+  "release_feed_updated": false
+}

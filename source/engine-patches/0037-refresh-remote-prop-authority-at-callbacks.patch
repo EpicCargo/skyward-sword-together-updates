@@ -1,0 +1,74 @@
+From 28dfb00175ae1e4c25042461fa4134eb0653b348 Mon Sep 17 00:00:00 2001
+From: EpicCargo <149317426+EpicCargo@users.noreply.github.com>
+Date: Thu, 12 Nov 2026 21:52:34 -0500
+Subject: [PATCH] Refresh remote prop authority at actor callbacks
+
+---
+ runtime/hle/sst_prop_bridge.h | 37 ++++++++++++++++++++++-------------
+ 1 file changed, 23 insertions(+), 14 deletions(-)
+
+diff --git a/runtime/hle/sst_prop_bridge.h b/runtime/hle/sst_prop_bridge.h
+index 960d2eb..951a3d1 100644
+--- a/runtime/hle/sst_prop_bridge.h
++++ b/runtime/hle/sst_prop_bridge.h
+@@ -184,6 +184,24 @@ static void prop_incoming(const SstProp *p, void *unused) {
+     binding->local_placed=false;
+ }
+ 
++// Reconcile the authenticated current roster without native memory writes.
++static bool prop_roster(const SstScene *scene) {
++    SstPlayer players[SST_MAX_PLAYERS]; int count = sst_net_players(players, SST_MAX_PLAYERS);
++    SstPropPresence live[SST_MAX_PLAYERS]; unsigned live_count = 0;
++    uint16_t mine = sst_net_my_id();
++    if (!mine) return false;
++    live[live_count++] = (SstPropPresence){mine, props_bridge.generation};
++    for (int j = 0; j < count; j++) {
++        if (!players[j].active || players[j].id == mine ||
++            !sst_world_same_area(&players[j].scene, scene)) continue;
++        if (live_count == SST_MAX_PLAYERS) return false;
++        live[live_count++] = (SstPropPresence){players[j].id, players[j].presence_generation};
++    }
++    // Retired IDs must not occupy the bounded slots forever. The exact current
++    // authenticated roster makes slot reuse safe without admitting late packets.
++    return sst_props_roster(&props_bridge.state, live, live_count);
++}
++
+ static void prop_tick(SstLocal l, uint32_t load, bool allowed, bool pause) {
+     pthread_mutex_lock(&props_bridge.mu);
+     uint32_t gen = sst_net_generation();
+@@ -210,20 +228,7 @@ static void prop_tick(SstLocal l, uint32_t load, bool allowed, bool pause) {
+         // carry's cleanup for its exact, independently validated actor callback.
+         prop_suspend(); goto done;
+     }
+-    SstPlayer players[SST_MAX_PLAYERS]; int count = sst_net_players(players, SST_MAX_PLAYERS);
+-    SstPropPresence live[SST_MAX_PLAYERS]; unsigned live_count = 0;
+-    uint16_t mine = sst_net_my_id();
+-    if (!mine) { prop_clear(); goto done; }
+-    live[live_count++] = (SstPropPresence){mine, props_bridge.generation};
+-    for (int j = 0; j < count; j++) {
+-        if (!players[j].active || players[j].id == mine ||
+-            !sst_world_same_area(&players[j].scene, &l.scene)) continue;
+-        if (live_count == SST_MAX_PLAYERS) { prop_clear(); goto done; }
+-        live[live_count++] = (SstPropPresence){players[j].id, players[j].presence_generation};
+-    }
+-    // Retired IDs must not occupy the four slots forever. The exact current
+-    // authenticated roster makes slot reuse safe without admitting late packets.
+-    if (!sst_props_roster(&props_bridge.state, live, live_count)) { prop_clear(); goto done; }
++    if (!prop_roster(&l.scene)) { prop_suspend(); goto done; }
+     sst_net_poll_props(prop_incoming, NULL);
+ done:
+     pthread_mutex_unlock(&props_bridge.mu);
+@@ -244,6 +249,10 @@ static void prop_callback_context(void) {
+     if (props_bridge.enabled &&
+         !prop_local_matches(sst_game_read_local(&SST_LAYOUT_SSHD_100, sst_game_pose_tick())))
+         prop_clear();
++    // A remote JOIN/SCENE/LEAVE can arrive between periodic world ticks.
++    // Retire its accepted target before this actor can present or contend with it.
++    if (props_bridge.enabled && !prop_roster(&props_bridge.scene))
++        prop_suspend();
+ }
+ 
+ static void prop_send(PropBinding *b, bool held, uint64_t now) {
+-- 
+2.43.0
+

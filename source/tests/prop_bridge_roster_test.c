@@ -123,6 +123,9 @@ int main(void) {
     enqueue(prop(9,current[0].id,current[0].presence_generation,3));
     prop_tick(local,1,true,true); assert(!props_bridge.enabled && !queued_count && discarded==1);
     tick(local,1); assert(props_bridge.enabled && !get(9,&out));
+    // This binding was recreated after invalid-roster suspension. Its receive
+    // fence deliberately rejects a packet tied to the discovery millisecond.
+    now_ms++;
     enqueue(prop(9,current[0].id,current[0].presence_generation,4)); tick(local,1); assert(get(9,&out));
     tick(local,2); assert(!get(9,&out));
     enqueue(prop(9,current[0].id,current[0].presence_generation,5)); tick(local,2); assert(get(9,&out));
