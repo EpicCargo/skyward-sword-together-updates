@@ -70,6 +70,7 @@ static bool have_pending;
 static Cpu cpu;
 static const SstScene area = {.stage="F000", .room=1, .layer=1, .entrance=4};
 
+#ifndef SST_PROP_FIXTURE_CUSTOM_GUEST_CALL
 void guest_call(Cpu *c, uint64_t address) {
     assert(pthread_mutex_trylock(&props_bridge.mu) == 0);
     pthread_mutex_unlock(&props_bridge.mu);
@@ -79,6 +80,7 @@ void guest_call(Cpu *c, uint64_t address) {
     model_calls++;
     c->x[1] = 0; // The actual adapter must restore the caller's register state.
 }
+#endif
 uint32_t sst_game_pose_tick(void) { return local.pose.tick; }
 SstLocal sst_game_read_local(const SstGameLayout *layout, uint32_t tick) {
     assert(layout == &SST_LAYOUT_SSHD_100 && tick == local.pose.tick); return local;

@@ -1,0 +1,176 @@
+From 1437c14c0cb5de07982edcbe48824c222660ac42 Mon Sep 17 00:00:00 2001
+From: EpicCargo <149317426+EpicCargo@users.noreply.github.com>
+Date: Thu, 12 Nov 2026 22:39:55 -0500
+Subject: [PATCH] Stop stale prop presentation at returning model callbacks
+
+---
+ runtime/hle/sst_prop_bridge.h | 62 +++++++++++++++++++++++++++++++----
+ runtime/hle/sst_prop_native.h | 36 ++++++++++++++++----
+ 2 files changed, 86 insertions(+), 12 deletions(-)
+
+diff --git a/runtime/hle/sst_prop_bridge.h b/runtime/hle/sst_prop_bridge.h
+index 951a3d1..94580a9 100644
+--- a/runtime/hle/sst_prop_bridge.h
++++ b/runtime/hle/sst_prop_bridge.h
+@@ -322,10 +322,49 @@ static bool prop_display_pose(const SstProp *p,SstPropNativePose *out) {
+     *out=target;return true;
+ }
+ 
++typedef struct {
++    uint64_t actor, player, model;
++    uint32_t instance, load, generation, state;
++    uint8_t native_room;
++    SstScene scene;
++    SstPropKey key;
++    SstProp target;
++    bool cleanup, parked;
++} PropPresentation;
++static bool prop_presentation_current(PropPresentation *p) {
++    if (!p->cleanup) prop_callback_context();
++    PropBinding *b=prop_binding(p->actor);
++    if (!b || b->instance!=p->instance || !sst_prop_key_equal(&b->key,&p->key) ||
++        props_bridge.player!=p->player || props_bridge.load!=p->load ||
++        props_bridge.generation!=p->generation ||
++        !sst_world_same_area(&props_bridge.scene,&p->scene) ||
++        !prop_local_matches(sst_game_read_local(&SST_LAYOUT_SSHD_100,sst_game_pose_tick())))return false;
++    if (r32(p->actor+0x358)!=p->state || r8(p->actor+0x17c)!=p->native_room ||
++        sst_prop_native_model(p->actor)!=p->model)return false;
++    if (p->cleanup) return true;
++    if (!props_bridge.enabled || b->restore_pending) return false;
++    SstProp current={0};
++    bool have=sst_props_get(&props_bridge.state,&p->key,sst_now_ms(),&current);
++    if (have!=(p->target.from!=0) || (have &&
++        (current.from!=p->target.from || current.presence_generation!=p->target.presence_generation ||
++         current.sequence!=p->target.sequence || current.phase!=p->target.phase)))return false;
++    // The first pose write precedes model guest calls. Preserve its actual floor
++    // before a returning safe point can retire this partially presented carry.
++    if (!p->parked && p->target.phase==SST_PROP_CARRY) b->remote_held=true;
++    return true;
++}
++static bool prop_presentation_guard(void *opaque) {
++    pthread_mutex_lock(&props_bridge.mu);
++    bool current=prop_presentation_current(opaque);
++    pthread_mutex_unlock(&props_bridge.mu);
++    return current;
++}
++
+ static GuestFn prop_original[SST_PROP_NATIVE_ADAPTERS];
+ static void prop_execute(Cpu *c, GuestFn original) {
+     uint64_t actor = c->x[0]; SstProp target = {0}; SstPropNativePose pose;
+     uint32_t instance = 0, load = 0, gen = 0; bool candidate = false, parked=false, cleanup=false;
++    PropPresentation presentation={0};
+     pthread_mutex_lock(&props_bridge.mu);
+     // Deactivation can follow a pause, which already cleared enabled.
+     // Settings/connection changes still owe outstanding native floor cleanup.
+@@ -385,17 +424,28 @@ static void prop_execute(Cpu *c, GuestFn original) {
+         if(candidate){instance = b->instance; load = props_bridge.load; gen = props_bridge.generation;}
+         if (!candidate) prop_release(b);
+     }
++    if (candidate) {
++        PropBinding *present_binding=prop_binding(actor);
++        if (!present_binding) candidate=false;
++        else presentation=(PropPresentation){.actor=actor,.player=props_bridge.player,
++            .instance=instance,.load=load,.generation=gen,.key=present_binding->key,
++            .model=sst_prop_native_model(actor),.state=r32(actor+0x358),.native_room=r8(actor+0x17c),
++            .scene=props_bridge.scene,
++            .target=target,.cleanup=cleanup,.parked=parked};
++    }
+     pthread_mutex_unlock(&props_bridge.mu);
+     // Native model processing can enter HLE safe points. No bridge mutex may be
+     // held across a guest call: shutdown/reboot can unwind the whole guest stack.
+-    bool presented = candidate && sst_prop_native_vase(actor) && r32(actor + 8) == instance &&
+-        sst_prop_native_present(c, actor, &pose);
+-    if (presented) {
+-        sst_prop_native_release_velocity(actor); c->x[0] = 1;
++    SstPropNativeResult presented=SST_PROP_NATIVE_SKIPPED;
++    if (candidate && sst_prop_native_vase(actor) && r32(actor+8)==instance)
++        presented=sst_prop_native_present(c,actor,&pose,prop_presentation_guard,&presentation);
++    if (presented==SST_PROP_NATIVE_INTERRUPTED) {c->x[0]=1;return;}
++    if (presented==SST_PROP_NATIVE_PRESENTED) {
++        c->x[0] = 1;
+         pthread_mutex_lock(&props_bridge.mu);
+-        b = (props_bridge.enabled || cleanup) && props_bridge.load == load && props_bridge.generation == gen ?
+-            prop_binding(actor) : NULL;
++        b = prop_presentation_current(&presentation) ? prop_binding(actor) : NULL;
+         if (b) {
++            sst_prop_native_release_velocity(actor);
+             if(parked) {
+                 sst_prop_presentation_stats.parked_presented++;b->remote_held=false;
+             } else {
+diff --git a/runtime/hle/sst_prop_native.h b/runtime/hle/sst_prop_native.h
+index 228910e..28d8795 100644
+--- a/runtime/hle/sst_prop_native.h
++++ b/runtime/hle/sst_prop_native.h
+@@ -135,20 +135,41 @@ static inline bool sst_prop_native_sample(uint64_t a, SstPropNativePose *pose) {
+ // intercept this exact actor's execute while remote authority is valid; normal
+ // Wait/Grab simulation would otherwise apply gravity, collision or native Link's
+ // carry action. Every genuinely attached local actor remains on its normal path.
+-static inline bool sst_prop_native_present(Cpu *c, uint64_t a,
+-                                           const SstPropNativePose *pose) {
++typedef enum {
++    SST_PROP_NATIVE_SKIPPED, SST_PROP_NATIVE_PRESENTED, SST_PROP_NATIVE_INTERRUPTED
++} SstPropNativeResult;
++typedef bool (*SstPropNativeGuard)(void *opaque);
++typedef struct {
++    uint64_t actor, model;
++    const SstPropNativeDescriptor *descriptor;
++    uint32_t instance, params, state;
++    uint16_t placed_id;
++    uint8_t room;
++} SstPropNativeFrame;
++static inline bool sst_prop_native_frame_current(const SstPropNativeFrame *f) {
++    uint64_t a=f->actor;
++    return sst_prop_native_actor_descriptor(a)==f->descriptor &&
++        r32(a+8)==f->instance && r32(a+0xc)==f->params &&
++        r16(a+0x136)==f->placed_id && r8(a+0x17c)==f->room &&
++        r32(a+0x358)==f->state && sst_prop_native_model(a)==f->model;
++}
++static inline SstPropNativeResult sst_prop_native_present(Cpu *c, uint64_t a,
++        const SstPropNativePose *pose, SstPropNativeGuard guard, void *opaque) {
+     if (!c || !sst_prop_native_pose_valid(pose) || !sst_prop_native_vase(a) ||
+         (r32(a + 0x358) != 0 && r32(a + 0x358) != 3))
+-        return false;
++        return SST_PROP_NATIVE_SKIPPED;
+     const SstPropNativeDescriptor *d = sst_prop_native_actor_descriptor(a);
+     uint64_t model = sst_prop_native_model(a);
+-    if (!d || !model) return false;
++    if (!d || !model || !guard) return SST_PROP_NATIVE_SKIPPED;
+     float scale[3];
+     if (d->tail_flags & SST_PROP_NATIVE_COPY_SCALE) {
+         memcpy(scale, (void *)(uintptr_t)(a + 0x150), sizeof scale);
+         for (unsigned i = 0; i < 3; i++)
+-            if (!isfinite(scale[i]) || scale[i] <= 0 || scale[i] > 16) return false;
++            if (!isfinite(scale[i]) || scale[i] <= 0 || scale[i] > 16) return SST_PROP_NATIVE_SKIPPED;
+     }
++    SstPropNativeFrame frame={.actor=a,.model=model,.descriptor=d,.instance=r32(a+8),
++        .params=r32(a+0xc),.state=r32(a+0x358),.placed_id=r16(a+0x136),.room=r8(a+0x17c)};
++    if (!guard(opaque) || !sst_prop_native_frame_current(&frame)) return SST_PROP_NATIVE_INTERRUPTED;
+ 
+     memcpy((void *)(uintptr_t)(a + 0x144), pose->pos, sizeof pose->pos);
+     memcpy((void *)(uintptr_t)(a + 0x13c), pose->rot, sizeof pose->rot);
+@@ -164,10 +185,13 @@ static inline bool sst_prop_native_present(Cpu *c, uint64_t a,
+         Cpu saved = *c;
+         c->x[0] = model; c->x[1] = 2; c->x[2] = 0;
+         guest_call(c, SST_PROP_MODEL_OPTIONS); *c = saved;
++        if (!guard(opaque) || !sst_prop_native_frame_current(&frame)) return SST_PROP_NATIVE_INTERRUPTED;
+         c->x[0] = model; c->x[1] = 1; c->x[2] = 0; c->x[3] = 0;
+         guest_call(c, SST_PROP_MODEL_PROCESS); *c = saved;
++        if (!guard(opaque) || !sst_prop_native_frame_current(&frame)) return SST_PROP_NATIVE_INTERRUPTED;
+         c->x[0] = model; c->x[1] = 2; c->x[2] = 1;
+         guest_call(c, SST_PROP_MODEL_OPTIONS); *c = saved;
++        if (!guard(opaque) || !sst_prop_native_frame_current(&frame)) return SST_PROP_NATIVE_INTERRUPTED;
+     }
+ 
+     float center[3] = {pose->pos[0], pose->pos[1] + d->center_height[0], pose->pos[2]};
+@@ -175,7 +199,7 @@ static inline bool sst_prop_native_present(Cpu *c, uint64_t a,
+     center[1] = pose->pos[1] + d->center_height[1];
+     memcpy((void *)(uintptr_t)(a + 0x1c8), center, sizeof center);
+     if (d->tail_clear_offset) *(uint8_t *)(uintptr_t)(a + d->tail_clear_offset) = 0;
+-    return true;
++    return SST_PROP_NATIVE_PRESENTED;
+ }
+ 
+ // Call once when a confirmed putdown resumes this unheld local actor at the
+-- 
+2.43.0
+
