@@ -97,5 +97,13 @@
   "game_launched": false,
   "gameplay_accepted": false,
   "installed": false,
-  "release_feed_updated": false
+  "release_feed_updated": false,
+  "hosted_validation": {
+    "passed": true,
+    "source_commit": "42c262235923b9db98f460367b10a8e67a49210b",
+    "github_run_url": "https://github.com/EpicCargo/skyward-sword-together-updates/actions/runs/43342088046",
+    "source_tests_passed": true,
+    "windows_runtime_cross_build_passed": true,
+    "game_launched": false
+  }
 }

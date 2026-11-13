@@ -263,7 +263,7 @@
     "build-runtime.py",
     "client-patches/0001-reclaim-retired-prop-tracks.patch"
   ],
-  "validation_scope": "Native key/lifetime admission passed72 local CPU cases,42 exact patch33 baseline failures/30 controls,600000 full-table replacements and prior lifecycle regressions. Hosted validation and native gameplay remain separate gates.",
+  "validation_scope": "Native key/lifetime admission passed 72 local and hosted CPU cases, 42 exact patch33 baseline failures/30 controls, 600000 local full-table replacements, prior lifecycle regressions and a hosted Windows cross-build. Native gameplay remains pending.",
   "previous_hardware_engine_tree": "687802ad93078709fb83d3b3a20d8ba015b39c35",
   "previous_hardware_runtime_sha256": "410753d9ca080f44dbc523c253fa99752b503aa71fedc5478dbda3b12900e0be",
   "previous_partial_engine_tree": "7112f66f7cf19b9afeec131568813cdd475ff6b6",
