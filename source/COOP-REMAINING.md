@@ -1,6 +1,6 @@
 # Remaining co-op work
 
-Updated November 13, 2026. Patch39 adds the first renderer-foundation correction after confirming the private game library was already fully generated, compiled and linked. Patch40 corrects the clean/manual Makefile path to generate and link all four modules at their runtime bases. The co-op source also includes patches33–38 for prop lifecycle and callback authority. Patch32 passed four focused Windows runs, each with one full game and three lightweight peers. Patch39 has compiler and asset-free graphics coverage but no game launch. Separate full-client, WSL visual and campaign readiness remain unverified.
+Updated November 13, 2026. Patch39 adds the first renderer-foundation correction after confirming the private game library was already fully generated, compiled and linked. Patch40 corrects the clean/manual Makefile path to generate and link all four modules at their runtime bases; patch41 gives the crash symbolizer the same complete map. The co-op source also includes patches33–38 for prop lifecycle and callback authority. Patch32 passed four focused Windows runs, each with one full game and three lightweight peers. Patch39 has compiler and asset-free graphics coverage but no game launch. Separate full-client, WSL visual and campaign readiness remain unverified.
 
 | Priority | Work | Current evidence and next acceptance |
 | --- | --- | --- |

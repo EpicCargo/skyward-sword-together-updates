@@ -1,0 +1,63 @@
+From 307df0d7fcaeb12f130550bc3e8404530d9734e3 Mon Sep 17 00:00:00 2001
+From: SST continuation <sst-continuation@localhost>
+Date: Fri, 13 Nov 2026 14:20:25 -0500
+Subject: [PATCH] Align guest symbolization with four-module layout
+
+---
+ tools/sym.py             |  7 ++++++-
+ tools/test_build_game.py | 16 ++++++++++++++++
+ 2 files changed, 22 insertions(+), 1 deletion(-)
+
+diff --git a/tools/sym.py b/tools/sym.py
+index 3322a35..ca54276 100644
+--- a/tools/sym.py
++++ b/tools/sym.py
+@@ -7,7 +7,12 @@ import sys
+ import capstone
+ from nso import Nso
+ 
+-MODS = [('main', 0x7000000000), ('sdk', 0x7004000000)]
++MODS = [
++    ('main', 0x7000000000),
++    ('sdk', 0x7030000000),
++    ('subsdk0', 0x7032000000),
++    ('subsdk1', 0x7034000000),
++]
+ _cache = {}
+ 
+ 
+diff --git a/tools/test_build_game.py b/tools/test_build_game.py
+index d348074..158a44e 100644
+--- a/tools/test_build_game.py
++++ b/tools/test_build_game.py
+@@ -1,4 +1,5 @@
+ """A new generator version must not reuse objects from an older build."""
++import ast
+ import importlib.util
+ from pathlib import Path
+ import re
+@@ -44,6 +45,21 @@ class BuildCacheTest(unittest.TestCase):
+                 self.assertEqual(make_base, runtime_base)
+                 self.assertIn(f'gen.py {module} ../extracted/exefs/{module} $(GEN_BASE_{module}) ../$(GEN)/{module}', makefile)
+ 
++    def test_symbolizer_covers_every_loaded_module_at_its_runtime_base(self):
++        root = Path(__file__).resolve().parents[1]
++        runtime = (root / 'runtime/rt.h').read_text()
++        tree = ast.parse((root / 'tools/sym.py').read_text())
++        mods = next(ast.literal_eval(node.value) for node in tree.body
++                    if isinstance(node, ast.Assign) and any(isinstance(target, ast.Name) and target.id == 'MODS'
++                                                            for target in node.targets))
++        runtime_names = {'main': 'MAIN', 'sdk': 'SDK', 'subsdk0': 'SUBSDK0', 'subsdk1': 'SUBSDK1'}
++        expected = []
++        for module in ('main', 'sdk', 'subsdk0', 'subsdk1'):
++            base = re.search(rf'^#define\s+{runtime_names[module]}_BASE\s+(0x[0-9a-f]+)ull$',
++                             runtime, re.MULTILINE).group(1)
++            expected.append((module, int(base, 16)))
++        self.assertEqual(mods, expected)
++
+ 
+ if __name__ == '__main__':
+     unittest.main()
+-- 
+2.43.0
+
