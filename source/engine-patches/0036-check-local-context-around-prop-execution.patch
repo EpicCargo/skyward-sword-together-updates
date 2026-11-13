@@ -1,0 +1,72 @@
+From 0849327ebf3b1eae634dbc623dd2a072e877b906 Mon Sep 17 00:00:00 2001
+From: EpicCargo <149317426+EpicCargo@users.noreply.github.com>
+Date: Thu, 12 Nov 2026 20:57:28 -0500
+Subject: [PATCH] Check current local context around prop actor execution
+
+---
+ runtime/hle/sst_prop_bridge.h | 28 +++++++++++++++++++++++-----
+ 1 file changed, 23 insertions(+), 5 deletions(-)
+
+diff --git a/runtime/hle/sst_prop_bridge.h b/runtime/hle/sst_prop_bridge.h
+index 3ade974..960d2eb 100644
+--- a/runtime/hle/sst_prop_bridge.h
++++ b/runtime/hle/sst_prop_bridge.h
+@@ -229,6 +229,23 @@ done:
+     pthread_mutex_unlock(&props_bridge.mu);
+ }
+ 
++static bool prop_local_matches(SstLocal local) {
++    return local.valid && local.player_address == props_bridge.player &&
++        local.player_instance == props_bridge.load &&
++        sst_world_same_area(&local.scene, &props_bridge.scene);
++}
++
++static void prop_callback_context(void) {
++    if (!g_sst.sync_props || sst_net_status(NULL, 0) != SST_ONLINE ||
++        sst_net_generation() != props_bridge.generation)
++        prop_suspend();
++    // The world tick is periodic. A room change or a new local player can
++    // precede it; old bindings and floor samples have no authority there.
++    if (props_bridge.enabled &&
++        !prop_local_matches(sst_game_read_local(&SST_LAYOUT_SSHD_100, sst_game_pose_tick())))
++        prop_clear();
++}
++
+ static void prop_send(PropBinding *b, bool held, uint64_t now) {
+     if (held) { b->remote_held = false; b->local_held = true; b->local_placed = false; b->settle_until = now + 1000; }
+     else if (b->local_held) { b->local_held = false; b->local_placed = true; }
+@@ -250,8 +267,8 @@ static void prop_send(PropBinding *b, bool held, uint64_t now) {
+         props_bridge.place_cursor = (unsigned)(b - props_bridge.bindings + 1) % SST_PROPS;
+     }
+     SstPropNativePose native; SstLocal local = sst_game_read_local(&SST_LAYOUT_SSHD_100, sst_game_pose_tick());
+-    if (!local.valid || !sst_world_same_area(&local.scene, &props_bridge.scene) ||
+-        !sst_prop_native_sample(b->actor, &native)) return;
++    if (!prop_local_matches(local)) { prop_clear(); return; }
++    if (!sst_prop_native_sample(b->actor, &native)) return;
+     SstProp p = {.scene=local.scene, .key=b->key, .sequence=++props_bridge.sequence,
+         .pose_tick=local.pose.tick, .phase=held ? SST_PROP_CARRY : SST_PROP_PLACE,
+         .yaw=local.pose.rot[1]};
+@@ -305,9 +322,7 @@ static void prop_execute(Cpu *c, GuestFn original) {
+     // Settings/connection changes still owe outstanding native floor cleanup.
+     // A successful reconnect can also precede the next periodic world tick.
+     // Retire the old session before this actor can use its packet authority.
+-    if (!g_sst.sync_props || sst_net_status(NULL, 0) != SST_ONLINE ||
+-        sst_net_generation() != props_bridge.generation)
+-        prop_suspend();
++    prop_callback_context();
+     PropBinding *b = prop_binding(actor);
+     if (b && b->restore_pending) {
+         SstLocal current = sst_game_read_local(&SST_LAYOUT_SSHD_100, sst_game_pose_tick());
+@@ -394,6 +409,9 @@ static void prop_execute(Cpu *c, GuestFn original) {
+     }
+     if (original) original(c);
+     pthread_mutex_lock(&props_bridge.mu);
++    // Native execution may cross a safe point. Recheck before releasing
++    // velocity or publishing a local observation from its returned actor.
++    prop_callback_context();
+     b = !cleanup && props_bridge.enabled && g_sst.sync_props &&
+         sst_net_status(NULL, 0) == SST_ONLINE ? prop_binding(actor) : NULL;
+     if (b) {
+-- 
+2.43.0
+

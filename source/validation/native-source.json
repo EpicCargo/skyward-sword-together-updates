@@ -1,7 +1,7 @@
 {
   "base_commit": "506a9bc5aead5fc9598bb8f4a521f3b26f8897e8",
-  "engine_tree": "aa2ff3f7a6a8a65f48100161019ad9cb141f1853",
-  "engine_patches": 35,
+  "engine_tree": "784400e0827726d93f0b4bd98f19b504c24d6ebc",
+  "engine_patches": 36,
   "native_file_sha256": {
     "client/Makefile": "c909d6794becd1904f63cb58d2fbbf47c5393a4624945bd25c3080cbb476e79c",
     "client/src/sst_animation.c": "94fd3e1703f99205624883bbb97964dcc4ed8dba73ef167b0bdbb527ae28f7e1",
@@ -170,7 +170,7 @@
     "engine/runtime/hle/sst_dev.c": "5560369f4b29f1aa81cc376e9497c6a4df23cb6e87165db345f2765ac9c81414",
     "engine/runtime/hle/sst_dev.h": "90c719f26f9466c4e0f8c39308caba7729f4239ba5326565da0dc99d6588c948",
     "engine/runtime/hle/sst_pickup_bridge.h": "9a4eb3b02fd24279195906b2b98ee3ecee9abccbea7c7183d5621bacecf88c6b",
-    "engine/runtime/hle/sst_prop_bridge.h": "fe77fc89efde1fb4e427a50c7a28608bba4219b7e6d56a3e397172eb5b178e6c",
+    "engine/runtime/hle/sst_prop_bridge.h": "c4f93c4e21df8205228c3cd91dbf130a6a02dac6fb34df44547a341b8c70f835",
     "engine/runtime/hle/sst_prop_native.h": "3dc48fd44941c2fd1e4a452b7883ce2d321d298b53e98037ce4c56753bdbb200",
     "engine/runtime/hle/sst_prop_rest.h": "8ad670ae59d89d583fb23544aadbdb999398fe346b42e1c5bada33735109a975",
     "engine/runtime/hle/sst_prop_walk.h": "092ad1e499eaeaf16e66dcb2cc3eda6c72af720082e7f1c1694bea8bc4170a03",
@@ -263,11 +263,11 @@
     "build-runtime.py",
     "client-patches/0001-reclaim-retired-prop-tracks.patch"
   ],
-  "validation_scope": "Actor-callback session retirement passed60 local cases,24 exact patch34 failures/36 controls, prior native lifecycle regressions and600000 full-table replacements. Hosted cross-build and native gameplay remain separate gates.",
+  "validation_scope": "Local-context actor callback checks: CPU regressions use synthetic native/model/network stubs. Hosted build and native gameplay are separate gates.",
   "previous_hardware_engine_tree": "687802ad93078709fb83d3b3a20d8ba015b39c35",
   "previous_hardware_runtime_sha256": "410753d9ca080f44dbc523c253fa99752b503aa71fedc5478dbda3b12900e0be",
   "previous_partial_engine_tree": "7112f66f7cf19b9afeec131568813cdd475ff6b6",
   "previous_partial_runtime_sha256": "3a40abc9848b24f3e5fc89b4c8fced2b5546b908ac579e96e2c2d1bf899937a8",
-  "previous_cpu_engine_tree": "45b8f354ff88318a233c2e5155f155318f4e6e08",
+  "previous_cpu_engine_tree": "aa2ff3f7a6a8a65f48100161019ad9cb141f1853",
   "previous_focused_native_runtime_sha256": "4f3a88b6d54ef3f860d22a156eeb542ff03f1ec70c0b9da09aeef2e57ddf4cd1"
 }
