@@ -1,0 +1,32 @@
+{
+  "passed": true,
+  "gpu_cases": 14,
+  "renderer": "Mesa llvmpipe",
+  "validation_warnings": 0,
+  "source_sha256": {
+    "tests/vulkan_guest_memory_test.c": "08e343b44fba6b9604f76f2a837dbbc68918a8a2d6b791f980c279512dda77bb",
+    "engine/runtime/nvn/maxwell/translate.c": "ff07d2408d64e1f349dd7f0f0859d50ee47df1e486489351d5abbb4e6a706d74",
+    "engine/runtime/nvn/vulkan/guest_memory.h": "ab602110f2e1479666f404d4a21e706145a6a1229dcd41258ad43d6f38298341"
+  },
+  "game_launched": false,
+  "engine_tree": "afc6c5f74a29d03bbea1193b669836f665cb9eb5",
+  "engine_patches": 42,
+  "peak_sampled_rss_mib": 436.9,
+  "game_visual_acceptance": false,
+  "cases": [
+    "32-bit load/store",
+    "read beyond 128 MiB",
+    "read ending at live limit",
+    "read outside reduced live size",
+    "128-bit read crossing live limit",
+    "read starting at live limit",
+    "wrapped guest address",
+    "zero live-size fallback preserves memory",
+    "zero-backed fallback reads zero",
+    "128-bit store crossing live limit preserves memory",
+    "128-bit store ending exactly at live limit",
+    "store starting at live limit",
+    "store outside reduced live size",
+    "128-bit load/store"
+  ]
+}

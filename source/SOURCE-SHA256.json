@@ -3,11 +3,11 @@
   "CHANGES-2026-11-08.md": "6d1c8b97257b9b5007078a92a389d2e7f9537f3675c7711777462a6dcacb8a30",
   "CHANGES-2026-11-11.md": "028957bbbebe8369c302b2beaf4a38e1f2ac1a8b8d1e4e24ab1cb70d3b17d23f",
   "CHANGES-2026-11-12.md": "a3242c14829e6eff4cc2e3a1d834446e90e772f9ae6aab7593f20542534f6006",
-  "CHANGES-2026-11-13.md": "88c0f336aaa19f5a35df11fca32817b71abd5a2a67a0e38434a0622d24569658",
+  "CHANGES-2026-11-13.md": "15eddc44446dd1f35bff4371482033d6a85f860b5731f63a9aa142518c204aa7",
   "COOP-REMAINING.md": "2d982c82a7e7ad2bcfb192fa684a6cf3a0cf15158194089f5ec7c6641bd18d92",
   "DEVELOPMENT-RESOURCE-POLICY.md": "84d169cce1770a5289ddf67da926cbbb99df5535211897ab25cfa28590a88145",
   "ENGINE-LICENSE": "82366d6b052c2608d7458b81a869249abed63932bd88fa03ca8f7a136f8602e3",
-  "README.md": "ce6db4002d231225ee00a759cc37ea9e5060995c4ca846f93a26394fb5e60a9c",
+  "README.md": "de3aa05797c097d94509bc7ee7ede4762b17fdc6058c049cb367c722639fe7de",
   "client/Makefile": "c909d6794becd1904f63cb58d2fbbf47c5393a4624945bd25c3080cbb476e79c",
   "client/src/sst_animation.c": "94fd3e1703f99205624883bbb97964dcc4ed8dba73ef167b0bdbb527ae28f7e1",
   "client/src/sst_animation.h": "7e44e9235529fb4974a9c02084c0bedb8ea4613da52ba2a960965d9cc0b3ecf5",
@@ -609,7 +609,7 @@
   "validation/prop-bindings-20261111.json": "c71fdfdb1745b9bf9598c6d71ff1fd5cf5ef4f0ff3dd591e1a5966fe2ed02f90",
   "validation/prop-deactivation-cpu-20261111.json": "b8079782ddda503856b1fbcb01de74a431214584708d7e2786c5a3d118cb4fe4",
   "validation/prop_capacity_test.c": "0e3b22e810dec2515498a54538e0dfd8ffc007b6f0e5315e859580c254d44621",
-  "validation/recompilation-renderer-foundation-20261113.json": "6f06659763d86bf115f0ed9da0f1f48c3353611edcf7474d1ee93e0c1c3d5f9e",
+  "validation/recompilation-renderer-foundation-20261113.json": "9978b641ab9c66cd3ce194de3a8e7f290d61612759791e0dd43dadba8ddc01da",
   "validation/scene-incarnation-20261112.json": "904e492712ba3f1a5385017ea9a56fb9a258ff21bd3a228d9400e733f115e31a",
   "validation/vulkan-device-selection-20261113.json": "c3ebf8d8eae724bbbff5d87e11cfdebe63732b7957268a02b2f84d2dfc4c144e",
   "validation/windows-binding-build-20261111.json": "d9244f9756406de32d306204179493389f9d92b2acbd027fd18a6c5e0be2ab7a",
@@ -619,5 +619,8 @@
   "validation/windows-runtime-ci-inputs-20261111.json": "02a5dbe6a02c1aa3bc6c91a25d1a3bed20d09bd18b1367f4560b5da0a7067f04",
   "validation/windows-runtime-execution-block-20261111.json": "6e4a23c690333a0a965117b91db82325d2c626908ac58602116438f022056476",
   "validation/windows-support-import-20261111.json": "9e84f94e863aef261e6f3e2dbd2c394482c66c8973eec8522e041aa1d87b3726",
-  "validation/windows_telemetry.py": "b6ea9d3940ca8cc03c47ecb79b9e6dcf1391d3058f9eccbeef9c93ce3484f5cf"
+  "validation/windows_telemetry.py": "b6ea9d3940ca8cc03c47ecb79b9e6dcf1391d3058f9eccbeef9c93ce3484f5cf",
+  "docs/vulkan-guest-memory-test.md": "3e02007effd28a080600700fa07de54ec10cf7faba623e5beeb2649ccbe4c21c",
+  "tests/vulkan_guest_memory_test.c": "08e343b44fba6b9604f76f2a837dbbc68918a8a2d6b791f980c279512dda77bb",
+  "validation/vulkan-guest-memory-readback-20261113.json": "bb0027479dbfc530a00fdbc29827d3e2b92d58ccaebb223443bd2e0d16b091cf"
 }

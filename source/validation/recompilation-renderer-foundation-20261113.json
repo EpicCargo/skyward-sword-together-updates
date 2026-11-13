@@ -34,6 +34,9 @@
     "glsl_new_failures": 0,
     "guest_memory_programs": 156,
     "operand_boundary_cases": 12,
+    "current_source_gpu_readback_cases": 14,
+    "current_source_gpu_validation_warnings": 0,
+    "current_source_gpu_receipt": "vulkan-guest-memory-readback-20261113.json",
     "changed_runtime_objects_compiled": ["exec.c", "device.c", "shaders.c"]
   },
   "manual_rebuild_recipe": {

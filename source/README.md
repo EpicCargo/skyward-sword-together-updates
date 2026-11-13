@@ -23,6 +23,8 @@ The pinned upstream Windows support ZIP returned HTTP 404 during the latest cont
 
 ## Tests and evidence
 
+The current 42-patch renderer passes 14 real offscreen Vulkan guest-memory readback cases with zero validation warnings, including wide stores at the heap boundary and memory access beyond the driver's 128 MiB descriptor limit. The [reproducible fixture](docs/vulkan-guest-memory-test.md) and exact source receipt are included. Game visuals remain pending.
+
 ```sh
 python3 -m unittest discover -s launcher/tests -v
 python3 -m unittest discover -s scripts/tests -v
