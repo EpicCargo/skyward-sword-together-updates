@@ -1,0 +1,185 @@
+From 2d610f15cb0f03aad3486ac532edbb35ba487069 Mon Sep 17 00:00:00 2001
+From: SST development <sst-development@localhost>
+Date: Fri, 13 Nov 2026 20:56:34 -0500
+Subject: [PATCH] Snapshot bound texture handles in hardware constant buffer
+ two
+
+---
+ runtime/nvn/renderer.m     | 15 +++++++++++
+ runtime/nvn/texture_cbuf.h | 29 ++++++++++++++++++++++
+ runtime/nvn/vulkan/exec.c  | 11 +++++++-
+ tools/test_texture_cbuf.c  | 51 ++++++++++++++++++++++++++++++++++++++
+ 4 files changed, 105 insertions(+), 1 deletion(-)
+ create mode 100644 runtime/nvn/texture_cbuf.h
+ create mode 100644 tools/test_texture_cbuf.c
+
+diff --git a/runtime/nvn/renderer.m b/runtime/nvn/renderer.m
+index 1e5b53c..546c64a 100644
+--- a/runtime/nvn/renderer.m
++++ b/runtime/nvn/renderer.m
+@@ -14,6 +14,7 @@
+ #include "maxwell/shader.h"
+ #include "nvn.h"
+ #include "renderer.h"
++#include "texture_cbuf.h"
+ 
+ static id<MTLDevice> dev;
+ static id<MTLCommandBuffer> cmdbuf;
+@@ -1303,6 +1304,15 @@ static void bind_cbufs(int stage, ShaderInfo *si) {
+             else [enc setFragmentBuffer:ring offset:off atIndex:1];
+             continue;
+         }
++        if (k == 2) {
++            uint8_t data[NVN_TEXTURE_CBUF_MAX];
++            size_t size = nvn_texture_cbuf_size(si->cbuf_size[2], (si->cbuf_dynamic & (1u << 2)) != 0);
++            nvn_texture_cbuf_snapshot(data, size, st.tex[stage]);
++            uint64_t off = ring_alloc(data, size);
++            if (stage == 0) [enc setVertexBuffer:ring offset:off atIndex:2];
++            else [enc setFragmentBuffer:ring offset:off atIndex:2];
++            continue;
++        }
+         int idx = k - cbuf_base;
+         Range r = (idx >= 0 && idx < 18) ? st.ubuf[stage][idx] : (Range){0, 0};
+         uint64_t size = si->cbuf_size[k];
+@@ -1396,6 +1406,11 @@ static void dispatch_compute(uint32_t gx, uint32_t gy, uint32_t gz) {
+             uint64_t size = ss->const_size ? ss->const_size : 16;
+             if (size < si->cbuf_size[1]) size = si->cbuf_size[1];
+             off = ring_alloc((void *)(uintptr_t)(ss->code_addr + ss->const_offset), size);
++        } else if (k == 2) {
++            uint8_t data[NVN_TEXTURE_CBUF_MAX];
++            size_t size = nvn_texture_cbuf_size(si->cbuf_size[2], (si->cbuf_dynamic & (1u << 2)) != 0);
++            nvn_texture_cbuf_snapshot(data, size, st.tex[5]);
++            off = ring_alloc(data, size);
+         } else {
+             int idx = k - cbuf_base;
+             Range r = (idx >= 0 && idx < 18) ? st.ubuf[5][idx] : (Range){0, 0};
+diff --git a/runtime/nvn/texture_cbuf.h b/runtime/nvn/texture_cbuf.h
+new file mode 100644
+index 0000000..f0d3b6d
+--- /dev/null
++++ b/runtime/nvn/texture_cbuf.h
+@@ -0,0 +1,29 @@
++// Hardware c2: the same per-stage 64-bit handles used by bound texture reads.
++#pragma once
++#include <stdbool.h>
++#include <stddef.h>
++#include <stdint.h>
++#include <string.h>
++
++enum { NVN_TEXTURE_CBUF_PREFIX = 0x20, NVN_TEXTURE_CBUF_SLOTS = 32,
++       NVN_TEXTURE_CBUF_MAX = 0x10000 };
++
++static inline size_t nvn_texture_cbuf_size(uint32_t required, bool indexed) {
++    if (indexed || required >= NVN_TEXTURE_CBUF_MAX) return NVN_TEXTURE_CBUF_MAX;
++    size_t size = required;
++    const size_t table_end = NVN_TEXTURE_CBUF_PREFIX + NVN_TEXTURE_CBUF_SLOTS * sizeof(uint64_t);
++    if (size < table_end) size = table_end;
++    return (size + 15) & ~(size_t)15;
++}
++
++// Snapshot into ordinary CPU memory before uploading to a transient GPU buffer.
++// Reserved bytes and reads beyond the bound handle table remain zero.
++static inline void nvn_texture_cbuf_snapshot(void *dst, size_t bytes,
++                                              const uint64_t handles[NVN_TEXTURE_CBUF_SLOTS]) {
++    memset(dst, 0, bytes);
++    if (bytes > NVN_TEXTURE_CBUF_PREFIX) {
++        size_t copy = bytes - NVN_TEXTURE_CBUF_PREFIX;
++        if (copy > NVN_TEXTURE_CBUF_SLOTS * sizeof(uint64_t)) copy = NVN_TEXTURE_CBUF_SLOTS * sizeof(uint64_t);
++        memcpy((uint8_t *)dst + NVN_TEXTURE_CBUF_PREFIX, handles, copy);
++    }
++}
+diff --git a/runtime/nvn/vulkan/exec.c b/runtime/nvn/vulkan/exec.c
+index e84359f..b859089 100644
+--- a/runtime/nvn/vulkan/exec.c
++++ b/runtime/nvn/vulkan/exec.c
+@@ -19,6 +19,7 @@
+ #include "guest_memory.h"
+ #include "../renderer.h"
+ #include "../source_policy.h"
++#include "../texture_cbuf.h"
+ #include "../../settings.h"
+ #include "../../frame_rate.h"
+ #include "../../sst/sst_game.h"
+@@ -666,7 +667,8 @@ VkSpan vk_transient_copy(const void *data, uint64_t size, uint64_t align) {
+ 
+ // Per-draw constants that usually repeat the previous draw's (scale table, tint, driver constants): reuse that copy
+ // while it's identical, within one submission. slot: one per kind of data.
+-enum { DEDUPE_RSCALE_V, DEDUPE_RSCALE_F, DEDUPE_TINT, DEDUPE_DRV_V, DEDUPE_DRV_F, DEDUPE_DRV_C, DEDUPE_SLOTS };
++enum { DEDUPE_RSCALE_V, DEDUPE_RSCALE_F, DEDUPE_TINT, DEDUPE_DRV_V, DEDUPE_DRV_F, DEDUPE_DRV_C,
++       DEDUPE_TEXTURE_V, DEDUPE_TEXTURE_F, DEDUPE_TEXTURE_C, DEDUPE_SLOTS };
+ static VkSpan copy_dedupe(int slot, const void *data, uint64_t size, uint64_t align) {
+     static struct { uint64_t seq, size; uint8_t data[0x800]; VkSpan span; } last[DEDUPE_SLOTS];
+     uint64_t seq = vk_pending_seq();
+@@ -2030,6 +2032,13 @@ static VkDescriptorBufferInfo cbuf_info(int stage, ShaderInfo *si, int k, uint32
+         if (size < si->cbuf_size[1]) size = si->cbuf_size[1];
+         return ubo_span(guest_copy(ss->code_addr + ss->const_offset, size), size);  // (constant: shared per submission)
+     }
++    if (k == 2) {
++        uint8_t data[NVN_TEXTURE_CBUF_MAX];
++        size_t size = nvn_texture_cbuf_size(si->cbuf_size[2], (si->cbuf_dynamic & (1u << 2)) != 0);
++        nvn_texture_cbuf_snapshot(data, size, st.tex[stage]);
++        return ubo_span(copy_dedupe(stage == 5 ? DEDUPE_TEXTURE_C : stage == 1 ? DEDUPE_TEXTURE_F : DEDUPE_TEXTURE_V,
++                                   data, size, 256), size);
++    }
+     int idx = k - 3;  // cbuf_base
+     Range r = (idx >= 0 && idx < 18) ? st.ubuf[stage][idx] : (Range){0, 0};
+     uint64_t size = si->cbuf_size[k] ? si->cbuf_size[k] : 256;
+diff --git a/tools/test_texture_cbuf.c b/tools/test_texture_cbuf.c
+new file mode 100644
+index 0000000..5efda0d
+--- /dev/null
++++ b/tools/test_texture_cbuf.c
+@@ -0,0 +1,51 @@
++// Asset-free c2 layout and submission-snapshot regression.
++#include <assert.h>
++#include <stdio.h>
++#include <stdlib.h>
++#include "../runtime/nvn/texture_cbuf.h"
++
++int main(void) {
++    const uint32_t required[] = {0, 1, 16, 256, 288, 289, 512, 65535, 65536, UINT32_MAX};
++    const size_t expected[] = {288, 288, 288, 288, 288, 304, 512, 65536, 65536, 65536};
++    unsigned cases = 0;
++    for (unsigned i = 0; i < sizeof required / sizeof required[0]; ++i) {
++        assert(nvn_texture_cbuf_size(required[i], false) == expected[i]);
++        assert(nvn_texture_cbuf_size(required[i], true) == 65536);
++        cases += 2;
++    }
++    uint64_t handles[32];
++    for (unsigned i = 0; i < 32; ++i) handles[i] = UINT64_C(0xfedcba9876543200) + i;
++    handles[7] = 0;  // unbound slot between live handles
++    const size_t lengths[] = {0, 1, 31, 32, 33, 39, 40, 287, 288, 289, 512, 65536};
++    for (unsigned i = 0; i < sizeof lengths / sizeof lengths[0]; ++i) {
++        size_t n = lengths[i];
++        uint8_t *allocation = malloc(n + 32);
++        memset(allocation, 0xa5, n + 32);
++        nvn_texture_cbuf_snapshot(allocation + 16, n, handles);
++        for (size_t j = 0; j < n; ++j) {
++            unsigned value = j < 32 || j >= 288 ? 0 :
++                (unsigned)((handles[(j - 32) / 8] >> (8 * ((j - 32) % 8))) & 255);
++            assert(allocation[16 + j] == value);
++        }
++        for (size_t j = 0; j < 16; ++j) assert(allocation[j] == 0xa5 && allocation[16 + n + j] == 0xa5);
++        free(allocation);
++        ++cases;
++    }
++    uint8_t first[288], second[288];
++    nvn_texture_cbuf_snapshot(first, sizeof first, handles);
++    handles[31] = UINT64_C(0x0123456789abcdef);
++    nvn_texture_cbuf_snapshot(second, sizeof second, handles);
++    assert(first[280] == 0x1f && second[280] == 0xef && first[287] == 0xfe && second[287] == 0x01);
++    ++cases;  // rebinding does not mutate the previous submission's snapshot
++    handles[0] = 0;
++    nvn_texture_cbuf_snapshot(second, sizeof second, handles);
++    for (unsigned i = 32; i < 40; ++i) assert(second[i] == 0);
++    assert(first[39] == 0xfe);
++    ++cases;  // unbinding clears all eight bytes without changing the earlier snapshot
++    memset(handles, 0, sizeof handles);
++    nvn_texture_cbuf_snapshot(second, sizeof second, handles);
++    for (unsigned i = 0; i < sizeof second; ++i) assert(second[i] == 0);
++    ++cases;
++    printf("Texture c2 snapshot PASS: %u cases\n", cases);
++    return 0;
++}
+-- 
+2.43.0

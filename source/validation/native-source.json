@@ -1,7 +1,7 @@
 {
   "base_commit": "506a9bc5aead5fc9598bb8f4a521f3b26f8897e8",
-  "engine_tree": "ebd522ec267980a41ea0782a3d2abebefbaf1ba8",
-  "engine_patches": 46,
+  "engine_tree": "7a5a46e551a45fe0dad8a421a9891c63d1ad3c06",
+  "engine_patches": 47,
   "native_file_sha256": {
     "client/Makefile": "c909d6794becd1904f63cb58d2fbbf47c5393a4624945bd25c3080cbb476e79c",
     "client/src/sst_animation.c": "94fd3e1703f99205624883bbb97964dcc4ed8dba73ef167b0bdbb527ae28f7e1",
@@ -212,7 +212,7 @@
     "engine/runtime/nvn/texpatch.h": "7747d5ff2f8fe5f311ebdde7cd2c034de77a69ff69303bfccca9909d2f726c70",
     "engine/runtime/nvn/vulkan/device.c": "54dc05e435c67187a93a28fee6b7820a758983986b86eedc27f00bf2c49f87c9",
     "engine/runtime/nvn/vulkan/device_select.h": "b32236c719b811b8fe46a8ce5d615d98989481600b39b7e3ce274cab4e795cb2",
-    "engine/runtime/nvn/vulkan/exec.c": "1ce04bd52c826dd9baedc73bdf851fa013e52a52e0d71a4e0b3e8c2b11d63bea",
+    "engine/runtime/nvn/vulkan/exec.c": "1715c9fb630bf294e933e0cea4d3173e322eac42fcffabb604a387c55ce18356",
     "engine/runtime/nvn/vulkan/guest_memory.h": "ab602110f2e1479666f404d4a21e706145a6a1229dcd41258ad43d6f38298341",
     "engine/runtime/nvn/vulkan/shaders.c": "13952ba8c1ba2576db3a5234da44a50f08250c8280af95a87fe6efeee94c074e",
     "engine/runtime/nvn/vulkan/shaders.h": "090eaf3ba517ba2db6921c19a28be7f50d78b9d8b0047c13806a454abe19336f",
@@ -258,7 +258,10 @@
     "third_party/coop-anything-chaos/relay.py": "1be86b1a51fc1aff526003dd982d2838493f8c8bc725de8b4ddcb82a8e9cadc7",
     "client/tests/prop_capacity_test.c": "0e3b22e810dec2515498a54538e0dfd8ffc007b6f0e5315e859580c254d44621",
     "engine/runtime/ui/developer_tab.mm": "ae23e4ca4a751fb6c6e1a025512d42b3b56d1fb3de4403c61b0e3d8dfa2b47d3",
-    "engine/tools/test_shader_program_size.c": "036108fce6734b9cccef5ac2ea96c35ec27bcad026d4966077a174317d403ac9"
+    "engine/tools/test_shader_program_size.c": "036108fce6734b9cccef5ac2ea96c35ec27bcad026d4966077a174317d403ac9",
+    "engine/runtime/nvn/renderer.m": "38c570184c55d3ee68cafa3d7b70ad1ff423ceff425971779d9b7bf3cc8e1dd4",
+    "engine/runtime/nvn/texture_cbuf.h": "f0c3cca7c8b1cf0efb8ca821e12ef32ea2efda39220532ce7bceceab9498e36d",
+    "engine/tools/test_texture_cbuf.c": "5d7ed9578e3783ca6e74cf85419fbfe30014aa78bfaed6885fe4de087adad9cb"
   },
   "original_frozen_entry_count": 257,
   "omitted_local_only_recipes": [

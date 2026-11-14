@@ -147,6 +147,9 @@ jobs:
             engine/runtime/nvn/maxwell/translate.c -lm \
             -o build/source-checks/shader-program-size
           build/source-checks/shader-program-size
+          clang "${flags[@]}" -Werror engine/tools/test_texture_cbuf.c \
+            -o build/source-checks/texture-cbuf
+          build/source-checks/texture-cbuf
           clang "${flags[@]}" -Werror engine/tools/test_vk_device_select.c \
             -o build/source-checks/vk-device-select
           build/source-checks/vk-device-select
