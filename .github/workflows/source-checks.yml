@@ -156,6 +156,10 @@ jobs:
           clang "${flags[@]}" -Werror engine/tools/test_input_script.c \
             -o build/source-checks/input-script
           build/source-checks/input-script
+          clang "${flags[@]}" -Werror -I third_party/windows-build-headers-v202/vulkan/include \
+            engine/tools/test_queue_guard.c engine/runtime/nvn/vulkan/queue_guard.c -lpthread \
+            -o build/source-checks/queue-guard
+          build/source-checks/queue-guard
           clang "${flags[@]}" -Werror engine/tools/test_vk_device_select.c \
             -o build/source-checks/vk-device-select
           build/source-checks/vk-device-select

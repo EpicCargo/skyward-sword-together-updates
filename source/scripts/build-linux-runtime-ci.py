@@ -50,6 +50,8 @@ def build():
     headers, config = inputs()
     native = native_identity()
     head = subprocess.check_output(['git', '-C', str(ROOT), 'rev-parse', 'HEAD'], text=True).strip()
+    if os.environ.get('GITHUB_SHA') != head:
+        raise RuntimeError('CI source commit differs from the checked-out commit')
     engine = ROOT / 'engine'
     if any((engine / name).exists() for name in ('generated', 'generated-x86_64', 'generated-aarch64', 'extracted')):
         raise RuntimeError('CI runtime checkout must contain no generated game inputs')

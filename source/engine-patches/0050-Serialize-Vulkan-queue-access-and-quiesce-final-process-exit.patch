@@ -1,0 +1,295 @@
+From 81ca24f046e798c94b2dd19ed0e8961de3ead196 Mon Sep 17 00:00:00 2001
+From: SST development <sst-development@localhost>
+Date: Sat, 14 Nov 2026 00:02:49 -0500
+Subject: [PATCH] Serialize Vulkan queue access and quiesce final process exit
+
+---
+ runtime/nvn/vulkan/device.c       |  8 ++--
+ runtime/nvn/vulkan/exec.c         |  2 +-
+ runtime/nvn/vulkan/imgui_glue.cpp |  9 +++-
+ runtime/nvn/vulkan/queue_guard.c  | 29 ++++++++++++
+ runtime/nvn/vulkan/queue_guard.h  | 17 +++++++
+ runtime/nvn/vulkan/vk.h           |  1 +
+ runtime/ui/launcher.mm            |  3 +-
+ runtime/ui/menu.mm                |  3 +-
+ tools/test_queue_guard.c          | 78 +++++++++++++++++++++++++++++++
+ 9 files changed, 142 insertions(+), 8 deletions(-)
+ create mode 100644 runtime/nvn/vulkan/queue_guard.c
+ create mode 100644 runtime/nvn/vulkan/queue_guard.h
+ create mode 100644 tools/test_queue_guard.c
+
+diff --git a/runtime/nvn/vulkan/device.c b/runtime/nvn/vulkan/device.c
+index b4c9bc9..3c6509d 100644
+--- a/runtime/nvn/vulkan/device.c
++++ b/runtime/nvn/vulkan/device.c
+@@ -365,7 +365,7 @@ static void create_swapchain(void) {
+ }
+ 
+ static void recreate_swapchain(void) {
+-    vkDeviceWaitIdle(g_vk.dev);
++    vk_queue_wait_idle(g_vk.dev);
+     create_swapchain();
+ }
+ 
+@@ -493,7 +493,7 @@ void vk_frame_end(const char *shot_path) {
+     vk_submit_extra(cur_frame.acquired, done_sem[img], VK_NULL_HANDLE);
+     VkPresentInfoKHR pi = {.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR, .waitSemaphoreCount = 1, .pWaitSemaphores = &done_sem[img],
+                            .swapchainCount = 1, .pSwapchains = &g_vk.swapchain, .pImageIndices = &img};
+-    VkResult r = vkQueuePresentKHR(g_vk.queue, &pi);
++    VkResult r = vk_queue_present(g_vk.queue, &pi);
+     if (r == VK_ERROR_OUT_OF_DATE_KHR || r == VK_SUBOPTIMAL_KHR) recreate_swapchain();
+     cur_frame.ok = false;
+     if (shot_path) {
+@@ -704,7 +704,7 @@ static void quick_exit_handler(void) {
+     if (trace < 0) trace = getenv("LARECOMP_VK_TRACE") != NULL;
+     if (trace) LOG("[vk] exit: waiting for the GPU\n");
+     if (g_vk.dev) {
+-        vkDeviceWaitIdle(g_vk.dev);
++        vk_queue_shutdown_wait_idle(g_vk.dev);
+         if (trace) LOG("[vk] exit: saving the pipeline cache\n");
+         vk_pipeline_cache_save();
+     }
+@@ -839,7 +839,7 @@ void backend_init(void) {
+ // ---- in-place reboot (runtime/main.c teardown; main thread, guest threads stopped)
+ void backend_reset(void) {
+     if (!g_vk.dev) return;
+-    vkDeviceWaitIdle(g_vk.dev);
++    vk_queue_wait_idle(g_vk.dev);
+     extern void vk_textures_reset(void);
+     extern void vk_exec_reset(void);
+     vk_textures_reset();
+diff --git a/runtime/nvn/vulkan/exec.c b/runtime/nvn/vulkan/exec.c
+index 86fc5e4..d2c4f28 100644
+--- a/runtime/nvn/vulkan/exec.c
++++ b/runtime/nvn/vulkan/exec.c
+@@ -507,7 +507,7 @@ void vk_submit_extra(VkSemaphore wait, VkSemaphore signal, VkCommandBuffer extra
+     {
+         PROF_T0();
+         dl_note("submit %llu", (unsigned long long)submit_seq + 1);
+-        VkResult sr = vkQueueSubmit2(g_vk.queue, 1, &si, VK_NULL_HANDLE);
++        VkResult sr = vk_queue_submit2(g_vk.queue, 1, &si, VK_NULL_HANDLE);
+         if (sr == VK_ERROR_DEVICE_LOST) vk_devlost_dump();
+         VK_CHECK(sr);
+         PROF_ADD(prof_submit);
+diff --git a/runtime/nvn/vulkan/imgui_glue.cpp b/runtime/nvn/vulkan/imgui_glue.cpp
+index 428e4ca..1d62e31 100644
+--- a/runtime/nvn/vulkan/imgui_glue.cpp
++++ b/runtime/nvn/vulkan/imgui_glue.cpp
+@@ -61,10 +61,17 @@ extern "C" bool vk_imgui_backend_init(void) {
+ 
+ extern "C" void vk_imgui_backend_shutdown(void) {
+     if (!ImGui::GetIO().BackendRendererUserData) return;
+-    vkDeviceWaitIdle(g_vk.dev);
++    vk_queue_wait_idle(g_vk.dev);
+     ImGui_ImplVulkan_Shutdown();
+ }
+ 
++extern "C" void vk_imgui_backend_new_frame(void) {
++    // The backend may submit font uploads and wait for this same queue.
++    vk_queue_lock();
++    ImGui_ImplVulkan_NewFrame();
++    vk_queue_unlock();
++}
++
+ // A static RGBA8 image for ImGui (start screen background). Returns the ImTextureID.
+ extern "C" uint64_t vk_imgui_texture_rgba(const void *rgba, int w, int h) {
+     VkImageCreateInfo ci = {VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO};
+diff --git a/runtime/nvn/vulkan/queue_guard.c b/runtime/nvn/vulkan/queue_guard.c
+new file mode 100644
+index 0000000..cbf5603
+--- /dev/null
++++ b/runtime/nvn/vulkan/queue_guard.c
+@@ -0,0 +1,29 @@
++#include <pthread.h>
++#include "queue_guard.h"
++
++static pthread_mutex_t queue_gate = PTHREAD_MUTEX_INITIALIZER;
++void vk_queue_lock(void) { pthread_mutex_lock(&queue_gate); }
++void vk_queue_unlock(void) { pthread_mutex_unlock(&queue_gate); }
++
++VkResult vk_queue_submit2(VkQueue queue, uint32_t count, const VkSubmitInfo2 *submits, VkFence fence) {
++    vk_queue_lock();
++    VkResult result = vkQueueSubmit2(queue, count, submits, fence);
++    vk_queue_unlock();
++    return result;  // callers handle errors after releasing the gate
++}
++VkResult vk_queue_present(VkQueue queue, const VkPresentInfoKHR *present) {
++    vk_queue_lock();
++    VkResult result = vkQueuePresentKHR(queue, present);
++    vk_queue_unlock();
++    return result;
++}
++VkResult vk_queue_wait_idle(VkDevice device) {
++    vk_queue_lock();
++    VkResult result = vkDeviceWaitIdle(device);
++    vk_queue_unlock();
++    return result;
++}
++VkResult vk_queue_shutdown_wait_idle(VkDevice device) {
++    vk_queue_lock();
++    return vkDeviceWaitIdle(device);
++}
+diff --git a/runtime/nvn/vulkan/queue_guard.h b/runtime/nvn/vulkan/queue_guard.h
+new file mode 100644
+index 0000000..65271c8
+--- /dev/null
++++ b/runtime/nvn/vulkan/queue_guard.h
+@@ -0,0 +1,17 @@
++// All host access to the device's queue shares this gate, including ImGui uploads.
++#pragma once
++#include <vulkan/vulkan.h>
++#ifdef __cplusplus
++extern "C" {
++#endif
++void vk_queue_lock(void);
++void vk_queue_unlock(void);
++VkResult vk_queue_submit2(VkQueue queue, uint32_t count, const VkSubmitInfo2 *submits, VkFence fence);
++VkResult vk_queue_present(VkQueue queue, const VkPresentInfoKHR *present);
++VkResult vk_queue_wait_idle(VkDevice device);
++// Final process exit only: retains the gate until plat_terminate(), preventing
++// new submissions after idle while the pipeline cache is saved.
++VkResult vk_queue_shutdown_wait_idle(VkDevice device);
++#ifdef __cplusplus
++}
++#endif
+diff --git a/runtime/nvn/vulkan/vk.h b/runtime/nvn/vulkan/vk.h
+index dc9ef88..8797a6c 100644
+--- a/runtime/nvn/vulkan/vk.h
++++ b/runtime/nvn/vulkan/vk.h
+@@ -10,6 +10,7 @@
+ #include <stdbool.h>
+ #include <stdint.h>
+ #include <vulkan/vulkan.h>
++#include "queue_guard.h"
+ #if __has_include(<vma/vk_mem_alloc.h>)
+ #include <vma/vk_mem_alloc.h>
+ #else
+diff --git a/runtime/ui/launcher.mm b/runtime/ui/launcher.mm
+index 05a53ce..eeb966b 100644
+--- a/runtime/ui/launcher.mm
++++ b/runtime/ui/launcher.mm
+@@ -55,6 +55,7 @@ bool vk_frame_begin(const float clear[4]);
+ void vk_frame_end(const char *shot_path);
+ void *vk_frame_cmd(void);
+ bool vk_imgui_backend_init(void);
++void vk_imgui_backend_new_frame(void);
+ void vk_imgui_backend_shutdown(void);
+ uint64_t vk_imgui_texture_rgba(const void *rgba, int w, int h);
+ #endif
+@@ -1273,7 +1274,7 @@ extern "C" void launcher_run(const char *root) {
+             next_frame = (on_time ? next_frame : now) + period;
+             static const float clear_col[4] = {0.04f, 0.05f, 0.06f, 1};
+             if (!vk_frame_begin(clear_col)) { SDL_Delay(16); continue; }
+-            ImGui_ImplVulkan_NewFrame();
++            vk_imgui_backend_new_frame();
+ #endif
+             ImGui_ImplSDL3_NewFrame();
+             if (SDL_HasGamepad()) io.BackendFlags |= ImGuiBackendFlags_HasGamepad;
+diff --git a/runtime/ui/menu.mm b/runtime/ui/menu.mm
+index 251c7e9..1d4eb83 100644
+--- a/runtime/ui/menu.mm
++++ b/runtime/ui/menu.mm
+@@ -21,6 +21,7 @@
+ #else
+ #include "imgui_impl_vulkan.h"
+ extern "C" bool vk_imgui_backend_init(void);  // runtime/nvn/vulkan/imgui_glue.cpp
++extern "C" void vk_imgui_backend_new_frame(void);
+ #endif
+ 
+ extern "C" {
+@@ -956,7 +957,7 @@ void menu_render(void *cmd, uint32_t target_w, uint32_t target_h) {
+ #ifdef __APPLE__
+     ImGui_ImplMetal_NewFrame(rp);
+ #else
+-    ImGui_ImplVulkan_NewFrame();
++    vk_imgui_backend_new_frame();
+ #endif
+     ImGui::NewFrame();
+ 
+diff --git a/tools/test_queue_guard.c b/tools/test_queue_guard.c
+new file mode 100644
+index 0000000..97a2c3c
+--- /dev/null
++++ b/tools/test_queue_guard.c
+@@ -0,0 +1,78 @@
++#define _POSIX_C_SOURCE 200809L
++#include <assert.h>
++#include <pthread.h>
++#include <sched.h>
++#include <stdatomic.h>
++#include <stdint.h>
++#include <stdio.h>
++#include <sys/wait.h>
++#include <time.h>
++#include <unistd.h>
++#include "../runtime/nvn/vulkan/queue_guard.h"
++
++static atomic_uint active, peak, calls, fail_next, trying, finished;
++static pthread_barrier_t start;
++static VkResult driver(void) {
++    unsigned n = atomic_fetch_add(&active, 1) + 1, old = atomic_load(&peak);
++    while (n > old && !atomic_compare_exchange_weak(&peak, &old, n)) {}
++    for (unsigned i = 0; i < 4; ++i) sched_yield();
++    atomic_fetch_add(&calls, 1);
++    atomic_fetch_sub(&active, 1);
++    return atomic_exchange(&fail_next, 0) ? VK_ERROR_DEVICE_LOST : VK_SUCCESS;
++}
++VKAPI_ATTR VkResult VKAPI_CALL vkQueueSubmit2(VkQueue q, uint32_t n, const VkSubmitInfo2 *s, VkFence f) {
++    (void)q; (void)n; (void)s; (void)f; return driver();
++}
++VKAPI_ATTR VkResult VKAPI_CALL vkQueuePresentKHR(VkQueue q, const VkPresentInfoKHR *p) {
++    (void)q; (void)p; return driver();
++}
++VKAPI_ATTR VkResult VKAPI_CALL vkDeviceWaitIdle(VkDevice d) { (void)d; return driver(); }
++
++static void *work(void *argument) {
++    uintptr_t kind = (uintptr_t)argument;
++    pthread_barrier_wait(&start);
++    for (unsigned i = 0; i < 1000; ++i) {
++        if (kind == 0) assert(vk_queue_submit2(VK_NULL_HANDLE, 0, NULL, VK_NULL_HANDLE) == VK_SUCCESS);
++        else if (kind == 1) assert(vk_queue_present(VK_NULL_HANDLE, NULL) == VK_SUCCESS);
++        else if (kind == 2) assert(vk_queue_wait_idle(VK_NULL_HANDLE) == VK_SUCCESS);
++        else {
++            // ImGui performs multiple driver operations under the same public gate.
++            vk_queue_lock(); assert(driver() == VK_SUCCESS); assert(driver() == VK_SUCCESS); vk_queue_unlock();
++        }
++    }
++    return NULL;
++}
++static void *late_submit(void *unused) {
++    (void)unused;
++    atomic_store(&trying, 1);
++    vk_queue_submit2(VK_NULL_HANDLE, 0, NULL, VK_NULL_HANDLE);
++    atomic_store(&finished, 1);
++    return NULL;
++}
++int main(void) {
++    assert(!pthread_barrier_init(&start, NULL, 4));
++    pthread_t threads[4];
++    for (uintptr_t i = 0; i < 4; ++i) assert(!pthread_create(&threads[i], NULL, work, (void *)i));
++    for (unsigned i = 0; i < 4; ++i) assert(!pthread_join(threads[i], NULL));
++    assert(!pthread_barrier_destroy(&start));
++    assert(atomic_load(&calls) == 5000 && atomic_load(&peak) == 1 && !atomic_load(&active));
++    atomic_store(&fail_next, 1);
++    assert(vk_queue_submit2(VK_NULL_HANDLE, 0, NULL, VK_NULL_HANDLE) == VK_ERROR_DEVICE_LOST);
++    assert(vk_queue_wait_idle(VK_NULL_HANDLE) == VK_SUCCESS); // failure did not retain the gate
++    pid_t child = fork();
++    assert(child >= 0);
++    if (!child) {
++        unsigned before = atomic_load(&calls);
++        assert(vk_queue_shutdown_wait_idle(VK_NULL_HANDLE) == VK_SUCCESS);
++        pthread_t late;
++        assert(!pthread_create(&late, NULL, late_submit, NULL));
++        while (!atomic_load(&trying)) sched_yield();
++        struct timespec pause = {.tv_nsec = 50000000};
++        nanosleep(&pause, NULL);
++        _exit(!atomic_load(&finished) && atomic_load(&calls) == before + 1 ? 0 : 1);
++    }
++    int status = 0;
++    assert(waitpid(child, &status, 0) == child && WIFEXITED(status) && WEXITSTATUS(status) == 0);
++    puts("Queue host synchronization PASS: 5000 concurrent calls, error release and terminal gate");
++    return 0;
++}
+-- 
+2.43.0
+

@@ -1,0 +1,9 @@
+# Vulkan queue access and controlled shutdown
+
+Patch50 fixes a real validation error observed when a test stopped the game after its peer-state reader failed. The UI exit handler called `vkDeviceWaitIdle` while the game thread was submitting to the same queue. Vulkan requires [external synchronization of all affected queue handles](https://docs.vulkan.org/refpages/latest/refpages/source/vkDeviceWaitIdle.html).
+
+The runtime's submit, present and idle operations share one mutex. ImGui's font-upload entry also holds that gate around its legacy queue operations. Final process exit acquires the gate, waits for idle, retains the gate during pipeline-cache saving and terminates the process. This prevents a new submission after the final idle wait. Ordinary swapchain/reset waits release the gate, and API errors are returned to callers after unlocking.
+
+The actual helper passes 5,000 calls from four concurrent CPU producers, including the UI-style grouped operations. Additional checks prove error-path release and, in a child process, that final quiescence prevents late submissions. A separate real Vulkan fixture uses three threads for 3,000 operations across submit2, device-idle and legacy upload/queue-idle paths; local validation reports zero warnings/errors with address, undefined-behavior and leak sanitizers. The Linux CI job repeats these checks. Native controlled-window-close acceptance is a separate gate.
+
+The interrupted run also exposed concurrent reads of a truncated JSON status file. `scripts/fixture_json.py` publishes complete peer status/control snapshots with an atomic replacement. It retries temporary sharing-lock failures and retains the previous valid snapshot if a reader holds the destination. Four file-backed contract tests include three simultaneous readers and 300 replacements. This affects fixture diagnostics/control; no game save format or network protocol changes.

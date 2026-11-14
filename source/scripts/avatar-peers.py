@@ -11,6 +11,7 @@ import socket
 import struct
 import time
 import zlib
+from fixture_json import write_json_snapshot
 
 POSE = struct.Struct("<I3f3hHfHHHBB")
 ROOT = Path(__file__).resolve().parent.parent
@@ -233,13 +234,13 @@ def main():
                             peer["outgoing"] += frame(0x11, body)
                 if args.state and now - last_state >= 1:
                     last_state = now
-                    args.state.write_text(json.dumps(dict(
+                    write_json_snapshot(args.state, dict(
                         source=source, scene=target_scene.hex() if target_scene else None,
                         peer_ids=[p["id"] for p in peers], poses=tick,
                         udp=[dict(active=bool(p["udp"].active(now)),sent=p["udp"].sent,
                                   received=p["udp"].received,fallbacks=p["udp"].fallbacks) for p in peers] if args.udp else [],
                         source_pos=list(pose[1:4]) if pose else None, source_yaw=pose[5] if pose else None,
-                        source_animation=dict(id=pose[7], frame=pose[8], action=pose[9]) if pose else None)))
+                        source_animation=dict(id=pose[7], frame=pose[8], action=pose[9]) if pose else None))
                 for peer in peers:
                     if peer["outgoing"]:
                         try:
