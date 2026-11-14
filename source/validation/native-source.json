@@ -1,7 +1,7 @@
 {
   "base_commit": "506a9bc5aead5fc9598bb8f4a521f3b26f8897e8",
-  "engine_tree": "8f13ee0eb07fa6f0b153cfa0c55d7527f1bcde39",
-  "engine_patches": 48,
+  "engine_tree": "742a16267abd1aa1fee8328dd45cd417a678b55d",
+  "engine_patches": 49,
   "native_file_sha256": {
     "client/Makefile": "c909d6794becd1904f63cb58d2fbbf47c5393a4624945bd25c3080cbb476e79c",
     "client/src/sst_animation.c": "94fd3e1703f99205624883bbb97964dcc4ed8dba73ef167b0bdbb527ae28f7e1",
@@ -153,7 +153,7 @@
     "engine/runtime/hle/framepace.c": "50a9258f91580175ab1fdf4433ff59fc5befe1e74cdf74cfbfc70ea1f52b75c0",
     "engine/runtime/hle/heaps.c": "53f1069d8ff4d35f5fb754ecae61c8f9ad0bd384e2f129dc381ed3a0b404c5c9",
     "engine/runtime/hle/hookshot.c": "9188bc1c7f052066e7c2f76deb523a9b74d0ab06bf69898ee62327f26a212c22",
-    "engine/runtime/hle/input.c": "3bd29f8053fc9d22d561fce97671f816dc2c25cc2a70ac5195df59fbf1f8b7fc",
+    "engine/runtime/hle/input.c": "9fd68bb8a306e1cd837051a5362b4abe85b4107a10618a9e3196fc02256559a0",
     "engine/runtime/hle/keysanity.c": "ceea43ef4e5acbcee7cc0ca9cfdd2a2d4dbb7e812dbbb89dc44518c067dee7ca",
     "engine/runtime/hle/miniboss.c": "3a0149956a65b43cd740f05c4b723d514b0e44574f7401333f182426967a853e",
     "engine/runtime/hle/mirror.c": "e05d4d5c47380227390e64384aa65844e6eb7efabcb0a91a8eb797e610538029",
@@ -264,7 +264,9 @@
     "engine/tools/test_texture_cbuf.c": "5d7ed9578e3783ca6e74cf85419fbfe30014aa78bfaed6885fe4de087adad9cb",
     "engine/tools/bindless_fixture.h": "f0973e53ccace46d6461d08c3db2a04a78ffe12ce0bb8045c9935ef8ad9a2a95",
     "engine/tools/test_bindless_texture.c": "b263940534f516a9da7f56357b35ae7c1841547335f82197c5ffeac078ad3e64",
-    "tests/bindless_gpu_test.c": "b4c99f3c684484763afa6981fd1cb552dc961edfa9ba5e7f4a066687ada3327c"
+    "tests/bindless_gpu_test.c": "b4c99f3c684484763afa6981fd1cb552dc961edfa9ba5e7f4a066687ada3327c",
+    "engine/runtime/hle/input_script.h": "e0e0c62bb9474de446c32e5b37fc2edd4f75f981619a284887f5fab394725557",
+    "engine/tools/test_input_script.c": "d5533f2697cbf33c949634369baa8715bab59214c9137935f27aee367e506b3e"
   },
   "original_frozen_entry_count": 257,
   "omitted_local_only_recipes": [

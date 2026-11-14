@@ -1,0 +1,135 @@
+From 1b123ed57988e49a62dd878b04d6c97a36f0528e Mon Sep 17 00:00:00 2001
+From: SST development <sst-development@localhost>
+Date: Fri, 13 Nov 2026 22:47:17 -0500
+Subject: [PATCH] Ignore terminal line breaks in live input scripts
+
+---
+ runtime/hle/input.c        | 11 ++------
+ runtime/hle/input_script.h | 13 +++++++++
+ tools/test_input_script.c  | 58 ++++++++++++++++++++++++++++++++++++++
+ 3 files changed, 74 insertions(+), 8 deletions(-)
+ create mode 100644 runtime/hle/input_script.h
+ create mode 100644 tools/test_input_script.c
+
+diff --git a/runtime/hle/input.c b/runtime/hle/input.c
+index 1b09e42..1516d59 100644
+--- a/runtime/hle/input.c
++++ b/runtime/hle/input.c
+@@ -16,6 +16,7 @@
+ #include "../settings.h"
+ #include "../input_bind.h"
+ #include "stick.h"
++#include "input_script.h"
+ #include "../frame_rate.h"
+ 
+ extern bool menu_input_captured(void);  // runtime/ui/menu.mm: overlay menu or name entry up
+@@ -366,10 +367,7 @@ static void host_test_frame(uint64_t frame) {
+     static char live_spec[16384];
+     const char *live_path = getenv("LARECOMP_INPUT_FILE");
+     if (live_path) {
+-        FILE *f = fopen(live_path, "rb");
+-        size_t n = f ? fread(live_spec, 1, sizeof live_spec - 1, f) : 0;
+-        if (f) fclose(f);
+-        live_spec[n] = 0;
++        input_script_read(live_spec, sizeof live_spec, live_path);
+         hspec = live_spec;
+         host_test = true;
+     }
+@@ -463,10 +461,7 @@ void input_frame(uint64_t frame) {
+     static char file_spec[16384];
+     const char *script_path = getenv("LARECOMP_INPUT_FILE");
+     if (script_path) {
+-        FILE *f = fopen(script_path, "rb");
+-        size_t n = f ? fread(file_spec, 1, sizeof file_spec - 1, f) : 0;
+-        if (f) fclose(f);
+-        file_spec[n] = 0;
++        input_script_read(file_spec, sizeof file_spec, script_path);
+         spec = file_spec;
+     }
+     if (!spec) return;
+diff --git a/runtime/hle/input_script.h b/runtime/hle/input_script.h
+new file mode 100644
+index 0000000..fdba53f
+--- /dev/null
++++ b/runtime/hle/input_script.h
+@@ -0,0 +1,13 @@
++// Read a live input script without treating its final line break as command data.
++#pragma once
++#include <stdio.h>
++
++static size_t input_script_read(char *out, size_t capacity, const char *path) {
++    if (!capacity) return 0;
++    FILE *file = fopen(path, "rb");
++    size_t length = file ? fread(out, 1, capacity - 1, file) : 0;
++    if (file) fclose(file);
++    while (length && (out[length - 1] == '\r' || out[length - 1] == '\n')) --length;
++    out[length] = 0;
++    return length;
++}
+diff --git a/tools/test_input_script.c b/tools/test_input_script.c
+new file mode 100644
+index 0000000..150e728
+--- /dev/null
++++ b/tools/test_input_script.c
+@@ -0,0 +1,58 @@
++// File-backed contract checks for the live input reader used by both consumers.
++#define _POSIX_C_SOURCE 200809L
++#include <assert.h>
++#include <stdlib.h>
++#include <string.h>
++#include <unistd.h>
++#include "../runtime/hle/input_script.h"
++
++static void write_script(const char *path, const char *text) {
++    FILE *file = fopen(path, "wb");
++    assert(file);
++    size_t size = strlen(text);
++    assert(fwrite(text, 1, size, file) == size);
++    assert(!fclose(file));
++}
++
++int main(void) {
++    char path[] = "/tmp/sst-input-script-XXXXXX";
++    int descriptor = mkstemp(path);
++    assert(descriptor >= 0 && !close(descriptor));
++    const struct { const char *input, *expected; size_t capacity; } cases[] = {
++        {"", "", 256},
++        {"17300:shot:control-after-up", "17300:shot:control-after-up", 256},
++        {"17300:shot:control-after-up\n", "17300:shot:control-after-up", 256},
++        {"17300:shot:control-after-up\r\n", "17300:shot:control-after-up", 256},
++        {"17300:shot:control-after-up\r", "17300:shot:control-after-up", 256},
++        {"1:shot:first\n\r\n", "1:shot:first", 256},
++        {"\n", "", 256},
++        {"\r\n", "", 256},
++        {"1:type:Link  \n", "1:type:Link  ", 256},
++        {"1:shot:first,\n2:shot:last\r\n", "1:shot:first,\n2:shot:last", 256},
++        {"1:key:Keypad 0:10\n", "1:key:Keypad 0:10", 256},
++        {"100:shot:a-long-name\n", "100:sho", 8},
++        {"1:A:8\n", "", 1},
++        {"1:A:8\n", "", 0}
++    };
++    unsigned passed = 0;
++    for (size_t i = 0; i < sizeof cases / sizeof cases[0]; ++i) {
++        write_script(path, cases[i].input);
++        unsigned char bytes[257];
++        memset(bytes, 0xa5, sizeof bytes);
++        size_t length = input_script_read((char *)bytes, cases[i].capacity, path);
++        assert(length == strlen(cases[i].expected));
++        if (cases[i].capacity) assert(!strcmp((char *)bytes, cases[i].expected));
++        for (size_t j = cases[i].capacity; j < sizeof bytes; ++j) assert(bytes[j] == 0xa5);
++        ++passed;
++    }
++    write_script(path, "200:shot:reloaded\r\n");
++    char buffer[256];
++    assert(input_script_read(buffer, sizeof buffer, path) == strlen("200:shot:reloaded"));
++    assert(!strcmp(buffer, "200:shot:reloaded"));
++    ++passed;
++    assert(!unlink(path));
++    assert(input_script_read(buffer, sizeof buffer, path) == 0 && !buffer[0]);
++    ++passed;
++    printf("Live input script PASS: %u cases\n", passed);
++    return 0;
++}
+-- 
+2.43.0
+

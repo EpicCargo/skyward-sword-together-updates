@@ -1,0 +1,50 @@
+{
+  "passed": true,
+  "scope": "Manual review of owned software-Vulkan opening and normal directional controls in Link's Knight Academy room; one standalone game",
+  "engine_tree": "8f13ee0eb07fa6f0b153cfa0c55d7527f1bcde39",
+  "binary_sha256": "87cb71c43f124fb839af88eae5040d14c11c723c1228029f1afceb70caa97f1d",
+  "run": "20261114T032456",
+  "completed_normally": true,
+  "requested_frame": 18000,
+  "seconds": 807.0575146139963,
+  "renderer_samples": 380,
+  "sampled_draws": 3982130,
+  "sampled_skipped_draws": 0,
+  "shader_failures": 0,
+  "vulkan_validation_enabled": false,
+  "synthetic_gpu_validation_passed_separately": true,
+  "reviewed_capture_sha256": {
+    "before": "99194a1e29601cd8dfe3a01483da2944f47d3cb01a3b00098c41d520b4ac7648",
+    "after_right": "4d4264208dadb5b0e35f94b054939ecda61d30d21c19c09d3ca1b91249eda7bf",
+    "after_down": "1f163d368a7cad7251e67793d46f01f5b7a5a56f83eab8efe18176a871551c0a",
+    "after_left": "9cdce92635fb422c80d9a0813da4d8d4eba45ebd98b8fc9e6b20d56b4b6423e1",
+    "after_up": "31d97f2ab7223e73d5ed22dd96491ad8a33bde75a292bc093d2c2ebdf34abd36"
+  },
+  "movement_inputs": {
+    "right": [
+      16600,
+      45
+    ],
+    "down": [
+      16800,
+      45
+    ],
+    "left": [
+      17000,
+      45
+    ],
+    "up": [
+      17200,
+      45
+    ]
+  },
+  "minimum_windows_free_bytes": 9538973696,
+  "peak_group_rss_mib": 2073.2,
+  "final_linux_games": [],
+  "native_coop_tested": false,
+  "windows_hardware_accepted": false,
+  "complete_campaign_accepted": false,
+  "personal_saves_or_assets_modified": false,
+  "game_images_published": false,
+  "observation_fixture_issue": "A terminal newline in the live input file became part of the last screenshot filename. Original file preserved; an identical readable copy was used for manual review."
+}

@@ -20,4 +20,4 @@ The GPU fixture checks all 32 handle entries with neighboring pixels selecting d
 
 The private offline compiler audit covers 2096 paired vertex/fragment programs (4192 stages). All generated Vulkan GLSL stages compile to SPIR-V with paired varying masks and otherwise default keys. This does not establish actual pipeline linkage, render-state compatibility or gameplay correctness. The 72 previously unsupported fragment variants still reject in Metal. Only aggregate counts and source hashes are published; game shader bytes and generated game shaders stay private.
 
-Controllable Link, opening visuals on the new runtime, native co-op interaction and independent full clients remain separate acceptance checks.
+The new runtime separately completed the opening and normal Knight Academy directional movement in an isolated 18,000-frame run. That game run did not enable Vulkan validation. Native co-op interaction, Windows hardware and independent full clients remain separate acceptance checks.

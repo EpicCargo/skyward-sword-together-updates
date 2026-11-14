@@ -46,7 +46,8 @@
     "actual_render_state_keys_verified": false,
     "game_shader_bytes_published": false
   },
-  "native_gameplay_accepted": false,
+  "native_coop_gameplay_accepted": false,
+  "wsl_knight_academy_control_accepted": true,
   "metal_bindless_supported": false,
   "independent_full_clients_accepted": false,
   "release_feed_updated": false
