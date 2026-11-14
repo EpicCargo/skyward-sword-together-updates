@@ -66,5 +66,6 @@ jobs:
           export VK_ICD_FILENAMES="$sst_lvp_icd" VK_DRIVER_FILES="$sst_lvp_icd"
           python3 scripts/resource_runner.py --rss-mib 512 --available-mib 6144 --nice 10 --seconds 120 --lock build/bindless-gpu.lock -- build/bindless-gpu/check --compile build/bindless-gpu
           for mode in 0 1 2; do
-            python3 scripts/resource_runner.py --rss-mib 512 --available-mib 6144 --nice 10 --seconds 120 --lock build/bindless-gpu.lock -- build/bindless-gpu/check --run build/bindless-gpu "$mode"
+          # Mesa's sanitized pipeline compiler needs more than 512 MiB on this hosted image.
+          python3 scripts/resource_runner.py --rss-mib 1024 --available-mib 6144 --nice 10 --seconds 120 --lock build/bindless-gpu.lock -- build/bindless-gpu/check --run build/bindless-gpu "$mode"
           done
