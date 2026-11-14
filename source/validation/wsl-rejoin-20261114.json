@@ -1,0 +1,151 @@
+{
+  "passed": true,
+  "engine_patches": 50,
+  "engine_tree": "e70a62d5b901e1eb1670d4325d3a71f6a09729c1",
+  "binary_sha256": "ae0d508bb336e5a0154051668d3691d2acea8485cac71e9fc657ac96d02d687f",
+  "seconds": 499.4448126129864,
+  "requested_frame": 9000,
+  "last_sampled_frame": 8955,
+  "renderer_samples": 232,
+  "sampled_draws": 2462973,
+  "sampled_skipped_draws": 0,
+  "shader_failures": 0,
+  "validation_requested": true,
+  "validation_layer_fallback": false,
+  "reported_validation_warnings": 0,
+  "reported_validation_errors": 0,
+  "reported_validation_ids": 0,
+  "completed_normally": true,
+  "owned_cleanup_complete": true,
+  "minimum_windows_free_bytes": 13373042688,
+  "runtime_log_sha256": "5246a4e53775858f93694e6369de6507bb6ea85309421ec76a9a1f5d387982c9",
+  "game_captures_published": false,
+  "personal_game_files_modified": false,
+  "installed": false,
+  "scope": "One WSL full game and three synthetic loopback peers: movement, pose pause/recovery, departure and fresh-ID rejoin",
+  "all_phases_completed": true,
+  "phases": [
+    {
+      "phase": "bootstrap",
+      "frame": 0,
+      "seconds": 1.2382404749951093,
+      "wave": 1
+    },
+    {
+      "phase": "appear",
+      "frame": 2841,
+      "seconds": 240.43298421999498,
+      "wave": 1
+    },
+    {
+      "phase": "move",
+      "frame": 3025,
+      "seconds": 248.70135068499076,
+      "wave": 1
+    },
+    {
+      "phase": "stale",
+      "frame": 3991,
+      "seconds": 292.79969683299714,
+      "wave": 1
+    },
+    {
+      "phase": "stale-capture",
+      "frame": 4088,
+      "seconds": 296.81008247999125,
+      "wave": 1
+    },
+    {
+      "phase": "recover",
+      "frame": 4287,
+      "seconds": 304.82854088098975,
+      "wave": 1
+    },
+    {
+      "phase": "recover-capture",
+      "frame": 4353,
+      "seconds": 308.83842704599374,
+      "wave": 1
+    },
+    {
+      "phase": "depart",
+      "frame": 4546,
+      "seconds": 317.10961167099595,
+      "wave": 1
+    },
+    {
+      "phase": "depart-capture",
+      "frame": 4645,
+      "seconds": 321.12045989399485,
+      "wave": 1
+    },
+    {
+      "phase": "rejoin",
+      "frame": 4845,
+      "seconds": 329.39260120599647,
+      "wave": 2
+    },
+    {
+      "phase": "rejoin-capture",
+      "frame": 4934,
+      "seconds": 333.4022303919919,
+      "wave": 2
+    },
+    {
+      "phase": "depart-again",
+      "frame": 5132,
+      "seconds": 342.4257129429898,
+      "wave": 2
+    },
+    {
+      "phase": "final-capture",
+      "frame": 5208,
+      "seconds": 346.43707805300073,
+      "wave": 2
+    },
+    {
+      "phase": "complete",
+      "frame": 5405,
+      "seconds": 353.705369762989,
+      "wave": 2
+    }
+  ],
+  "first_peer_ids": [
+    2,
+    3,
+    4
+  ],
+  "rejoined_peer_ids": [
+    5,
+    6,
+    7
+  ],
+  "native_movement_positions": 14,
+  "loopback_listener_closed": true,
+  "prop_carry_tested": false,
+  "independent_full_clients_tested": false,
+  "native_room_transition_observed": false,
+  "avatars_manually_reviewed": true,
+  "reviewed_capture_sha256": {
+    "three-before-move.png": "c7c1fd09fa7cc6c2d114026371691aba2cbde50b3930cec90dd9dbe9965063d8",
+    "after-right.png": "7e83d47799fa44bc02855d0d60a59988c405bfeb69669712a0cb7ebfc290facb",
+    "after-down.png": "4ffa981108755098d96b4bf6507ccc14d0ed9619976d9a431f23437decac26e9",
+    "after-left.png": "2e89ff37a1683fe04edac093eefbe6e7913cf792b5633f8e381f9f1eddbfb350",
+    "after-up.png": "2d95426c9631e0a27221acce0dfd04cb8c32aff12e502636700cc809dcc0827c",
+    "stale-hidden.png": "2f685b0a8d13e9950cf6004a20321aeafe71ffb0e9ab18decdcf9985c2ce491b",
+    "recovered-three.png": "2f118444a3eea3d34f71e3761903da5cf5ef196108c3bba0eaefb2e2d1b7d015",
+    "after-departure.png": "09de8b0c165ea96d9c3b038656ec42dd9a5067fdd86a20bffdfd1b54fdbf0b21",
+    "rejoined-three.png": "cbe5326b08c6072b4b30228dcadba3a7c9a55b2fc43fd47e6e20e4f385e3755e",
+    "final-single-player.png": "6ee1c738073ace5a22e43c22199841f3aa1963fecfd845e71a9af64b6ea9b287"
+  },
+  "supplemental_startup_inputs": {
+    "observed_frame": 2511,
+    "commands": [
+      "2571:STICK_DOWN:15",
+      "2671:A:15",
+      "2751:shot:start-selected-save"
+    ]
+  },
+  "transport": "Loopback TCP control and UDP poses; intentional peer departures",
+  "peak_group_rss_mib": 1782.6
+}

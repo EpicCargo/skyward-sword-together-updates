@@ -1,0 +1,21 @@
+{
+  "passed": true,
+  "engine_patches": 50,
+  "engine_tree": "e70a62d5b901e1eb1670d4325d3a71f6a09729c1",
+  "tested_source_commit": "e31bb1d86fabe7001af7ed184b074e6f04a26387",
+  "tested_source_files": 650,
+  "linux_ci_run": 43560668005,
+  "linux_runtime_binary_sha256": "ae0d508bb336e5a0154051668d3691d2acea8485cac71e9fc657ac96d02d687f",
+  "cpu_concurrent_calls": 5000,
+  "real_vulkan_operations": 3000,
+  "snapshot_contracts": 4,
+  "validation_warnings": 0,
+  "validation_errors": 0,
+  "address_sanitizer": true,
+  "undefined_behavior_sanitizer": true,
+  "leak_sanitizer": true,
+  "real_elf_contracts": 4,
+  "total_link_interface_contracts": 11,
+  "game_launched_by_ci": false,
+  "scope": "Actual runtime queue helper and atomic fixture publication; synthetic and file-backed checks"
+}
