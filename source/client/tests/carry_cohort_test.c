@@ -138,6 +138,46 @@ static void ordinary_neutral_preserved(void) {
     remote.equip_flags=SST_POSE_CONTEXT_UNSUPPORTED;
     assert(sst_animation_replay_prepare(&remote,&replay) && !replay.pose.action);
 }
+// Independent native clients exposed this boundary: receiving a safe carry
+// identity does not create the observer's missing local skeletal pose. Keep the
+// cold limitation explicit, including an unrelated native quest-barrel pickup.
+static void cold_receiver_and_local_learning(void) {
+    reset();SstPose local={.anim_id=26},remote=carry();remote.anim_frame=9;
+    SstAnimationReplay replay;
+    for(unsigned i=0;i<=12;i++){step(&local,i);parts(&local,i);}
+    step(&local,13);parts(&local,13);
+    uint64_t teaching=sst_animation_teaching_hash();
+    for(unsigned i=0;i<30;i++) {
+        remote.tick++;
+        assert(sst_animation_replay_prepare(&remote,&replay) && replay.ready);
+        assert(replay.cohort && !replay.pose.action);
+        assert(!(replay.pose.equip_flags&SST_POSE_IDENTITY_MASK));
+        assert(!sst_animation_replay_stats().carry_parts);
+        assert(sst_animation_teaching_hash()==teaching);
+    }
+    // Native action67 alone is insufficient: unsupported held objects must not
+    // teach the small-pot identity, even with matching clip and body geometry.
+    local=carry();local.equip_flags=SST_POSE_CONTEXT_UNSUPPORTED;
+    for(unsigned i=0;i<=12;i++){step(&local,i);parts(&local,i);}
+    step(&local,13);parts(&local,13);
+    assert(!sst_animation_replay_stats().carry_parts);
+    assert(sst_animation_replay_prepare(&remote,&replay) && !replay.pose.action);
+    local=warm();
+    assert(sst_animation_replay_prepare(&remote,&replay) && !replay.cohort);
+    assert(replay.pose.action==67);
+    assert((replay.pose.equip_flags&SST_POSE_IDENTITY_MASK)==SST_POSE_CONTEXT_SMALL_CARRY);
+    selected(&replay,1,false,89);selected(&replay,2,false,109);
+    // Returning the viewer to ordinary idle retains the verified same-scene
+    // carry snapshot for an unseen remote gait; no viewer motion is borrowed.
+    local=(SstPose){.anim_id=26};
+    for(unsigned i=14;i<26;i++){step(&local,i);parts(&local,i);}
+    remote=unseen();teaching=sst_animation_teaching_hash();
+    assert(sst_animation_replay_prepare(&remote,&replay) && replay.cohort);
+    assert(replay.pose.action==67);
+    assert((replay.pose.equip_flags&SST_POSE_IDENTITY_MASK)==SST_POSE_CONTEXT_SMALL_CARRY);
+    assert(sst_animation_teaching_hash()==teaching);
+    puts("cold receiver: missing pose, receive-only isolation, unsupported pickup, local learning and post-putdown replay PASS");
+}
 static void eviction_fails_closed(void) {
     reset();SstPose p=warm(),remote=unseen();SstAnimationReplay replay;
     // The extra cohort shares the existing 8 MiB budget and ordinary LRU;
@@ -178,7 +218,7 @@ static void reset_duration_and_denied_source(void) {
 }
 int main(void) {
     warm_fallback_and_exact_priority();mixed_and_incomplete_rejected();scope_and_unsafe();
-    ordinary_neutral_preserved();eviction_fails_closed();
+    ordinary_neutral_preserved();cold_receiver_and_local_learning();eviction_fails_closed();
     reset_duration_and_denied_source();sst_animation_reset();
     puts("carry cohort: exact priority, coherent native idle, complete manifest, scene/unsafe/lifetime gates PASS");
     return 0;

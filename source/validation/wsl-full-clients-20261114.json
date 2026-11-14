@@ -1,0 +1,89 @@
+{
+  "observations_reviewed": true,
+  "full_coop_accepted": false,
+  "runtime_bug_fixed": false,
+  "run": "20261114T195352",
+  "runtime_sha256": "b622e18e110ab516742d2f393b1cba8464b04dc1c8d48bc45f29bc71c8ccdf56",
+  "engine_tree": "b15b9b5f7377639fa2a2bfd3de2d90f7d0e46bd8",
+  "engine_patches": 51,
+  "full_native_clients": 2,
+  "scalar_peers": 0,
+  "virtual_machines": false,
+  "independent_profiles_and_displays": true,
+  "transport": "localhost TCP/UDP",
+  "frames_requested_per_client": 12000,
+  "seconds": 889.83455123,
+  "resource": {
+    "returncode": 0,
+    "reason": "normal",
+    "allowed_owned_clients": 2,
+    "owned_group": 3342,
+    "peak_group_rss_mib": 3744.265625,
+    "minimum_windows_free_bytes": 6667591680,
+    "final_owned_games": [],
+    "linux_reserve_mib": 3072,
+    "windows_reserve_mib": 3072,
+    "combined_rss_cap_mib": 12288
+  },
+  "clients": {
+    "host": {
+      "log_sha256": "1777155d2c97b31616cfdbe7102670c6ef134679e49fadd8da6c19ec7e61fa81",
+      "exit_code": 0,
+      "renderer_samples": 417,
+      "sampled_draws": 4008265,
+      "sampled_skipped_draws": 0,
+      "validation_requested": true,
+      "validation_layer_fallback": false,
+      "reported_validation_messages": 0,
+      "shader_failures": 0,
+      "prop_totals": {
+        "received": 0,
+        "denied": 0,
+        "carried": 0,
+        "placed": 0,
+        "parked": 0
+      }
+    },
+    "guest": {
+      "log_sha256": "f140aec16085b75b3873bc16bdbdff96f3c44fd1e68863e88a4b33ed52ec731e",
+      "exit_code": 0,
+      "renderer_samples": 417,
+      "sampled_draws": 4140458,
+      "sampled_skipped_draws": 0,
+      "validation_requested": true,
+      "validation_layer_fallback": false,
+      "reported_validation_messages": 0,
+      "shader_failures": 0,
+      "prop_totals": {
+        "received": 3676,
+        "denied": 3333,
+        "carried": 0,
+        "placed": 547,
+        "parked": 3332
+      }
+    }
+  },
+  "reviewed_private_image_sha256": {
+    "host/native-carry": "c3d46a059ad46b15ae266faa6f82b641bec7a6a635d5258bb433928e124c5bd7",
+    "host/host-putdown": "aab9dcfd83e8156673ffd04d25fff29531ef073d7180828d705609abd9e01ab3",
+    "guest/cold-observer-position": "fa9e7a2bbb0535d4254dea40086c1818a49beec9d65cd0c7208060f0a6831731",
+    "guest/nearer-pickup-result": "ce0c9029cb5680d9463581561a28ca6c40c821c7cbd326ea416c9bfedd5c1eed"
+  },
+  "observations": [
+    "Host genuine native small-pot119 pickup and putdown visually verified.",
+    "Cold guest received updates but used ordinary-neutral peer playback with carry_parts0; remote pot was not displayed.",
+    "Cold guest snapshot:2819 received,3006 denials,0 carry presentations.",
+    "After host putdown the guest applied placement updates.",
+    "Guest later picked a quest barrel; native action67 alone is not small-pot carry acceptance."
+  ],
+  "not_accepted": [
+    "Cold remote hand alignment",
+    "Guest native small-pot handback",
+    "Simultaneous native grabs",
+    "Large pot or normal barrel synchronization",
+    "Separate PCs, internet transport, reconnect, room transitions"
+  ],
+  "raw_harness_gameplay_accepted": false,
+  "raw_results_preserved": true,
+  "owned_cleanup_complete": true
+}

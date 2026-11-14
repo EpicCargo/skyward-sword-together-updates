@@ -43,6 +43,7 @@ jobs:
             build/scene_incarnation_test build/scene_transport_test \
             build/rejoin_test build/remote_frame_test build/motion_queue_test \
             build/enemy_motion_merge_test build/pickup_net_test \
+            build/carry_cohort_test \
             build/sst-session-host build/host_fixture
       - name: Check native prop, carry and session behavior
         run: |
@@ -52,6 +53,8 @@ jobs:
             motion_queue_test enemy_motion_merge_test pickup_net_test; do
             "client/build/$check"
           done
+          ASAN_OPTIONS=detect_leaks=1:halt_on_error=1 UBSAN_OPTIONS=halt_on_error=1:print_stacktrace=1 \
+            client/build/carry_cohort_test
           python3 client/tests/session_host_test.py client/build/sst-session-host
       - name: Check the actual engine bridge and object-capacity regressions
         env:

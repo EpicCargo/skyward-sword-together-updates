@@ -59,7 +59,7 @@
     "client/tests/animation_test.c": "f093db05e4a883269e346e1ea7abfc54886ee76e0fede3df8ed03d34ab4902e8",
     "client/tests/avatar_test.c": "b43d6c69a3e3d065f4723a2f4253f7b551228038fef27ea67fccb11ec6a262a4",
     "client/tests/backup_portable_test.c": "cab7f86f85216d90f2a030beb08634b2317fbbfc3ea95fdd1af71d80eef5c11c",
-    "client/tests/carry_cohort_test.c": "9dc45ba9e9d2e63384d2c5c113e0fbf28b8f5cf7e1d4d696be4eb40b05cc082b",
+    "client/tests/carry_cohort_test.c": "099640c040f6c4c78855d515319e5ed7f4211b295c7138403775b8f265270297",
     "client/tests/carry_context_test.c": "f9215a9d2f9c4b1a4871f00905406bf06607aa434fa23381d48d80ba97613f97",
     "client/tests/carry_playout_test.c": "f80167a6c094b9e57f640e3c4be5dab2f91cc9715891dbb5bb1fdf0fabb70d9b",
     "client/tests/carry_reader_test.c": "44fd4f557c80e0ef1717b561c752dd0f2efd1bcc87304f68bd902316de8c75f1",
