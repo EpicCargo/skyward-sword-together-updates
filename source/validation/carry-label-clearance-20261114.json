@@ -1,0 +1,14 @@
+{
+  "passed": true,
+  "baseline_source": "f2d574bb620ccbbd1b0690968dce8a3db3d6c3f0",
+  "baseline_carry_clearance_failure_reproduced": true,
+  "original_checks": 6,
+  "flag_resolution_cases": 18,
+  "visibility_controls": 2,
+  "game_launched": false,
+  "tested_source_commit": "4d314fbd5fd3d0e08f8905350b03b85b2faca581",
+  "address_sanitizer": true,
+  "undefined_behavior_sanitizer": true,
+  "leak_sanitizer": true,
+  "native_carry_label_capture_verified": true
+}

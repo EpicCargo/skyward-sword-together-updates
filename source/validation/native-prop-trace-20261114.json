@@ -1,0 +1,17 @@
+{
+  "passed": true,
+  "profile_classes": 3,
+  "behavior_scenarios": 6,
+  "modes": [
+    "off",
+    "on"
+  ],
+  "actual_bridge_behavior_unchanged": true,
+  "trace_records": 9,
+  "engine_tree": "b15b9b5f7377639fa2a2bfd3de2d90f7d0e46bd8",
+  "game_launched": false,
+  "tested_source_commit": "4d314fbd5fd3d0e08f8905350b03b85b2faca581",
+  "address_sanitizer": true,
+  "undefined_behavior_sanitizer": true,
+  "leak_sanitizer": true
+}
