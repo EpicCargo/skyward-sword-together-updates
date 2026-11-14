@@ -32,3 +32,36 @@ jobs:
           clang -O1 -g -std=c11 -fsanitize=address,undefined \
             engine/tools/test_texture_cbuf.c -o /tmp/texture-cbuf
           /tmp/texture-cbuf
+  gpu:
+    needs: cpu
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: source
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - name: Install offscreen validation prerequisites
+        run: sudo apt-get update && sudo apt-get install -y libvulkan-dev libshaderc-dev glslang-dev spirv-tools mesa-vulkan-drivers vulkan-validationlayers pkg-config
+      - name: Restore the exact asset-free source
+        run: python3 scripts/restore-engine.py
+      - name: Compile the GPU fixture with one compiler
+        run: |
+          mkdir -p build/bindless-gpu
+          python3 scripts/resource_runner.py --rss-mib 512 --available-mib 3072 --nice 10 --seconds 150 --lock build/bindless-gpu.lock -- \
+            clang -O1 -g -std=c11 -D_GNU_SOURCE -fsanitize=address,undefined -fno-omit-frame-pointer \
+            tests/bindless_gpu_test.c engine/runtime/nvn/maxwell/translate.c \
+            -Wl,--start-group $(pkg-config --libs --static shaderc_combined glslang SPIRV-Tools) -lSPIRV -Wl,--end-group \
+            -lstdc++ -lpthread -lvulkan -lm -o build/bindless-gpu/check
+      - name: Check texture selection, gradients and binding lifetimes
+        env:
+          ASAN_OPTIONS: detect_leaks=1:halt_on_error=1:quarantine_size_mb=16
+          UBSAN_OPTIONS: halt_on_error=1:print_stacktrace=1
+          LP_NUM_THREADS: '2'
+        run: |
+          sst_lvp_icd=$(find /usr/share/vulkan/icd.d -name '*lvp*' -print -quit)
+          test -n "$sst_lvp_icd"
+          export VK_ICD_FILENAMES="$sst_lvp_icd" VK_DRIVER_FILES="$sst_lvp_icd"
+          python3 scripts/resource_runner.py --rss-mib 512 --available-mib 3072 --nice 10 --seconds 180 --lock build/bindless-gpu.lock -- build/bindless-gpu/check

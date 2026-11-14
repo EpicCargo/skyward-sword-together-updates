@@ -263,7 +263,8 @@
     "engine/runtime/nvn/texture_cbuf.h": "f0c3cca7c8b1cf0efb8ca821e12ef32ea2efda39220532ce7bceceab9498e36d",
     "engine/tools/test_texture_cbuf.c": "5d7ed9578e3783ca6e74cf85419fbfe30014aa78bfaed6885fe4de087adad9cb",
     "engine/tools/bindless_fixture.h": "f0973e53ccace46d6461d08c3db2a04a78ffe12ce0bb8045c9935ef8ad9a2a95",
-    "engine/tools/test_bindless_texture.c": "fa0d116adbc4be142069130676613276f5ae8cb7441c2ed5b859224bbb8a0420"
+    "engine/tools/test_bindless_texture.c": "fa0d116adbc4be142069130676613276f5ae8cb7441c2ed5b859224bbb8a0420",
+    "tests/bindless_gpu_test.c": "1c926825d529f8528fda88b49219bc6d5e8a9f684203af7def8a3cdc9015ecae"
   },
   "original_frozen_entry_count": 257,
   "omitted_local_only_recipes": [
