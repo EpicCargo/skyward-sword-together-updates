@@ -50,7 +50,7 @@ jobs:
       - name: Compile the GPU fixture with one compiler
         run: |
           mkdir -p build/bindless-gpu
-          python3 scripts/resource_runner.py --rss-mib 512 --available-mib 3072 --nice 10 --seconds 150 --lock build/bindless-gpu.lock -- \
+          python3 scripts/resource_runner.py --rss-mib 512 --available-mib 6144 --nice 10 --seconds 150 --lock build/bindless-gpu.lock -- \
             clang -O1 -g -std=c11 -D_GNU_SOURCE -fsanitize=address,undefined -fno-omit-frame-pointer \
             tests/bindless_gpu_test.c engine/runtime/nvn/maxwell/translate.c \
             -Wl,--start-group $(pkg-config --libs --static shaderc_combined glslang SPIRV-Tools) -lSPIRV -Wl,--end-group \
@@ -64,4 +64,4 @@ jobs:
           sst_lvp_icd=$(find /usr/share/vulkan/icd.d -name '*lvp*' -print -quit)
           test -n "$sst_lvp_icd"
           export VK_ICD_FILENAMES="$sst_lvp_icd" VK_DRIVER_FILES="$sst_lvp_icd"
-          python3 scripts/resource_runner.py --rss-mib 512 --available-mib 3072 --nice 10 --seconds 180 --lock build/bindless-gpu.lock -- build/bindless-gpu/check
+          python3 scripts/resource_runner.py --rss-mib 512 --available-mib 6144 --nice 10 --seconds 180 --lock build/bindless-gpu.lock -- build/bindless-gpu/check
