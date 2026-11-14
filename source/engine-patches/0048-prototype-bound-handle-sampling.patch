@@ -1,0 +1,297 @@
+From e0ec1131293f2bac701f4c3e45faa717189479e3 Mon Sep 17 00:00:00 2001
+From: SST development <sst-development@localhost>
+Date: Fri, 13 Nov 2026 21:42:07 -0500
+Subject: [PATCH] Prototype bounded Vulkan bindless texture sampling
+
+---
+ runtime/nvn/maxwell/translate.c | 99 +++++++++++++++++++++++++++++++--
+ runtime/nvn/vulkan/exec.c       |  9 +++
+ tools/bindless_fixture.h        | 29 ++++++++++
+ tools/test_bindless_texture.c   | 67 ++++++++++++++++++++++
+ 4 files changed, 199 insertions(+), 5 deletions(-)
+ create mode 100644 tools/bindless_fixture.h
+ create mode 100644 tools/test_bindless_texture.c
+
+diff --git a/runtime/nvn/maxwell/translate.c b/runtime/nvn/maxwell/translate.c
+index 87621ac..9ad93ad 100644
+--- a/runtime/nvn/maxwell/translate.c
++++ b/runtime/nvn/maxwell/translate.c
+@@ -77,6 +77,8 @@ typedef struct {
+     // GLSL-specific state follows the shared translation state.
+     bool glsl;               // emit Vulkan GLSL: dialect-specific constructs here, the rest via glsl_rewrite()
+     bool uses_gmem_store;    // STG present: the gmem buffer is not readonly
++    bool bindless_2d;        // GLSL's finite table of stage-bound 2D texture handles
++    int bindless_slots[32];
+     uint32_t cbuf_need[18];  // highest constant vec4 index + 1 per cbuf (array size of the GLSL block)
+ } Ctx;
+ 
+@@ -481,7 +483,7 @@ static int tex_slot(Ctx *c, uint32_t index, int type, bool shadow, bool array) {
+     bool weak = type < 0;
+     if (weak) type = TEXTYPE_2D;
+     int s = c->info->ntex++;
+-    if (s >= 31) { fail(c, "too many textures"); return 0; }
++    if (s >= (c->glsl && c->stage == STAGE_FRAGMENT ? 32 : 31)) { fail(c, "too many textures"); return 0; }
+     c->tex_slot[index] = s + 1;
+     c->tex_weak[s] = weak;
+     ShaderTexture *t = &c->info->tex[s];
+@@ -764,15 +766,93 @@ static void emit_texs(Ctx *c, uint64_t w, bool fetch) {
+     write_tex_result(c, slot, call, mask, d0, d1, true, !bits(w, 59, 1));  // 0xd0/0xd2: .F16 results
+ }
+ 
++// Only accept a direct, unconditional 32-bit c2 handle load in straight-line
++// code. Unknown intervening instructions fail proof rather than guessing their
++// write set. These scalar classes match the existing decoder below.
++static bool bindless_cb2_handle(Ctx *c, uint32_t pc, int r) {
++    if (!c->code || c->branchy || r == RZ || pc < 8 || pc % 8 || pc / 8 >= c->ninsts) return false;
++    for (size_t i = 1; i < pc / 8; i++) {
++        if (i % 4 == 0) continue;
++        uint64_t w = ((const uint64_t *)c->code)[i];
++        if (bits(w, 16, 4) == 15) continue;
++        uint64_t flow = w & 0xfff0000000000000ull;
++        if (flow == 0xe300000000000000ull || flow == 0xe330000000000000ull) return false;
++    }
++    for (size_t i = pc / 8; i-- > 1;) {
++        if (i % 4 == 0) continue;
++        uint64_t w = ((const uint64_t *)c->code)[i];
++        if (bits(w, 16, 4) == 15) continue;  // @!PT never executes
++        int d = (int)bits(w, 0, 8);
++#define BM(value, mask) ((w & (uint64_t)(mask)) == (uint64_t)(value))
++        if (BM(0xef90000000000000ull, 0xfff8000000000000ull)) {
++            int size = (int)bits(w, 48, 3), n = size == 5 ? 2 : 1;
++            if (d != RZ && r >= d && r < d + n) {
++                uint32_t off = (uint32_t)bits(w, 20, 16);
++                return size == 4 && r == d && bits(w, 16, 4) == PT && bits(w, 36, 5) == 2 &&
++                       off >= 0x20 && off <= 0x118 && !(off & 7);
++            }
++            continue;
++        }
++        if (BM(0xdeb8000000000000ull, 0xfff8000000000000ull)) {
++            unsigned mask = (unsigned)bits(w, 31, 4), n = 0;
++            for (; mask; mask >>= 1) n += mask & 1;
++            if (d != RZ && r >= d && r < d + (int)n) return false;
++            continue;
++        }
++        bool scalar = BM(0x5c68000000000000ull, 0xfff8000000000000ull) ||  // FMUL
++                      BM(0x4c68000000000000ull, 0xfff8000000000000ull) ||
++                      BM(0x3868000000000000ull, 0xfef8000000000000ull) ||
++                      BM(0x5980000000000000ull, 0xff80000000000000ull) ||  // FFMA
++                      BM(0x4980000000000000ull, 0xff80000000000000ull) ||
++                      BM(0x5180000000000000ull, 0xff80000000000000ull) ||
++                      BM(0x3280000000000000ull, 0xfe80000000000000ull) ||
++                      BM(0x5ba0000000000000ull, 0xfff0000000000000ull) ||  // FCMP
++                      BM(0x4ba0000000000000ull, 0xfff0000000000000ull) ||
++                      BM(0x36a0000000000000ull, 0xfef0000000000000ull) ||
++                      BM(0x53a0000000000000ull, 0xfff0000000000000ull) ||
++                      BM(0x5080000000000000ull, 0xfff8000000000000ull) ||  // MUFU
++                      BM(0x0800000000000000ull, 0xfc00000000000000ull) ||  // FADD32I
++                      BM(0x5c98000000000000ull, 0xfff8000000000000ull) ||  // MOV
++                      BM(0x4c98000000000000ull, 0xfff8000000000000ull) ||
++                      BM(0x3898000000000000ull, 0xfef8000000000000ull) ||
++                      BM(0x0100000000000000ull, 0xfff0000000000000ull) ||  // MOV32I
++                      BM(0xe00000000000ff00ull, 0xff0000400000ff00ull) ||  // IPA
++                      BM(0xe000004000000000ull, 0xff00004000000000ull);
++        if (scalar) { if (d != RZ && d == r) return false; continue; }
++        if (BM(0x50b0000000000000ull, 0xfff8000000000000ull)) continue;  // NOP
++#undef BM
++        return false;
++    }
++    return false;
++}
++
+ // TEX (full form): coordinates from consecutive registers at gpr8, extra parameters at gpr20.
+-static void emit_tex(Ctx *c, uint64_t w, bool bindless) {
++static void emit_tex(Ctx *c, uint64_t w, bool bindless, uint32_t pc) {
+     int d = (int)bits(w, 0, 8), a = (int)bits(w, 8, 8), b = (int)bits(w, 20, 8);
+     uint32_t index = bindless ? 0 : (uint32_t)bits(w, 36, 13);
+     int target = (int)bits(w, 29, 2);
+     bool array = bits(w, 28, 1), dc = bits(w, 50, 1), aoffi = bindless ? bits(w, 36, 1) : bits(w, 54, 1);
+     uint32_t mask = (uint32_t)bits(w, 31, 4);
+     int lod_mode = bindless ? (int)bits(w, 37, 3) : (int)bits(w, 55, 3);  // 0 none, 1 lz, 2 lb, 3 ll, 6 lba, 7 lla
+-    if (bindless) { fail(c, "bindless tex"); return; }
++    if (bindless) {
++        if (!c->glsl || c->stage != STAGE_FRAGMENT || target != 1 || array || dc || aoffi || lod_mode ||
++            bits(w, 16, 4) != PT || !bindless_cb2_handle(c, pc, b)) {
++            fail(c, "unsupported bindless tex form or handle provenance"); return;
++        }
++        if (!c->bindless_2d) {
++            for (int i = 0; i < 32; i++) c->bindless_slots[i] = tex_slot(c, 8 + 2 * i, TEXTYPE_2D, false, false);
++            c->info->cbuf_mask |= 1u << 2;
++            if (c->info->cbuf_size[2] < 512) c->info->cbuf_size[2] = 512;
++            c->bindless_2d = true;
++        }
++        char call[1024], coord[256];
++        snprintf(coord, sizeof coord, "vec2(%s, %s)", F(R(a)), F(R(a + 1)));
++        // Derivatives are evaluated in the caller's straight-line control flow,
++        // before the helper selects a texture. No descriptor indexing feature.
++        snprintf(call, sizeof call, "sample_bound_handle_2d(%s, %s, dFdx(%s), dFdy(%s))", R(b), coord, coord, coord);
++        write_tex_result(c, 0, call, mask, d, RZ, false, false);
++        return;
++    }
+     int type = target == 0 ? (array ? TEXTYPE_1D_ARRAY : TEXTYPE_1D)
+              : target == 1 ? (array ? TEXTYPE_2D_ARRAY : TEXTYPE_2D)
+              : target == 2 ? TEXTYPE_3D
+@@ -929,9 +1009,9 @@ static void emit_insn(Ctx *c, uint64_t w, uint32_t pc) {
+     } else if (OPM(0xd200000000000000ull, 0xf600000000000000ull)) {  // TLDS
+         emit_texs(c, w, true);
+     } else if (OPM(0xc038000000000000ull, 0xfc38000000000000ull)) {  // TEX
+-        emit_tex(c, w, false);
++        emit_tex(c, w, false, pc);
+     } else if (OPM(0xdeb8000000000000ull, 0xfff8000000000000ull)) {  // TEX.B (bindless)
+-        emit_tex(c, w, true);
++        emit_tex(c, w, true, pc);
+     } else if (OPM(0xdf48000000000000ull, 0xfff8000000000000ull)) {  // TXQ
+         uint32_t index = (uint32_t)bits(w, 36, 13);
+         int qt = (int)bits(w, 22, 6);
+@@ -1862,6 +1942,13 @@ static ShaderInfo *glsl_finish(Ctx *c, bool any_branch, bool dbg) {
+         default: sp(&s, "ivec3 tsize%d(int l) { return ivec3(textureSize(t%d, l), 1); }\n", i, i);
+         }
+     }
++    if (c->bindless_2d) {
++        sp(&s, "vec4 sample_bound_handle_2d(uint h, vec2 uv, vec2 dx, vec2 dy) {\n");
++        for (int i = 0; i < 32; i++)
++            sp(&s, "  if (h != 0u && h == cb2[%d][%d]) return textureGrad(t%d, uv, dx, dy);\n",
++               2 + i / 2, (i % 2) * 2, c->bindless_slots[i]);
++        sp(&s, "  return vec4(0.0f);\n}\n");
++    }
+     if (stage == STAGE_VERTEX) {
+         for (int i = 0; i < 32; i++) {
+             if (!(c->in_attr_mask & (1u << i))) continue;
+@@ -2033,6 +2120,8 @@ ShaderInfo *maxwell_translate(const uint8_t *blob, size_t max_size, int stage, c
+     static int annotate = -1;
+     if (annotate < 0) annotate = getenv("LARECOMP_SAVE_MSL") != NULL;
+     c->branchy = any_branch;
++    c->code = code;
++    c->ninsts = end;
+     for (size_t i = 0; i < end && !c->fail; i++) {
+         if (i % 4 == 0) continue;
+         uint32_t pc = (uint32_t)(i * 8);
+diff --git a/runtime/nvn/vulkan/exec.c b/runtime/nvn/vulkan/exec.c
+index b859089..86fc5e4 100644
+--- a/runtime/nvn/vulkan/exec.c
++++ b/runtime/nvn/vulkan/exec.c
+@@ -1358,6 +1358,15 @@ static void translate_program(void *arg) {
+         atomic_store(&p->state, 2);
+         return;
+     }
++    const VkPhysicalDeviceLimits *limits = &g_vk.props.limits;
++    uint32_t vn = (uint32_t)p->vi->ntex, fn = (uint32_t)p->fi->ntex;
++    if (vn > limits->maxPerStageDescriptorSamplers || fn > limits->maxPerStageDescriptorSamplers ||
++        vn > limits->maxPerStageDescriptorSampledImages || fn > limits->maxPerStageDescriptorSampledImages ||
++        vn + fn > limits->maxDescriptorSetSamplers || vn + fn > limits->maxDescriptorSetSampledImages) {
++        LOG("[shader] Texture descriptor counts %u/%u exceed adapter limits\n", vn, fn);
++        atomic_store(&p->state, 2);
++        return;
++    }
+     p->vs_uses_vid = strstr(p->vi->msl, "gl_VertexIndex") != NULL;
+     save_glsl(p->vi->msl, p->code[0], "vs");
+     save_glsl(p->fi->msl, p->code[1], "fs");
+diff --git a/tools/bindless_fixture.h b/tools/bindless_fixture.h
+new file mode 100644
+index 0000000..f53c812
+--- /dev/null
++++ b/tools/bindless_fixture.h
+@@ -0,0 +1,29 @@
++// Synthetic NVN programs for the asset-free bindless CPU/GPU regressions.
++#pragma once
++#include <assert.h>
++#include <stdint.h>
++#include <string.h>
++typedef struct { uint64_t words[272]; unsigned used; } BindlessFixture;
++static void bf_init(BindlessFixture *p) {
++    memset(p, 0, sizeof *p);
++    uint32_t magic = 0x12345678, channels = 15;
++    memcpy(p->words, &magic, sizeof magic);
++    memcpy((uint8_t *)p->words + 0x30 + 0x48, &channels, sizeof channels);
++}
++static void bf_emit(BindlessFixture *p, uint64_t word) {
++    if (!(p->used % 4)) ++p->used;
++    assert(p->used < 256);
++    p->words[16 + p->used++] = word;
++}
++static void bf_mov(BindlessFixture *p, unsigned d, uint32_t value) {
++    bf_emit(p, UINT64_C(0x0100000000070000) | ((uint64_t)value << 20) | d);
++}
++static uint64_t bf_ldc(unsigned d, unsigned a, unsigned cbuf, unsigned off, unsigned size) {
++    return UINT64_C(0xef90000000070000) | ((uint64_t)size << 48) | ((uint64_t)cbuf << 36) |
++           ((uint64_t)off << 20) | ((uint64_t)a << 8) | d;
++}
++static uint64_t bf_tex(unsigned d, unsigned a, unsigned b, unsigned mask) {
++    return UINT64_C(0xdeb8000020070000) | ((uint64_t)mask << 31) | ((uint64_t)b << 20) | ((uint64_t)a << 8) | d;
++}
++static void bf_exit(BindlessFixture *p) { bf_emit(p, UINT64_C(0xe30000000007000f)); }
++static size_t bf_bytes(const BindlessFixture *p) { return 0x80 + p->used * 8; }
+diff --git a/tools/test_bindless_texture.c b/tools/test_bindless_texture.c
+new file mode 100644
+index 0000000..e1a4df9
+--- /dev/null
++++ b/tools/test_bindless_texture.c
+@@ -0,0 +1,67 @@
++// Exercise actual translation, including failure of unproven handle lifetimes.
++#include <assert.h>
++#include <stdio.h>
++#include <stdlib.h>
++#ifndef BINDLESS_TRANSLATE_FILE
++#define BINDLESS_TRANSLATE_FILE "../runtime/nvn/maxwell/translate.c"
++#endif
++#include BINDLESS_TRANSLATE_FILE
++#include "bindless_fixture.h"
++
++int main(int argc, char **argv) {
++    assert(argc == 1 || (argc == 2 && !strcmp(argv[1], "--baseline")));
++    bool baseline = argc == 2;
++    unsigned passed = 0;
++    for (unsigned mode = 0; mode < 32; ++mode) {
++        BindlessFixture p; bf_init(&p);
++        bf_mov(&p, 0, 0x3e800000); bf_mov(&p, 1, 0x3f400000); bf_mov(&p, 6, 248);
++        uint64_t load = bf_ldc(4, mode == 2 ? 6 : 255, 2, mode == 1 ? 0x118 : 0x20, 4);
++        uint64_t tex = bf_tex(0, 0, 4, 15);
++        ShaderKey key = {.glsl = 1}; int stage = STAGE_FRAGMENT;
++        bool accept = mode < 8 && !baseline;
++        if (mode == 8) load ^= UINT64_C(1) << 36;             // application cbuf, not driver c2
++        if (mode == 9) load -= UINT64_C(8) << 20;             // reserved prefix
++        if (mode == 10) load += UINT64_C(4) << 20;            // upper/unaligned handle word
++        if (mode == 11) load += UINT64_C(0x100) << 20;        // after the final bound handle
++        if (mode == 12) load = bf_ldc(3, 255, 2, 0x20, 5);   // 64-bit write overlaps r4
++        if (mode == 13) load &= ~(UINT64_C(7) << 16);         // predicated producer
++        if (mode == 14) load &= ~(UINT64_C(7) << 48);         // byte producer
++        if (mode == 15) key.glsl = 0;                        // Metal remains explicitly unsupported
++        if (mode == 16) stage = STAGE_VERTEX;
++        if (mode == 17) tex &= ~(UINT64_C(7) << 16);          // conditional implicit derivatives
++        if (mode == 18) tex |= UINT64_C(1) << 28;             // array
++        if (mode == 19) tex |= UINT64_C(1) << 50;             // depth comparison
++        if (mode == 20) tex |= UINT64_C(1) << 36;             // offset
++        if (mode == 21) tex |= UINT64_C(1) << 37;             // explicit LOD
++        if (mode == 22) tex &= ~(UINT64_C(3) << 29);          // 1D
++        if (mode == 23) tex |= UINT64_C(2) << 29;             // cube
++        if (mode == 24) tex = bf_tex(0, 0, 255, 15);          // zero register is not a bound handle
++        if (mode == 25) bf_emit(&p, UINT64_C(0xe290000000000000)); // branchy program
++        if (mode == 26) bf_emit(&p, UINT64_C(0xe330000000070000)); // discard before producer
++        bf_emit(&p, load);
++        if (mode == 3) bf_mov(&p, 5, 123);                   // unrelated scalar write
++        if (mode == 4) bf_emit(&p, bf_tex(10, 0, 4, 15));    // unrelated texture result
++        if (mode == 5) bf_emit(&p, load | (UINT64_C(1) << 19)); // @!PT cannot clobber the handle
++        if (mode == 6) bf_emit(&p, bf_ldc(7, 255, 3, 0x20, 5)); // unrelated wide load
++        if (mode == 7) bf_emit(&p, UINT64_C(0x50b0000000070f00)); // NOP's low field is not a destination
++        if (mode == 27) bf_mov(&p, 4, 123);                  // known scalar clobber
++        if (mode == 28) bf_emit(&p, bf_tex(3, 0, 4, 15));    // texture result crosses r4
++        if (mode == 29) bf_emit(&p, UINT64_C(0x3848000000370505)); // unmodeled write set stops proof
++        if (mode == 30) tex = bf_tex(254, 0, 4, 15);          // output register overflow
++        if (mode == 31) tex = bf_tex(0, 255, 4, 15);          // coordinate register overflow
++        bf_emit(&p, tex); bf_exit(&p);
++        ShaderInfo *s = maxwell_translate((const uint8_t *)p.words, bf_bytes(&p), stage, &key);
++        if (accept) {
++            if (!s->msl) fprintf(stderr, "mode%u: %s\n", mode, s->error);
++            assert(s->msl && s->ntex == 32 && (s->cbuf_mask & 4) && s->cbuf_size[2] >= 512);
++            assert(strstr(s->msl, "sample_bound_handle_2d") && strstr(s->msl, "textureGrad(t31"));
++            assert(strstr(s->msl, "dFdx(") && strstr(s->msl, "h == cb2[17][2]"));
++        } else {
++            if (s->msl) fprintf(stderr, "mode%u unexpectedly translated\n", mode);
++            assert(!s->msl && s->error[0]);
++        }
++        maxwell_free(s); ++passed;
++    }
++    printf("Bindless texture %s PASS: %u cases\n", baseline ? "baseline" : "translation", passed);
++    return 0;
++}
+-- 
+2.43.0

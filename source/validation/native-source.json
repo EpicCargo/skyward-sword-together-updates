@@ -1,7 +1,7 @@
 {
   "base_commit": "506a9bc5aead5fc9598bb8f4a521f3b26f8897e8",
-  "engine_tree": "7a5a46e551a45fe0dad8a421a9891c63d1ad3c06",
-  "engine_patches": 47,
+  "engine_tree": "272132886a2655f0290cad8d411893d58d5585a7",
+  "engine_patches": 48,
   "native_file_sha256": {
     "client/Makefile": "c909d6794becd1904f63cb58d2fbbf47c5393a4624945bd25c3080cbb476e79c",
     "client/src/sst_animation.c": "94fd3e1703f99205624883bbb97964dcc4ed8dba73ef167b0bdbb527ae28f7e1",
@@ -198,7 +198,7 @@
     "engine/runtime/nvn/custom_tex.h": "bef7832a53560a6c6bb5451435827bf6fc450ccbd3131b30b2eecc3067051370",
     "engine/runtime/nvn/formats.c": "09347467c76e9e448e3a580eaf89091e8a884c84350625d5c6cbfbeef8c56801",
     "engine/runtime/nvn/maxwell/shader.h": "7efcd570927d726b3d94ee628663f1d23dda405e80ebde40dd2c431188cb01a3",
-    "engine/runtime/nvn/maxwell/translate.c": "67286a24039143f4ba31ef5bc24b75fb0c689d9383d68cdf07ae4cdb8e44ed31",
+    "engine/runtime/nvn/maxwell/translate.c": "37a53ed3719ccfa162480b39fbd36c09a9762997fd9cc8ae7dcacf79bedb326c",
     "engine/runtime/nvn/nvn.h": "c321b5926d3eb972f0a35ac3f1f313d3abb6bdd44c9d34f4511a350d8b7aa79c",
     "engine/runtime/nvn/objects.c": "e70647f604c904558d12e3f4aad25b882d240895b5e2d360d6362a24d0d8494f",
     "engine/runtime/nvn/output_scale.c": "488cb6f9482bda91f575c9255c36fc3300624c47075970d9b930033fe7c254c5",
@@ -212,7 +212,7 @@
     "engine/runtime/nvn/texpatch.h": "7747d5ff2f8fe5f311ebdde7cd2c034de77a69ff69303bfccca9909d2f726c70",
     "engine/runtime/nvn/vulkan/device.c": "54dc05e435c67187a93a28fee6b7820a758983986b86eedc27f00bf2c49f87c9",
     "engine/runtime/nvn/vulkan/device_select.h": "b32236c719b811b8fe46a8ce5d615d98989481600b39b7e3ce274cab4e795cb2",
-    "engine/runtime/nvn/vulkan/exec.c": "1715c9fb630bf294e933e0cea4d3173e322eac42fcffabb604a387c55ce18356",
+    "engine/runtime/nvn/vulkan/exec.c": "16e49ed3580eacb4f0d497de16ff4151b31a6fa13273416be7837e07415c6f0e",
     "engine/runtime/nvn/vulkan/guest_memory.h": "ab602110f2e1479666f404d4a21e706145a6a1229dcd41258ad43d6f38298341",
     "engine/runtime/nvn/vulkan/shaders.c": "13952ba8c1ba2576db3a5234da44a50f08250c8280af95a87fe6efeee94c074e",
     "engine/runtime/nvn/vulkan/shaders.h": "090eaf3ba517ba2db6921c19a28be7f50d78b9d8b0047c13806a454abe19336f",
@@ -261,7 +261,9 @@
     "engine/tools/test_shader_program_size.c": "036108fce6734b9cccef5ac2ea96c35ec27bcad026d4966077a174317d403ac9",
     "engine/runtime/nvn/renderer.m": "38c570184c55d3ee68cafa3d7b70ad1ff423ceff425971779d9b7bf3cc8e1dd4",
     "engine/runtime/nvn/texture_cbuf.h": "f0c3cca7c8b1cf0efb8ca821e12ef32ea2efda39220532ce7bceceab9498e36d",
-    "engine/tools/test_texture_cbuf.c": "5d7ed9578e3783ca6e74cf85419fbfe30014aa78bfaed6885fe4de087adad9cb"
+    "engine/tools/test_texture_cbuf.c": "5d7ed9578e3783ca6e74cf85419fbfe30014aa78bfaed6885fe4de087adad9cb",
+    "engine/tools/bindless_fixture.h": "f0973e53ccace46d6461d08c3db2a04a78ffe12ce0bb8045c9935ef8ad9a2a95",
+    "engine/tools/test_bindless_texture.c": "fa0d116adbc4be142069130676613276f5ae8cb7441c2ed5b859224bbb8a0420"
   },
   "original_frozen_entry_count": 257,
   "omitted_local_only_recipes": [
