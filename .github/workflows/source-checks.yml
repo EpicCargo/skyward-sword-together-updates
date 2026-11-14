@@ -70,6 +70,9 @@ jobs:
           python3 validation/check_model_baseline.py
           flags=(-O1 -g -Wall -Wextra -std=c11 -D_GNU_SOURCE
             -fsanitize=address,undefined -fno-omit-frame-pointer)
+          clang "${flags[@]}" -DSST_OVERLAY_STANDALONE client/tests/overlay_test.c -lm \
+            -o build/source-checks/overlay-clearance
+          build/source-checks/overlay-clearance
           clang "${flags[@]}" -Wno-unused-function -ffunction-sections -fdata-sections \
             -Wl,--gc-sections -I engine/runtime tests/prop_bridge_roster_test.c \
             client/src/sst_props.c client/src/sst_world.c -lpthread -lm \
