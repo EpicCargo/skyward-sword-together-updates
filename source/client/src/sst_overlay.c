@@ -49,6 +49,7 @@ void sst_draw_rect_filled(float x, float y, float w, float h, unsigned col);
 // --- the draw call ---
 
 #define TAG_OFFSET_Y 180.0f // game units above the player's feet
+#define CARRY_TAG_OFFSET_Y 260.0f // clear the observed small-vase rim above the hands
 #define BAR_W 60.0f
 #define BAR_H 6.0f
 #define COL_WHITE 0xFFFFFFFF
@@ -67,8 +68,10 @@ void sst_overlay_draw(const SstCamera *camera) {
     for (int i = 0; i < n; i++) {
         SstPose smooth = remotes[i].pose;
 
-        // Project the position (elevated to head height)
-        float world[3] = {smooth.pos[0], smooth.pos[1] + TAG_OFFSET_Y, smooth.pos[2]};
+        // A small vase can extend above the head; keep its hands/rim visible.
+        bool small_carry = (smooth.equip_flags & SST_POSE_CONTEXT_MASK) == SST_POSE_CONTEXT_SMALL_CARRY;
+        float height = small_carry ? CARRY_TAG_OFFSET_Y : TAG_OFFSET_Y;
+        float world[3] = {smooth.pos[0], smooth.pos[1] + height, smooth.pos[2]};
         float sx, sy;
         if (!world_to_screen(camera->view_proj, camera->screen_w, camera->screen_h, world, &sx, &sy))
             continue;
