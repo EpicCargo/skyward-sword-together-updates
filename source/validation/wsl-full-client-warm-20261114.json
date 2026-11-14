@@ -1,0 +1,250 @@
+{
+  "observations_reviewed": true,
+  "full_coop_accepted": false,
+  "runtime_bug_fixed": false,
+  "run": "20261114T200848",
+  "binary_sha256": "b622e18e110ab516742d2f393b1cba8464b04dc1c8d48bc45f29bc71c8ccdf56",
+  "engine_tree": "b15b9b5f7377639fa2a2bfd3de2d90f7d0e46bd8",
+  "engine_patches": 51,
+  "full_native_clients": 2,
+  "scalar_peers": 0,
+  "virtual_machines": false,
+  "transport": "localhost TCP/UDP",
+  "independent_profiles_and_displays": true,
+  "frames_requested_per_client": 18000,
+  "seconds": 1367.056711438,
+  "resource": {
+    "returncode": 0,
+    "reason": "normal",
+    "allowed_owned_clients": 2,
+    "owned_group": 5263,
+    "peak_group_rss_mib": 3749.6953125,
+    "minimum_windows_free_bytes": 5588508672,
+    "final_owned_games": [],
+    "linux_reserve_mib": 3072,
+    "windows_reserve_mib": 3072,
+    "combined_rss_cap_mib": 12288
+  },
+  "clients": {
+    "host": {
+      "log_sha256": "d2cc81f17b32cb47677af8d0a28aadef0145f0d82266af327e436f772ed23164",
+      "exit_code": 0,
+      "renderer_samples": 642,
+      "sampled_draws": 5682457,
+      "sampled_skipped_draws": 0,
+      "validation_requested": true,
+      "validation_layer_fallback": false,
+      "reported_validation_messages": 0,
+      "shader_failures": 0,
+      "native_sent_key_phases": [
+        {
+          "key": 119,
+          "phase": 1
+        },
+        {
+          "key": 119,
+          "phase": 2
+        }
+      ],
+      "final_prop_counters": {
+        "frame_anchor": 17983,
+        "at": 3097567,
+        "enabled": 1,
+        "discovered": 1,
+        "last_bindings": 7,
+        "received": 2276,
+        "denied": 54,
+        "carried": 1510,
+        "placed": 891,
+        "parked": 54,
+        "owner": 2,
+        "sequence": 2490
+      }
+    },
+    "guest": {
+      "log_sha256": "ff68ac8ad51a236f41e91d8969fea98c29b840b760b3e439aa96de6f83d8880d",
+      "exit_code": 0,
+      "renderer_samples": 641,
+      "sampled_draws": 5812717,
+      "sampled_skipped_draws": 0,
+      "validation_requested": true,
+      "validation_layer_fallback": false,
+      "reported_validation_messages": 0,
+      "shader_failures": 0,
+      "native_sent_key_phases": [
+        {
+          "key": 117,
+          "phase": 1
+        },
+        {
+          "key": 117,
+          "phase": 2
+        },
+        {
+          "key": 119,
+          "phase": 1
+        },
+        {
+          "key": 119,
+          "phase": 2
+        }
+      ],
+      "final_prop_counters": {
+        "frame_anchor": 17983,
+        "at": 3095366,
+        "enabled": 1,
+        "discovered": 1,
+        "last_bindings": 7,
+        "received": 6936,
+        "denied": 4067,
+        "carried": 3198,
+        "placed": 220,
+        "parked": 4067,
+        "owner": 1,
+        "sequence": 7868
+      }
+    }
+  },
+  "guest_phase_snapshots": [
+    {
+      "phase": "cold",
+      "prop": {
+        "frame_anchor": 8337,
+        "at": 2427373,
+        "enabled": 1,
+        "discovered": 1,
+        "last_bindings": 7,
+        "received": 3704,
+        "denied": 3978,
+        "carried": 0,
+        "placed": 0,
+        "parked": 3978,
+        "owner": 0,
+        "sequence": 0
+      },
+      "replay": {
+        "frame_anchor": 8309,
+        "exact": 1798,
+        "neutral": 4285,
+        "carry": 0,
+        "unavailable": 12,
+        "suppressed": 180,
+        "neutral_parts": 15,
+        "carry_parts": 0
+      }
+    },
+    {
+      "phase": "learned",
+      "prop": {
+        "frame_anchor": 9697,
+        "at": 2524442,
+        "enabled": 1,
+        "discovered": 1,
+        "last_bindings": 7,
+        "received": 4928,
+        "denied": 4061,
+        "carried": 1286,
+        "placed": 0,
+        "parked": 4061,
+        "owner": 1,
+        "sequence": 5437
+      },
+      "replay": {
+        "frame_anchor": 9682,
+        "exact": 3047,
+        "neutral": 4396,
+        "carry": 20,
+        "unavailable": 12,
+        "suppressed": 180,
+        "neutral_parts": 15,
+        "carry_parts": 15
+      }
+    },
+    {
+      "phase": "after_local_putdown",
+      "prop": {
+        "frame_anchor": 10396,
+        "at": 2571946,
+        "enabled": 1,
+        "discovered": 1,
+        "last_bindings": 7,
+        "received": 5565,
+        "denied": 4061,
+        "carried": 1972,
+        "placed": 0,
+        "parked": 4061,
+        "owner": 1,
+        "sequence": 6090
+      },
+      "replay": {
+        "frame_anchor": 10351,
+        "exact": 3707,
+        "neutral": 4396,
+        "carry": 20,
+        "unavailable": 12,
+        "suppressed": 180,
+        "neutral_parts": 15,
+        "carry_parts": 15
+      }
+    }
+  ],
+  "reviewed_private_image_sha256": {
+    "host/native-carry": "01e9c3a6b0b406ec72f196b8e4739fda1672ecb31f773bae353fc34b9a2201b6",
+    "guest/other-pot-prompt": "9ff9d7b8bb4cd76719c05bcaac5dce918103f1491264372eeb9542c49b836d1e",
+    "guest/second-pot-result": "653c60ac10be327d8ac09a5c6e0f539503d429ab040e37cade707956752b7fda",
+    "guest/learned-observer-both-carry": "3bad2e83121538482f58ac3b133383dc38ed9a4a7b3ca9ca0425be54b5bb1883",
+    "guest/learned-observer-after-local-putdown": "751d452dbe48023586433b65a49b8885c54084b085cdda2ccd7f3a5180b58b72",
+    "host/host-place-for-handback": "9f472f68d05c586e7d5a44ce29ed077d55a255fb42805852190f1bc9327031a6"
+  },
+  "cold_display_reproduced": true,
+  "learned_steady_two_object_carry_reviewed": true,
+  "learned_carry_after_local_putdown_reviewed": true,
+  "two_distinct_floor_pots_in_host_view_reviewed": true,
+  "native_handback_review": {
+    "accepted": true,
+    "key": 119,
+    "source_client": "guest/player2",
+    "prior_owner": "host/player1",
+    "positioning": "Existing developer go-to-player action in the same area after NPC dialogue; no normal navigation or room transition acceptance.",
+    "native_actions": "Normal A-button controls; late dialogue controls caused two CARRY/PLACE cycles. The first held state was visually reviewed; the second cycle is source-phase evidence only.",
+    "source_phase_transitions": [
+      {
+        "preceding_trace_frame": 16280,
+        "phase": 1,
+        "sequence": 1883
+      },
+      {
+        "preceding_trace_frame": 16369,
+        "phase": 2,
+        "sequence": 1987
+      },
+      {
+        "preceding_trace_frame": 16383,
+        "phase": 1,
+        "sequence": 1994
+      },
+      {
+        "preceding_trace_frame": 16456,
+        "phase": 2,
+        "sequence": 2078
+      }
+    ],
+    "frame_numbers_are_nearest_preceding_trace_anchors": true,
+    "first_native_held_image_sha256": "c6c3f51eba1e02901cf5be85201263cbc87f32ca40f43313c894a2921320735a",
+    "first_native_held_image_ui": "Put down",
+    "host_carry_presentations_before": 1378,
+    "host_carry_presentations_after": 1510,
+    "host_presentation_counters_are_cumulative": true,
+    "independent_actor_lifetime_census": false,
+    "original_missed_pickup_and_NPC_approach_excluded": true
+  },
+  "positioning": "Native developer arrival to hall; normal stick/A pickup and putdown. Any later go-to-player setup is identified separately.",
+  "exclusions": [
+    "Quest-barrel pickup is not small carry.",
+    "NPC conversation and missed-pickup approach are excluded.",
+    "No simultaneous native grabs, large pots, normal barrels, throws, breaking, room travel, reconnect or separate-PC acceptance."
+  ],
+  "raw_harness_gameplay_accepted": false,
+  "raw_results_preserved": true,
+  "owned_cleanup_complete": true
+}

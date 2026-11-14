@@ -40,6 +40,30 @@ remain usable after the viewer puts their own object down. CI runs this actual
 animation service fixture under address, undefined-behavior and leak checks.
 The fixture documents current behavior; it does not generate a cold carry pose.
 
+## Learned-pose control and handback
+
+A second run completes18,000frames per client in1,367.1seconds, both exits zero,
+with3,749.7MiB peak combined RSS and no owned games left. The same runtime is
+unchanged. The host holds pot119 while the
+guest picks up a different small pot117 normally. After that genuine local
+pickup, the guest learns all15 carry parts and displays the host carrying119.
+Both distinct held pots are visible, and each client applies the other's carry.
+The guest continues displaying the host's carried119 after putting its own117
+down. Both floor pots are later visible in the host's view.
+
+The guest also picks up the host's placed119 while both clients remain connected.
+An NPC-dialogue approach is excluded. The existing same-area developer go-to-player
+action supplies positioning, then normal A controls perform the native pickup
+and putdown. Leftover dialogue controls cause two source CARRY/PLACE cycles; the
+first held state has a reviewed native `Put down` image, while the second cycle
+has source-phase evidence only. The host's carry presentation total rises
+from1,378 to1,510 during these intervals. No independent actor-lifetime census
+was performed. See the [warm-control receipt](../validation/wsl-full-client-warm-20261114.json).
+
+This confirms the missing local pose as the cold-observer blocker. It does not
+resolve it for a new player, establish full pickup/throw animation, or verify
+simultaneous grabs of the same object.
+
 The next runtime work is an independent render pose source that evaluates the
 owned game's local animation resources without changing the player's native
 held links or learning from forced viewer draws. It must match all required
