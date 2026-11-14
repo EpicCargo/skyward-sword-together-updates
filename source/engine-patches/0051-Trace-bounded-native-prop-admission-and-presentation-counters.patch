@@ -1,0 +1,65 @@
+From ef8e1f95505bb70da9fd16274f17c1170ea9bdaf Mon Sep 17 00:00:00 2001
+From: SST development <sst-development@localhost>
+Date: Sat, 14 Nov 2026 01:12:21 -0500
+Subject: [PATCH] Trace bounded native prop admission and presentation counters
+
+---
+ runtime/hle/sst_prop_bridge.h | 26 +++++++++++++++++++++++---
+ 1 file changed, 23 insertions(+), 3 deletions(-)
+
+diff --git a/runtime/hle/sst_prop_bridge.h b/runtime/hle/sst_prop_bridge.h
+index 94580a9..d7d1279 100644
+--- a/runtime/hle/sst_prop_bridge.h
++++ b/runtime/hle/sst_prop_bridge.h
+@@ -1,4 +1,4 @@
+-// Ordinary SSHD vases only. Included after the world bridge's memory helpers.
++// Reviewed SSHD props. Included after the world bridge's memory helpers.
+ #include "sst_prop_native.h"
+ #include "sst_prop_rest.h"
+ #include "sst_prop_walk.h"
+@@ -15,8 +15,8 @@ typedef struct {
+ } PropBinding;
+ static struct {
+     pthread_mutex_t mu;
+-    bool enabled, discovered;
+-    uint64_t player, place_at;
++    bool enabled, discovered, traced;
++    uint64_t player, place_at, trace_at;
+     unsigned place_cursor;
+     uint32_t load, generation, sequence;
+     SstScene scene;
+@@ -231,6 +231,25 @@ static void prop_tick(SstLocal l, uint32_t load, bool allowed, bool pause) {
+     if (!prop_roster(&l.scene)) { prop_suspend(); goto done; }
+     sst_net_poll_props(prop_incoming, NULL);
+ done:
++    // Optional in-process counters distinguish packet admission, missing carry
++    // bodies and actual native presentation without an external memory reader.
++    // No actor reads or simulation decisions are introduced by this trace.
++    if (ENV("SST_PROP_TRACE")) {
++        uint64_t now = sst_now_ms();
++        if (!props_bridge.traced || now < props_bridge.trace_at || now - props_bridge.trace_at >= 1000) {
++            props_bridge.traced = true; props_bridge.trace_at = now;
++            LOG("[sst-props] at=%llu enabled=%u discovered=%u last_bindings=%llu received=%llu denied=%llu carried=%llu placed=%llu parked=%llu owner=%llu sequence=%llu\n",
++                (unsigned long long)now, props_bridge.enabled ? 1u : 0u, props_bridge.discovered ? 1u : 0u,
++                (unsigned long long)sst_prop_discovery_stats.last_bindings,
++                (unsigned long long)sst_prop_presentation_stats.received,
++                (unsigned long long)sst_prop_presentation_stats.carry_denied,
++                (unsigned long long)sst_prop_presentation_stats.carried_presented,
++                (unsigned long long)sst_prop_presentation_stats.placed_presented,
++                (unsigned long long)sst_prop_presentation_stats.parked_presented,
++                (unsigned long long)sst_prop_presentation_stats.last_owner,
++                (unsigned long long)sst_prop_presentation_stats.last_sequence);
++        }
++    }
+     pthread_mutex_unlock(&props_bridge.mu);
+ }
+ 
+@@ -501,4 +520,5 @@ RT_ON_RESET(sst_prop_bridge_reset) {
+     memset(props_bridge.bindings, 0, sizeof props_bridge.bindings);
+     sst_props_reset(&props_bridge.state); props_bridge.enabled = props_bridge.discovered = false;
+     props_bridge.player = 0; props_bridge.load = props_bridge.generation = 0;
++    props_bridge.traced = false; props_bridge.trace_at = 0;
+ }
+-- 
+2.43.0
+

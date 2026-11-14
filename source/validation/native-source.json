@@ -1,7 +1,7 @@
 {
   "base_commit": "506a9bc5aead5fc9598bb8f4a521f3b26f8897e8",
-  "engine_tree": "e70a62d5b901e1eb1670d4325d3a71f6a09729c1",
-  "engine_patches": 50,
+  "engine_tree": "b15b9b5f7377639fa2a2bfd3de2d90f7d0e46bd8",
+  "engine_patches": 51,
   "native_file_sha256": {
     "client/Makefile": "c909d6794becd1904f63cb58d2fbbf47c5393a4624945bd25c3080cbb476e79c",
     "client/src/sst_animation.c": "94fd3e1703f99205624883bbb97964dcc4ed8dba73ef167b0bdbb527ae28f7e1",
@@ -170,7 +170,7 @@
     "engine/runtime/hle/sst_dev.c": "5560369f4b29f1aa81cc376e9497c6a4df23cb6e87165db345f2765ac9c81414",
     "engine/runtime/hle/sst_dev.h": "90c719f26f9466c4e0f8c39308caba7729f4239ba5326565da0dc99d6588c948",
     "engine/runtime/hle/sst_pickup_bridge.h": "9a4eb3b02fd24279195906b2b98ee3ecee9abccbea7c7183d5621bacecf88c6b",
-    "engine/runtime/hle/sst_prop_bridge.h": "468bdefdc616c604fa40b1017989eaed636401231545436b185c732eb5a46bec",
+    "engine/runtime/hle/sst_prop_bridge.h": "feaf8df1844bc5eb0a4317487bf642709408a975da63499bb8a9245e491facb3",
     "engine/runtime/hle/sst_prop_native.h": "edfca5d51048ce097135e5aab7d20ab895edb89488c29b568432d8dc8d93b171",
     "engine/runtime/hle/sst_prop_rest.h": "8ad670ae59d89d583fb23544aadbdb999398fe346b42e1c5bada33735109a975",
     "engine/runtime/hle/sst_prop_walk.h": "092ad1e499eaeaf16e66dcb2cc3eda6c72af720082e7f1c1694bea8bc4170a03",
