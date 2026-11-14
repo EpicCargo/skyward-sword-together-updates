@@ -1,19 +1,19 @@
-From e0ec1131293f2bac701f4c3e45faa717189479e3 Mon Sep 17 00:00:00 2001
+From 7ce365ff7b9e4874e12cd1b03d4261fc55d3ee62 Mon Sep 17 00:00:00 2001
 From: SST development <sst-development@localhost>
 Date: Fri, 13 Nov 2026 21:42:07 -0500
-Subject: [PATCH] Prototype bounded Vulkan bindless texture sampling
+Subject: [PATCH] Support scoped Vulkan bound-handle texture sampling
 
 ---
- runtime/nvn/maxwell/translate.c | 99 +++++++++++++++++++++++++++++++--
- runtime/nvn/vulkan/exec.c       |  9 +++
- tools/bindless_fixture.h        | 29 ++++++++++
- tools/test_bindless_texture.c   | 67 ++++++++++++++++++++++
- 4 files changed, 199 insertions(+), 5 deletions(-)
+ runtime/nvn/maxwell/translate.c | 113 ++++++++++++++++++++++++++++++--
+ runtime/nvn/vulkan/exec.c       |   9 +++
+ tools/bindless_fixture.h        |  29 ++++++++
+ tools/test_bindless_texture.c   |  72 ++++++++++++++++++++
+ 4 files changed, 218 insertions(+), 5 deletions(-)
  create mode 100644 tools/bindless_fixture.h
  create mode 100644 tools/test_bindless_texture.c
 
 diff --git a/runtime/nvn/maxwell/translate.c b/runtime/nvn/maxwell/translate.c
-index 87621ac..9ad93ad 100644
+index 87621ac..885d8ba 100644
 --- a/runtime/nvn/maxwell/translate.c
 +++ b/runtime/nvn/maxwell/translate.c
 @@ -77,6 +77,8 @@ typedef struct {
@@ -34,7 +34,7 @@ index 87621ac..9ad93ad 100644
      c->tex_slot[index] = s + 1;
      c->tex_weak[s] = weak;
      ShaderTexture *t = &c->info->tex[s];
-@@ -764,15 +766,93 @@ static void emit_texs(Ctx *c, uint64_t w, bool fetch) {
+@@ -764,15 +766,107 @@ static void emit_texs(Ctx *c, uint64_t w, bool fetch) {
      write_tex_result(c, slot, call, mask, d0, d1, true, !bits(w, 59, 1));  // 0xd0/0xd2: .F16 results
  }
  
@@ -42,13 +42,27 @@ index 87621ac..9ad93ad 100644
 +// code. Unknown intervening instructions fail proof rather than guessing their
 +// write set. These scalar classes match the existing decoder below.
 +static bool bindless_cb2_handle(Ctx *c, uint32_t pc, int r) {
-+    if (!c->code || c->branchy || r == RZ || pc < 8 || pc % 8 || pc / 8 >= c->ninsts) return false;
-+    for (size_t i = 1; i < pc / 8; i++) {
++    if (!c->code || r == RZ || pc < 8 || pc % 8 || pc / 8 >= c->ninsts) return false;
++    bool after_exit = false;
++    for (size_t i = 1; i < c->ninsts; i++) {
 +        if (i % 4 == 0) continue;
 +        uint64_t w = ((const uint64_t *)c->code)[i];
-+        if (bits(w, 16, 4) == 15) continue;
 +        uint64_t flow = w & 0xfff0000000000000ull;
-+        if (flow == 0xe300000000000000ull || flow == 0xe330000000000000ull) return false;
++        bool control = flow == 0xe240000000000000ull || flow == 0xe290000000000000ull ||
++                       flow == 0xe2a0000000000000ull || flow == 0xe2b0000000000000ull ||
++                       flow == 0xe250000000000000ull || flow == 0xe340000000000000ull ||
++                       flow == 0xe350000000000000ull || (w & 0xfff8000000000000ull) == 0xf0f8000000000000ull;
++        if (control) {
++            // Some compiler padding branches to its own scheduling word. It is
++            // unreachable after unconditional EXIT and does not make the live
++            // prefix non-uniform. All other control flow remains unsupported.
++            if (after_exit && (w & 0xfff0000000000020ull) == 0xe240000000000000ull &&
++                bits(w, 16, 4) == PT && norm_target((int64_t)i * 8 + 8 + sbits(w, 20, 24)) == i * 8) continue;
++            return false;
++        }
++        if (bits(w, 16, 4) == 15) continue;
++        if (i < pc / 8 && (flow == 0xe300000000000000ull || flow == 0xe330000000000000ull)) return false;
++        if (flow == 0xe300000000000000ull && bits(w, 16, 4) == PT) after_exit = true;
 +    }
 +    for (size_t i = pc / 8; i-- > 1;) {
 +        if (i % 4 == 0) continue;
@@ -130,7 +144,7 @@ index 87621ac..9ad93ad 100644
      int type = target == 0 ? (array ? TEXTYPE_1D_ARRAY : TEXTYPE_1D)
               : target == 1 ? (array ? TEXTYPE_2D_ARRAY : TEXTYPE_2D)
               : target == 2 ? TEXTYPE_3D
-@@ -929,9 +1009,9 @@ static void emit_insn(Ctx *c, uint64_t w, uint32_t pc) {
+@@ -929,9 +1023,9 @@ static void emit_insn(Ctx *c, uint64_t w, uint32_t pc) {
      } else if (OPM(0xd200000000000000ull, 0xf600000000000000ull)) {  // TLDS
          emit_texs(c, w, true);
      } else if (OPM(0xc038000000000000ull, 0xfc38000000000000ull)) {  // TEX
@@ -142,7 +156,7 @@ index 87621ac..9ad93ad 100644
      } else if (OPM(0xdf48000000000000ull, 0xfff8000000000000ull)) {  // TXQ
          uint32_t index = (uint32_t)bits(w, 36, 13);
          int qt = (int)bits(w, 22, 6);
-@@ -1862,6 +1942,13 @@ static ShaderInfo *glsl_finish(Ctx *c, bool any_branch, bool dbg) {
+@@ -1862,6 +1956,13 @@ static ShaderInfo *glsl_finish(Ctx *c, bool any_branch, bool dbg) {
          default: sp(&s, "ivec3 tsize%d(int l) { return ivec3(textureSize(t%d, l), 1); }\n", i, i);
          }
      }
@@ -156,7 +170,7 @@ index 87621ac..9ad93ad 100644
      if (stage == STAGE_VERTEX) {
          for (int i = 0; i < 32; i++) {
              if (!(c->in_attr_mask & (1u << i))) continue;
-@@ -2033,6 +2120,8 @@ ShaderInfo *maxwell_translate(const uint8_t *blob, size_t max_size, int stage, c
+@@ -2033,6 +2134,8 @@ ShaderInfo *maxwell_translate(const uint8_t *blob, size_t max_size, int stage, c
      static int annotate = -1;
      if (annotate < 0) annotate = getenv("LARECOMP_SAVE_MSL") != NULL;
      c->branchy = any_branch;
@@ -222,10 +236,10 @@ index 0000000..f53c812
 +static size_t bf_bytes(const BindlessFixture *p) { return 0x80 + p->used * 8; }
 diff --git a/tools/test_bindless_texture.c b/tools/test_bindless_texture.c
 new file mode 100644
-index 0000000..e1a4df9
+index 0000000..7aa2b31
 --- /dev/null
 +++ b/tools/test_bindless_texture.c
-@@ -0,0 +1,67 @@
+@@ -0,0 +1,72 @@
 +// Exercise actual translation, including failure of unproven handle lifetimes.
 +#include <assert.h>
 +#include <stdio.h>
@@ -240,13 +254,13 @@ index 0000000..e1a4df9
 +    assert(argc == 1 || (argc == 2 && !strcmp(argv[1], "--baseline")));
 +    bool baseline = argc == 2;
 +    unsigned passed = 0;
-+    for (unsigned mode = 0; mode < 32; ++mode) {
++    for (unsigned mode = 0; mode < 34; ++mode) {
 +        BindlessFixture p; bf_init(&p);
 +        bf_mov(&p, 0, 0x3e800000); bf_mov(&p, 1, 0x3f400000); bf_mov(&p, 6, 248);
 +        uint64_t load = bf_ldc(4, mode == 2 ? 6 : 255, 2, mode == 1 ? 0x118 : 0x20, 4);
 +        uint64_t tex = bf_tex(0, 0, 4, 15);
 +        ShaderKey key = {.glsl = 1}; int stage = STAGE_FRAGMENT;
-+        bool accept = mode < 8 && !baseline;
++        bool accept = (mode < 8 || mode == 32) && !baseline;
 +        if (mode == 8) load ^= UINT64_C(1) << 36;             // application cbuf, not driver c2
 +        if (mode == 9) load -= UINT64_C(8) << 20;             // reserved prefix
 +        if (mode == 10) load += UINT64_C(4) << 20;            // upper/unaligned handle word
@@ -278,6 +292,11 @@ index 0000000..e1a4df9
 +        if (mode == 30) tex = bf_tex(254, 0, 4, 15);          // output register overflow
 +        if (mode == 31) tex = bf_tex(0, 255, 4, 15);          // coordinate register overflow
 +        bf_emit(&p, tex); bf_exit(&p);
++        if (mode >= 32) {
++            while (p.used % 4) bf_emit(&p, UINT64_C(0x50b0000000070f00));
++            uint32_t relative = mode == 32 ? 0xfffff0 : 0;
++            bf_emit(&p, UINT64_C(0xe24000000007000f) | ((uint64_t)relative << 20));
++        }
 +        ShaderInfo *s = maxwell_translate((const uint8_t *)p.words, bf_bytes(&p), stage, &key);
 +        if (accept) {
 +            if (!s->msl) fprintf(stderr, "mode%u: %s\n", mode, s->error);

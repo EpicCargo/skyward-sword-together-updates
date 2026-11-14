@@ -12,7 +12,7 @@
 #include "../engine/tools/bindless_fixture.h"
 
 #define CHECK(x) do { VkResult r=(x); if(r!=VK_SUCCESS){fprintf(stderr,"%s: %d\n",#x,r);abort();} } while(0)
-enum { WIDTH=32, HEIGHT=2, PHASES=4, MIPS=3, DRAWS=PHASES*MIPS, PIXEL_BYTES=16, DRAW_BYTES=WIDTH*HEIGHT*PIXEL_BYTES };
+enum { WIDTH=32, HEIGHT=2, PHASES=4, MIPS=3, DRAWS=PHASES, PIXEL_BYTES=16, DRAW_BYTES=WIDTH*HEIGHT*PIXEL_BYTES };
 static VkInstance instance;
 static VkPhysicalDevice physical;
 static VkDevice device;
@@ -62,14 +62,23 @@ static void barrier(VkCommandBuffer cb,VkImage image,unsigned levels,VkImageLayo
         .image=image,.subresourceRange={VK_IMAGE_ASPECT_COLOR_BIT,0,levels,0,1}};
     vkCmdPipelineBarrier(cb,source_stage,dest_stage,0,0,NULL,0,NULL,1,&b);
 }
-static VkShaderModule compile(shaderc_compiler_t compiler,shaderc_compile_options_t options,const char *source,shaderc_shader_kind stage) {
+static void compile_file(shaderc_compiler_t compiler,shaderc_compile_options_t options,const char *folder,const char *name,const char *source,shaderc_shader_kind stage) {
     shaderc_compilation_result_t result=shaderc_compile_into_spv(compiler,source,strlen(source),stage,"bindless-fixture","main",options);
     if(shaderc_result_get_compilation_status(result)!=shaderc_compilation_status_success) {
         fprintf(stderr,"Shader compile: %s\n",shaderc_result_get_error_message(result));abort();
     }
-    VkShaderModuleCreateInfo info={.sType=VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO,.codeSize=shaderc_result_get_length(result),
-        .pCode=(const uint32_t *)shaderc_result_get_bytes(result)};
-    VkShaderModule module;CHECK(vkCreateShaderModule(device,&info,NULL,&module));shaderc_result_release(result);return module;
+    char path[1024];assert(snprintf(path,sizeof path,"%s/%s",folder,name)>0);
+    FILE *file=fopen(path,"wb");assert(file);
+    size_t size=shaderc_result_get_length(result);assert(fwrite(shaderc_result_get_bytes(result),1,size,file)==size && !fclose(file));
+    shaderc_result_release(result);
+}
+static VkShaderModule load_module(const char *folder,const char *name) {
+    char path[1024];assert(snprintf(path,sizeof path,"%s/%s",folder,name)>0);
+    FILE *file=fopen(path,"rb");assert(file && !fseek(file,0,SEEK_END));long size=ftell(file);
+    assert(size>0 && size<=4*1024*1024 && !(size%4) && !fseek(file,0,SEEK_SET));
+    uint32_t *code=malloc((size_t)size);assert(code && fread(code,1,(size_t)size,file)==(size_t)size && !fclose(file));
+    VkShaderModuleCreateInfo info={.sType=VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO,.codeSize=(size_t)size,.pCode=code};
+    VkShaderModule module;CHECK(vkCreateShaderModule(device,&info,NULL,&module));free(code);return module;
 }
 static uint64_t ipa(unsigned d,unsigned address) {
     return UINT64_C(0xe00000000007ff00)|((uint64_t)address<<28)|d;
@@ -84,14 +93,33 @@ static ShaderInfo *fragment(unsigned mip) {
     bf_mov(&p,2,scale[mip]);
     bf_emit(&p,UINT64_C(0x5c68000000270000));bf_emit(&p,UINT64_C(0x5c68000000270101));
     bf_emit(&p,bf_ldc(4,6,2,0x20,4));bf_emit(&p,bf_tex(0,0,4,15));bf_exit(&p);
+    if(mip==2) {
+        while(p.used%4)bf_emit(&p,UINT64_C(0x50b0000000070f00));
+        bf_emit(&p,UINT64_C(0xe2400fffff07000f)); // terminal branch to its own scheduling word
+    }
     ShaderKey key={.glsl=1};key.rt_kind[0]=2; // uint attachment preserves sample float bits; no cosmetic tint UBO
     ShaderInfo *s=maxwell_translate((const uint8_t *)p.words,bf_bytes(&p),STAGE_FRAGMENT,&key);
     if(!s->msl){fprintf(stderr,"Translation: %s\n",s->error);abort();}
     assert(s->ntex==32 && !s->uses_tint && s->uses_rscale && s->cbuf_size[2]==65536);return s;
 }
+static void compile_sources(const char *folder) {
+    shaderc_compiler_t compiler=shaderc_compiler_initialize();shaderc_compile_options_t options=shaderc_compile_options_initialize();assert(compiler && options);
+    shaderc_compile_options_set_target_env(options,shaderc_target_env_vulkan,shaderc_env_version_vulkan_1_3);
+    const char *vertex="#version 460\nvoid main(){vec2 p[3]=vec2[3](vec2(-1,-1),vec2(3,-1),vec2(-1,3));gl_Position=vec4(p[gl_VertexIndex],0,1);}\n";
+    compile_file(compiler,options,folder,"vs.spv",vertex,shaderc_vertex_shader);
+    for(unsigned l=0;l<MIPS;l++) {
+        ShaderInfo *shader=fragment(l);char name[32];snprintf(name,sizeof name,"fs%u.spv",l);
+        compile_file(compiler,options,folder,name,shader->msl,shaderc_fragment_shader);maxwell_free(shader);
+    }
+    shaderc_compile_options_release(options);shaderc_compiler_release(compiler);
+    puts("Bindless synthetic SPIR-V compilation PASS");
+}
 static const uint8_t colors[2][3][4]={{{255,0,0,255},{0,255,0,255},{0,0,255,255}},
                                     {{0,255,255,255},{255,0,255,255},{255,255,0,255}}};
-int main(void) {
+int main(int argc,char **argv) {
+    if(argc==3 && !strcmp(argv[1],"--compile")) { compile_sources(argv[2]);return 0; }
+    assert(argc==4 && !strcmp(argv[1],"--run"));const char *folder=argv[2];
+    unsigned selected=(unsigned)strtoul(argv[3],NULL,10);assert(selected<MIPS);
     const char *layer="VK_LAYER_KHRONOS_validation",*extension=VK_EXT_DEBUG_UTILS_EXTENSION_NAME;
     VkApplicationInfo app={.sType=VK_STRUCTURE_TYPE_APPLICATION_INFO,.pApplicationName="SST bindless fixture",.apiVersion=VK_API_VERSION_1_3};
     VkDebugUtilsMessengerCreateInfoEXT debug={.sType=VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT,
@@ -172,12 +200,9 @@ int main(void) {
         {0,VK_SUBPASS_EXTERNAL,VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,VK_PIPELINE_STAGE_TRANSFER_BIT,VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,VK_ACCESS_TRANSFER_READ_BIT,0}};
     VkRenderPassCreateInfo render_info={.sType=VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO,.attachmentCount=1,.pAttachments=&attachment,.subpassCount=1,.pSubpasses=&subpass,.dependencyCount=2,.pDependencies=dependencies};
     VkRenderPass render;CHECK(vkCreateRenderPass(device,&render_info,NULL,&render));
-    shaderc_compiler_t compiler=shaderc_compiler_initialize();shaderc_compile_options_t options=shaderc_compile_options_initialize();assert(compiler && options);
-    shaderc_compile_options_set_target_env(options,shaderc_target_env_vulkan,shaderc_env_version_vulkan_1_3);
-    const char *vertex="#version 460\nvoid main(){vec2 p[3]=vec2[3](vec2(-1,-1),vec2(3,-1),vec2(-1,3));gl_Position=vec4(p[gl_VertexIndex],0,1);}\n";
-    VkShaderModule vs=compile(compiler,options,vertex,shaderc_vertex_shader),fs[MIPS];VkPipeline pipelines[MIPS];
-    for(unsigned l=0;l<MIPS;l++) {
-        ShaderInfo *shader=fragment(l);fs[l]=compile(compiler,options,shader->msl,shaderc_fragment_shader);maxwell_free(shader);
+    VkShaderModule vs=load_module(folder,"vs.spv"),fs[MIPS]={0};VkPipeline pipelines[MIPS]={0};
+    for(unsigned l=selected;l<=selected;l++) {
+        char name[32];snprintf(name,sizeof name,"fs%u.spv",l);fs[l]=load_module(folder,name);
         VkPipelineShaderStageCreateInfo stages[]={{.sType=VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,.stage=VK_SHADER_STAGE_VERTEX_BIT,.module=vs,.pName="main"},
             {.sType=VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,.stage=VK_SHADER_STAGE_FRAGMENT_BIT,.module=fs[l],.pName="main"}};
         VkPipelineVertexInputStateCreateInfo input={.sType=VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO};
@@ -196,8 +221,8 @@ int main(void) {
         targets[draw]=image(WIDTH,HEIGHT,1,VK_FORMAT_R32G32B32A32_UINT,VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT|VK_IMAGE_USAGE_TRANSFER_SRC_BIT);
         VkFramebufferCreateInfo fb={.sType=VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO,.renderPass=render,.attachmentCount=1,.pAttachments=&targets[draw].view,.width=WIDTH,.height=HEIGHT,.layers=1};CHECK(vkCreateFramebuffer(device,&fb,NULL,&framebuffers[draw]));
         VkClearValue clear={0};VkRenderPassBeginInfo pass={.sType=VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO,.renderPass=render,.framebuffer=framebuffers[draw],.renderArea={{0,0},{WIDTH,HEIGHT}},.clearValueCount=1,.pClearValues=&clear};
-        vkCmdBeginRenderPass(cb,&pass,VK_SUBPASS_CONTENTS_INLINE);vkCmdBindPipeline(cb,VK_PIPELINE_BIND_POINT_GRAPHICS,pipelines[draw%MIPS]);
-        vkCmdBindDescriptorSets(cb,VK_PIPELINE_BIND_POINT_GRAPHICS,pipe_layout,1,1,&sets[draw/MIPS],0,NULL);vkCmdDraw(cb,3,1,0,0);vkCmdEndRenderPass(cb);
+        vkCmdBeginRenderPass(cb,&pass,VK_SUBPASS_CONTENTS_INLINE);vkCmdBindPipeline(cb,VK_PIPELINE_BIND_POINT_GRAPHICS,pipelines[selected]);
+        vkCmdBindDescriptorSets(cb,VK_PIPELINE_BIND_POINT_GRAPHICS,pipe_layout,1,1,&sets[draw],0,NULL);vkCmdDraw(cb,3,1,0,0);vkCmdEndRenderPass(cb);
         VkBufferImageCopy copy={.bufferOffset=draw*DRAW_BYTES,.imageSubresource={VK_IMAGE_ASPECT_COLOR_BIT,0,0,1},.imageExtent={WIDTH,HEIGHT,1}};
         vkCmdCopyImageToBuffer(cb,targets[draw].image,VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,readback.buffer,1,&copy);
     }
@@ -206,7 +231,7 @@ int main(void) {
     VkSubmitInfo submit={.sType=VK_STRUCTURE_TYPE_SUBMIT_INFO,.commandBufferCount=1,.pCommandBuffers=&cb};CHECK(vkQueueSubmit(queue,1,&submit,VK_NULL_HANDLE));CHECK(vkQueueWaitIdle(queue));
     unsigned checked=0;
     for(unsigned draw=0;draw<DRAWS;draw++)for(unsigned y=0;y<HEIGHT;y++)for(unsigned x=0;x<WIDTH;x++) {
-        unsigned phase=draw/MIPS,l=draw%MIPS,t=x%2;bool zero=phase==2 && x==31;
+        unsigned phase=draw,l=selected,t=x%2;bool zero=phase==2 && x==31;
         if(x==31 && (phase==1 || phase==3))t=0;
         for(unsigned c=0;c<4;c++) {
             uint32_t expected=!zero && colors[t][l][c]?0x3f800000:0;
@@ -216,13 +241,13 @@ int main(void) {
         ++checked;
     }
     for(unsigned i=0;i<DRAWS;i++){vkDestroyFramebuffer(device,framebuffers[i],NULL);free_image(targets[i]);}
-    for(unsigned i=0;i<MIPS;i++){vkDestroyPipeline(device,pipelines[i],NULL);vkDestroyShaderModule(device,fs[i],NULL);}
-    vkDestroyShaderModule(device,vs,NULL);shaderc_compile_options_release(options);shaderc_compiler_release(compiler);
+    for(unsigned i=selected;i<=selected;i++){vkDestroyPipeline(device,pipelines[i],NULL);vkDestroyShaderModule(device,fs[i],NULL);}
+    vkDestroyShaderModule(device,vs,NULL);
     vkDestroyRenderPass(device,render,NULL);vkDestroyDescriptorPool(device,descriptors,NULL);vkDestroyPipelineLayout(device,pipe_layout,NULL);
     for(unsigned i=0;i<2;i++)vkDestroyDescriptorSetLayout(device,layouts[i],NULL);
     for(unsigned i=0;i<PHASES;i++)free_buffer(cbuf[i]);free_buffer(rscale);free_buffer(upload);free_buffer(readback);
     vkDestroySampler(device,sampler,NULL);free_image(textures[0]);free_image(textures[1]);vkDestroyCommandPool(device,pool,NULL);vkDestroyDevice(device,NULL);
     destroy_debug(instance,messenger,NULL);vkDestroyInstance(instance,NULL);
-    printf("Bindless GPU readback: %u draws, %u pixels, warnings %u, errors %u\n",DRAWS,checked,warnings,errors);
+    printf("Bindless GPU mode%u readback: %u draws, %u pixels, warnings %u, errors %u\n",selected,DRAWS,checked,warnings,errors);
     assert(!warnings && !errors);return 0;
 }

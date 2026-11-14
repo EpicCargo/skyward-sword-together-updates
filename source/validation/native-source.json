@@ -1,6 +1,6 @@
 {
   "base_commit": "506a9bc5aead5fc9598bb8f4a521f3b26f8897e8",
-  "engine_tree": "272132886a2655f0290cad8d411893d58d5585a7",
+  "engine_tree": "443fed23688e6e583d808775a66e29c830b8e513",
   "engine_patches": 48,
   "native_file_sha256": {
     "client/Makefile": "c909d6794becd1904f63cb58d2fbbf47c5393a4624945bd25c3080cbb476e79c",
@@ -198,7 +198,7 @@
     "engine/runtime/nvn/custom_tex.h": "bef7832a53560a6c6bb5451435827bf6fc450ccbd3131b30b2eecc3067051370",
     "engine/runtime/nvn/formats.c": "09347467c76e9e448e3a580eaf89091e8a884c84350625d5c6cbfbeef8c56801",
     "engine/runtime/nvn/maxwell/shader.h": "7efcd570927d726b3d94ee628663f1d23dda405e80ebde40dd2c431188cb01a3",
-    "engine/runtime/nvn/maxwell/translate.c": "37a53ed3719ccfa162480b39fbd36c09a9762997fd9cc8ae7dcacf79bedb326c",
+    "engine/runtime/nvn/maxwell/translate.c": "925d2d1145953f8171a4a0dfd02c76b8a9f406a1ce03302c89f9ed36e5852f25",
     "engine/runtime/nvn/nvn.h": "c321b5926d3eb972f0a35ac3f1f313d3abb6bdd44c9d34f4511a350d8b7aa79c",
     "engine/runtime/nvn/objects.c": "e70647f604c904558d12e3f4aad25b882d240895b5e2d360d6362a24d0d8494f",
     "engine/runtime/nvn/output_scale.c": "488cb6f9482bda91f575c9255c36fc3300624c47075970d9b930033fe7c254c5",
@@ -263,8 +263,8 @@
     "engine/runtime/nvn/texture_cbuf.h": "f0c3cca7c8b1cf0efb8ca821e12ef32ea2efda39220532ce7bceceab9498e36d",
     "engine/tools/test_texture_cbuf.c": "5d7ed9578e3783ca6e74cf85419fbfe30014aa78bfaed6885fe4de087adad9cb",
     "engine/tools/bindless_fixture.h": "f0973e53ccace46d6461d08c3db2a04a78ffe12ce0bb8045c9935ef8ad9a2a95",
-    "engine/tools/test_bindless_texture.c": "fa0d116adbc4be142069130676613276f5ae8cb7441c2ed5b859224bbb8a0420",
-    "tests/bindless_gpu_test.c": "1c926825d529f8528fda88b49219bc6d5e8a9f684203af7def8a3cdc9015ecae"
+    "engine/tools/test_bindless_texture.c": "b263940534f516a9da7f56357b35ae7c1841547335f82197c5ffeac078ad3e64",
+    "tests/bindless_gpu_test.c": "b4c99f3c684484763afa6981fd1cb552dc961edfa9ba5e7f4a066687ada3327c"
   },
   "original_frozen_entry_count": 257,
   "omitted_local_only_recipes": [

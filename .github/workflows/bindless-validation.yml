@@ -59,9 +59,12 @@ jobs:
         env:
           ASAN_OPTIONS: detect_leaks=1:halt_on_error=1:quarantine_size_mb=16
           UBSAN_OPTIONS: halt_on_error=1:print_stacktrace=1
-          LP_NUM_THREADS: '2'
+          LP_NUM_THREADS: '1'
         run: |
           sst_lvp_icd=$(find /usr/share/vulkan/icd.d -name '*lvp*' -print -quit)
           test -n "$sst_lvp_icd"
           export VK_ICD_FILENAMES="$sst_lvp_icd" VK_DRIVER_FILES="$sst_lvp_icd"
-          python3 scripts/resource_runner.py --rss-mib 512 --available-mib 6144 --nice 10 --seconds 180 --lock build/bindless-gpu.lock -- build/bindless-gpu/check
+          python3 scripts/resource_runner.py --rss-mib 512 --available-mib 6144 --nice 10 --seconds 120 --lock build/bindless-gpu.lock -- build/bindless-gpu/check --compile build/bindless-gpu
+          for mode in 0 1 2; do
+            python3 scripts/resource_runner.py --rss-mib 512 --available-mib 6144 --nice 10 --seconds 120 --lock build/bindless-gpu.lock -- build/bindless-gpu/check --run build/bindless-gpu "$mode"
+          done
