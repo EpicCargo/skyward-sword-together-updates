@@ -1,0 +1,78 @@
+{
+  "passed": true,
+  "scope": "One WSL full game and three synthetic loopback peers; avatar/movement/departure only",
+  "engine_patches": 48,
+  "engine_tree": "8f13ee0eb07fa6f0b153cfa0c55d7527f1bcde39",
+  "binary_sha256": "87cb71c43f124fb839af88eae5040d14c11c723c1228029f1afceb70caa97f1d",
+  "completed_normally": true,
+  "seconds": 1242.0045191289973,
+  "requested_frame": 24000,
+  "last_sampled_frame": 23974,
+  "renderer_samples": 586,
+  "sampled_draws": 5033268,
+  "sampled_skipped_draws": 0,
+  "shader_failures": 0,
+  "validation_requested": true,
+  "validation_layer_fallback": false,
+  "reported_validation_warnings": 0,
+  "reported_validation_errors": 0,
+  "reported_validation_ids": 0,
+  "scalar_peer_ids": [
+    2,
+    3,
+    4
+  ],
+  "scalar_poses": 7286,
+  "peer_udp": [
+    {
+      "active": true,
+      "sent": 9440,
+      "received": 34821,
+      "fallbacks": 9
+    },
+    {
+      "active": true,
+      "sent": 9440,
+      "received": 34821,
+      "fallbacks": 9
+    },
+    {
+      "active": true,
+      "sent": 9440,
+      "received": 34821,
+      "fallbacks": 9
+    }
+  ],
+  "peer_pose_start_frame": 14508,
+  "peer_stop_frame": 20508,
+  "avatar_peer_counts_before_stop": [
+    3
+  ],
+  "avatar_peer_counts_after_stop": [
+    0
+  ],
+  "normal_gameplay_scenes": [
+    [
+      "F001r",
+      1,
+      1
+    ]
+  ],
+  "native_room_transition_observed": false,
+  "loopback_listener_closed": true,
+  "owned_cleanup_complete": true,
+  "minimum_windows_free_bytes": 3374723072,
+  "runtime_log_sha256": "8c4502ed8affd95a76734a95777980a17ff5948b177247e75df3b764590d204a",
+  "avatars_manually_reviewed": true,
+  "prop_carry_tested": false,
+  "independent_full_clients_tested": false,
+  "personal_game_files_modified": false,
+  "game_captures_archived": false,
+  "tested_runtime_source_commit": "e013c984c67f4ae2ce8d3dbca5f840f0559995df",
+  "peak_group_rss_mib": 2178.5,
+  "reviewed_capture_sha256": {
+    "frame14700.png": "3ce88f8d40a27ccb6b9ffd2d55d8a20ea9a36395c2cf189d1784f1eddc005df9",
+    "door-approach.png": "702c56cdc5b408a69f40dab2bb963e5279bf2d736197e014725b8724c0bd2319",
+    "frame20700.png": "630717f0bcf5eb5fec026e1366b20019ecd4bbfe67d8add9fb5fb2360b1bee14"
+  }
+}
