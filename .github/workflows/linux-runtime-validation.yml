@@ -1,0 +1,51 @@
+name: Linux runtime validation
+on:
+  push:
+    branches: [main, 'wip/linux50-20261114']
+    paths: ['source/**', '.github/workflows/linux-runtime-validation.yml']
+  pull_request:
+    paths: ['source/**', '.github/workflows/linux-runtime-validation.yml']
+  workflow_dispatch:
+concurrency:
+  group: linux-runtime-${{ github.ref }}
+  cancel-in-progress: true
+permissions:
+  contents: read
+jobs:
+  linux-runtime:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    defaults:
+      run:
+        working-directory: source
+    env:
+      PYTHONDONTWRITEBYTECODE: '1'
+      MAKEFLAGS: ''
+      MFLAGS: ''
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - name: Install host compiler and Vulkan loader headers
+        run: sudo apt-get update && sudo apt-get install -y clang lld libvulkan-dev make binutils
+      - name: Verify source, public headers and exact engine
+        run: |
+          python3 scripts/verify-source.py
+          python3 scripts/build-linux-runtime-ci.py --validate-inputs
+          python3 scripts/restore-engine.py
+      - name: Check real versioned ELF link contracts
+        run: |
+          python3 scripts/resource_runner.py --rss-mib 512 --available-mib 6144 --nice 10 --seconds 180 --lock build/linux-interface-check.lock -- \
+            python3 -m unittest discover -s scripts/tests -p test_linux_runtime_ci.py -v
+      - name: Compile the isolated Linux runtime with one compiler
+        run: |
+          python3 scripts/resource_runner.py --rss-mib 4096 --available-mib 6144 --nice 10 --seconds 900 --lock build/developer-build.lock -- \
+            python3 scripts/build-linux-runtime-ci.py
+          python3 scripts/verify-source.py
+      - name: Preserve runtime and static validation receipts
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: linux-runtime-${{ github.sha }}
+          path: source/build/linux-runtime-ci/artifacts/
+          if-no-files-found: error
+          retention-days: 7
