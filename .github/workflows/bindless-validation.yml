@@ -1,5 +1,11 @@
 name: Bindless prototype validation
-on: [workflow_dispatch]
+on:
+  push:
+    branches: ['wip/bindless48-20261114']
+  workflow_dispatch:
+concurrency:
+  group: bindless-prototype-${{ github.ref }}
+  cancel-in-progress: true
 permissions:
   contents: read
 jobs:
