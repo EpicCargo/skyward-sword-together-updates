@@ -1,10 +1,13 @@
-name: Bindless prototype validation
+name: Bindless texture validation
 on:
   push:
-    branches: ['wip/bindless48-20261114']
+    branches: [main, 'wip/bindless48-20261114']
+    paths: ['source/**', '.github/workflows/bindless-validation.yml']
+  pull_request:
+    paths: ['source/**', '.github/workflows/bindless-validation.yml']
   workflow_dispatch:
 concurrency:
-  group: bindless-prototype-${{ github.ref }}
+  group: bindless-validation-${{ github.ref }}
   cancel-in-progress: true
 permissions:
   contents: read

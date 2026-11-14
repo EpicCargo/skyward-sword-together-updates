@@ -150,6 +150,9 @@ jobs:
           clang "${flags[@]}" -Werror engine/tools/test_texture_cbuf.c \
             -o build/source-checks/texture-cbuf
           build/source-checks/texture-cbuf
+          clang "${flags[@]}" engine/tools/test_bindless_texture.c -lm \
+            -o build/source-checks/bindless-texture
+          build/source-checks/bindless-texture
           clang "${flags[@]}" -Werror engine/tools/test_vk_device_select.c \
             -o build/source-checks/vk-device-select
           build/source-checks/vk-device-select

@@ -1,19 +1,19 @@
-From 7ce365ff7b9e4874e12cd1b03d4261fc55d3ee62 Mon Sep 17 00:00:00 2001
+From 1b3602483c89ec626043a55266ab30440f2e5206 Mon Sep 17 00:00:00 2001
 From: SST development <sst-development@localhost>
 Date: Fri, 13 Nov 2026 21:42:07 -0500
 Subject: [PATCH] Support scoped Vulkan bound-handle texture sampling
 
 ---
- runtime/nvn/maxwell/translate.c | 113 ++++++++++++++++++++++++++++++--
+ runtime/nvn/maxwell/translate.c | 114 ++++++++++++++++++++++++++++++--
  runtime/nvn/vulkan/exec.c       |   9 +++
  tools/bindless_fixture.h        |  29 ++++++++
  tools/test_bindless_texture.c   |  72 ++++++++++++++++++++
- 4 files changed, 218 insertions(+), 5 deletions(-)
+ 4 files changed, 219 insertions(+), 5 deletions(-)
  create mode 100644 tools/bindless_fixture.h
  create mode 100644 tools/test_bindless_texture.c
 
 diff --git a/runtime/nvn/maxwell/translate.c b/runtime/nvn/maxwell/translate.c
-index 87621ac..885d8ba 100644
+index 87621ac..c563e10 100644
 --- a/runtime/nvn/maxwell/translate.c
 +++ b/runtime/nvn/maxwell/translate.c
 @@ -77,6 +77,8 @@ typedef struct {
@@ -34,7 +34,7 @@ index 87621ac..885d8ba 100644
      c->tex_slot[index] = s + 1;
      c->tex_weak[s] = weak;
      ShaderTexture *t = &c->info->tex[s];
-@@ -764,15 +766,107 @@ static void emit_texs(Ctx *c, uint64_t w, bool fetch) {
+@@ -764,15 +766,108 @@ static void emit_texs(Ctx *c, uint64_t w, bool fetch) {
      write_tex_result(c, slot, call, mask, d0, d1, true, !bits(w, 59, 1));  // 0xd0/0xd2: .F16 results
  }
  
@@ -123,7 +123,8 @@ index 87621ac..885d8ba 100644
      int lod_mode = bindless ? (int)bits(w, 37, 3) : (int)bits(w, 55, 3);  // 0 none, 1 lz, 2 lb, 3 ll, 6 lba, 7 lla
 -    if (bindless) { fail(c, "bindless tex"); return; }
 +    if (bindless) {
-+        if (!c->glsl || c->stage != STAGE_FRAGMENT || target != 1 || array || dc || aoffi || lod_mode ||
++        if (!c->glsl) { fail(c, "bindless tex"); return; }
++        if (c->stage != STAGE_FRAGMENT || target != 1 || array || dc || aoffi || lod_mode ||
 +            bits(w, 16, 4) != PT || !bindless_cb2_handle(c, pc, b)) {
 +            fail(c, "unsupported bindless tex form or handle provenance"); return;
 +        }
@@ -144,7 +145,7 @@ index 87621ac..885d8ba 100644
      int type = target == 0 ? (array ? TEXTYPE_1D_ARRAY : TEXTYPE_1D)
               : target == 1 ? (array ? TEXTYPE_2D_ARRAY : TEXTYPE_2D)
               : target == 2 ? TEXTYPE_3D
-@@ -929,9 +1023,9 @@ static void emit_insn(Ctx *c, uint64_t w, uint32_t pc) {
+@@ -929,9 +1024,9 @@ static void emit_insn(Ctx *c, uint64_t w, uint32_t pc) {
      } else if (OPM(0xd200000000000000ull, 0xf600000000000000ull)) {  // TLDS
          emit_texs(c, w, true);
      } else if (OPM(0xc038000000000000ull, 0xfc38000000000000ull)) {  // TEX
@@ -156,7 +157,7 @@ index 87621ac..885d8ba 100644
      } else if (OPM(0xdf48000000000000ull, 0xfff8000000000000ull)) {  // TXQ
          uint32_t index = (uint32_t)bits(w, 36, 13);
          int qt = (int)bits(w, 22, 6);
-@@ -1862,6 +1956,13 @@ static ShaderInfo *glsl_finish(Ctx *c, bool any_branch, bool dbg) {
+@@ -1862,6 +1957,13 @@ static ShaderInfo *glsl_finish(Ctx *c, bool any_branch, bool dbg) {
          default: sp(&s, "ivec3 tsize%d(int l) { return ivec3(textureSize(t%d, l), 1); }\n", i, i);
          }
      }
@@ -170,7 +171,7 @@ index 87621ac..885d8ba 100644
      if (stage == STAGE_VERTEX) {
          for (int i = 0; i < 32; i++) {
              if (!(c->in_attr_mask & (1u << i))) continue;
-@@ -2033,6 +2134,8 @@ ShaderInfo *maxwell_translate(const uint8_t *blob, size_t max_size, int stage, c
+@@ -2033,6 +2135,8 @@ ShaderInfo *maxwell_translate(const uint8_t *blob, size_t max_size, int stage, c
      static int annotate = -1;
      if (annotate < 0) annotate = getenv("LARECOMP_SAVE_MSL") != NULL;
      c->branchy = any_branch;
@@ -314,3 +315,4 @@ index 0000000..7aa2b31
 +}
 -- 
 2.43.0
+
