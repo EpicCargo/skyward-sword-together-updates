@@ -581,6 +581,7 @@
   "validation/actor-session-20261112.json": "8508b6878f263cdc6fc9b2981fc41b70d1ccbee01cdcd872668b5e597d96eb4a",
   "validation/actual-gameplay-replay-plan.json": "ec740d24ce4954928b70dab9928968bf2dc551e5d5d51b4501614df7a4dbcaa6",
   "validation/arrival-label-navigation.patch": "294d0e0d6ab9f492a6c44ddbdf34b3206eb4347af145567629c3bfd74061cfee",
+  "validation/bindless-texture-20261114.json": "f133de1d06acfcb1230a23378cbc086b5cfec483803b83980bed3aca4554e7bb",
   "validation/capacity_net_probe.c": "ad95b1107b23d77401317cc9aa5d96f7f14b4a4d388965ca70eadab690e6ca79",
   "validation/census_scene.py": "1b75529882894999b0c3f749b352980577dc82d573402ef3f4d381db091b90ed",
   "validation/check_admission_baseline.py": "aaf8521f9ff6db6c7c083790cf353b54eb43dc24df2cc429d8b73c17a30461d2",

@@ -8,7 +8,13 @@ Four-player co-op prototype for **Skyward Sword HD** on SkyRecomp 2.0.2.
 
 [![Source and co-op checks](https://github.com/EpicCargo/skyward-sword-together-updates/actions/workflows/source-checks.yml/badge.svg)](https://github.com/EpicCargo/skyward-sword-together-updates/actions/workflows/source-checks.yml)
 
-## Latest source update — November 11, 2026
+## Latest source update — November 14, 2026
+
+Patch48 adds Vulkan sampling for the fragment texture-handle form that blocked 72 opening-scene shader variants. The actual translator passes 34 focused cases; synthetic GPU tests pass 768 exact pixel checks across all 32 bindings and three mip levels, with zero validation warnings/errors. The private offline audit now compiles all 4,192 graphics stages. These are compiler and synthetic rendering results; controllable gameplay, independent full clients and complete co-op remain unverified. Metal bindless sampling remains unsupported.
+
+Patches39–47 also repair the rendering/build foundation, including copied vertex streams for WSL software Vulkan, shader-length validation and texture-handle constant data. The game CPU library already contains all four recompiled modules. [Current changes and evidence](source/CHANGES-2026-11-13.md) and [remaining acceptance checks](source/COOP-REMAINING.md) distinguish source checks from gameplay. Source pushes leave installed games and published binary downloads unchanged.
+
+## Earlier source update — November 11, 2026
 
 Patch32 parks a remotely carried prop before native simulation can resume between paused synchronization ticks, retaining packet replay protection. Its regression workflow checks the exact patch31 baseline and 42 pause/resume cases, alongside 138 deactivation cases across three object adapters and both host/guest IDs. The latest Windows runtime build and native gameplay checks remain pending. Earlier patch30 native runs stopped on memory pressure; pickup after remote placement and deactivation floor restoration remain unverified. The latest fully accepted gameplay evidence remains patch29.
 
