@@ -13,7 +13,7 @@ python3 scripts/verify-source.py
 python3 scripts/restore-engine.py
 ```
 
-Restoration tries the original upstream, then a public fork containing the exact pinned base commit. It imports the patches in a new checkout and verifies the exact tracked engine tree and 258 frozen native source files; a fork's current runtime is never substituted. It refuses to replace an existing `engine/` folder. For offline restoration, pass `--repository /path/to/an/existing/SkyRecomp/repository` containing the pinned commit. This overrides the defaults; repeat `--repository` to supply your own ordered alternatives. Failed retrievals leave no partial engine. Tree and native-file validation remain active under optimized Python.
+Restoration tries the original upstream, then a public fork containing the exact pinned base commit. It imports the patches in a new checkout and verifies the exact tracked engine tree and 259 frozen native source files; a fork's current runtime is never substituted. It refuses to replace an existing `engine/` folder. For offline restoration, pass `--repository /path/to/an/existing/SkyRecomp/repository` containing the pinned commit. This overrides the defaults; repeat `--repository` to supply your own ordered alternatives. Failed retrievals leave no partial engine. Tree and native-file validation remain active under optimized Python.
 
 `scripts/build-engine.sh` and `scripts/build-windows.py` provide guarded builds after their public prerequisites are installed. Windows compiler/support preparation is in `scripts/fetch-windows-compiler.py` and `scripts/fetch-windows-support.py`. Builds use one compiler and monitored memory reserves. See [development resource policy](DEVELOPMENT-RESOURCE-POLICY.md).
 
