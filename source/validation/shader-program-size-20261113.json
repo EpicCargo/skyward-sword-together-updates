@@ -1,0 +1,38 @@
+{
+  "date": "2026-11-13",
+  "scope": "Asset-free CPU shader program length regression; no game launch",
+  "passed": true,
+  "engine_patches": 46,
+  "engine_tree": "ebd522ec267980a41ea0782a3d2abebefbaf1ba8",
+  "baseline_tree": "1e016acda509bec379f6b51db54a8f0524c3b119",
+  "baseline_translator_sha256": "ff07d2408d64e1f349dd7f0f0859d50ee47df1e486489351d5abbb4e6a706d74",
+  "candidate_translator_sha256": "67286a24039143f4ba31ef5bc24b75fb0c689d9383d68cdf07ae4cdb8e44ed31",
+  "short_or_null_inputs": 614,
+  "valid_minimum_and_partial_tail_controls": 48,
+  "valid_control_source_differences": 0,
+  "exact_baseline_short_fragment_failure_reproduced": true,
+  "stages": ["vertex", "fragment", "compute"],
+  "dialects": ["MSL", "Vulkan GLSL"],
+  "address_and_undefined_sanitizers": true,
+  "msl_differential": {
+    "programs": 10000,
+    "translated": 7882,
+    "pre_existing_failures": 1990,
+    "operand_rejections": 128,
+    "differences": 0
+  },
+  "glsl_differential": {
+    "programs": 2000,
+    "compiled": 1541,
+    "pre_existing_rejections": 441,
+    "operand_rejections": 18,
+    "guest_memory_programs": 156,
+    "new_failures": 0
+  },
+  "focused_peak_group_rss_mib": 219.0,
+  "differential_peak_group_rss_mib": 185.9,
+  "resource_policy": "One compiler, 512 MiB owned group RSS cap, 3072 MiB free reserve on Windows and Linux",
+  "incomplete_attempt": "The first differential attempt stopped for Windows memory pressure. A subsequent guarded CPU-only run completed after the game had stopped.",
+  "gameplay_acceptance": false,
+  "bindless_texture_support_added": false
+}

@@ -1,7 +1,7 @@
 {
   "base_commit": "506a9bc5aead5fc9598bb8f4a521f3b26f8897e8",
-  "engine_tree": "1e016acda509bec379f6b51db54a8f0524c3b119",
-  "engine_patches": 45,
+  "engine_tree": "ebd522ec267980a41ea0782a3d2abebefbaf1ba8",
+  "engine_patches": 46,
   "native_file_sha256": {
     "client/Makefile": "c909d6794becd1904f63cb58d2fbbf47c5393a4624945bd25c3080cbb476e79c",
     "client/src/sst_animation.c": "94fd3e1703f99205624883bbb97964dcc4ed8dba73ef167b0bdbb527ae28f7e1",
@@ -197,8 +197,8 @@
     "engine/runtime/nvn/custom_tex.c": "ab3c2d45d0ac9cd09f785e5f070ee4ad31009822270ba7f36f13806f6cf9042c",
     "engine/runtime/nvn/custom_tex.h": "bef7832a53560a6c6bb5451435827bf6fc450ccbd3131b30b2eecc3067051370",
     "engine/runtime/nvn/formats.c": "09347467c76e9e448e3a580eaf89091e8a884c84350625d5c6cbfbeef8c56801",
-    "engine/runtime/nvn/maxwell/shader.h": "07134d0b609eb819029a43086d27a3e9ef5f9ac9dd6d43053b05aaaa01fc1b68",
-    "engine/runtime/nvn/maxwell/translate.c": "ff07d2408d64e1f349dd7f0f0859d50ee47df1e486489351d5abbb4e6a706d74",
+    "engine/runtime/nvn/maxwell/shader.h": "7efcd570927d726b3d94ee628663f1d23dda405e80ebde40dd2c431188cb01a3",
+    "engine/runtime/nvn/maxwell/translate.c": "67286a24039143f4ba31ef5bc24b75fb0c689d9383d68cdf07ae4cdb8e44ed31",
     "engine/runtime/nvn/nvn.h": "c321b5926d3eb972f0a35ac3f1f313d3abb6bdd44c9d34f4511a350d8b7aa79c",
     "engine/runtime/nvn/objects.c": "e70647f604c904558d12e3f4aad25b882d240895b5e2d360d6362a24d0d8494f",
     "engine/runtime/nvn/output_scale.c": "488cb6f9482bda91f575c9255c36fc3300624c47075970d9b930033fe7c254c5",
@@ -257,7 +257,8 @@
     "third_party/coop-anything-chaos/profiles.json": "08a0a1ae8e67598f8186bea348c927f038a3bb8393430af30620aae960ef7a0f",
     "third_party/coop-anything-chaos/relay.py": "1be86b1a51fc1aff526003dd982d2838493f8c8bc725de8b4ddcb82a8e9cadc7",
     "client/tests/prop_capacity_test.c": "0e3b22e810dec2515498a54538e0dfd8ffc007b6f0e5315e859580c254d44621",
-    "engine/runtime/ui/developer_tab.mm": "ae23e4ca4a751fb6c6e1a025512d42b3b56d1fb3de4403c61b0e3d8dfa2b47d3"
+    "engine/runtime/ui/developer_tab.mm": "ae23e4ca4a751fb6c6e1a025512d42b3b56d1fb3de4403c61b0e3d8dfa2b47d3",
+    "engine/tools/test_shader_program_size.c": "036108fce6734b9cccef5ac2ea96c35ec27bcad026d4966077a174317d403ac9"
   },
   "original_frozen_entry_count": 257,
   "omitted_local_only_recipes": [

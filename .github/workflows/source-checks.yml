@@ -143,6 +143,10 @@ jobs:
             -Wl,--gc-sections engine/tools/test_shader_bounds.c -lm \
             -o build/source-checks/shader-bounds
           for mode in {1..12}; do build/source-checks/shader-bounds "$mode"; done
+          clang "${flags[@]}" engine/tools/test_shader_program_size.c \
+            engine/runtime/nvn/maxwell/translate.c -lm \
+            -o build/source-checks/shader-program-size
+          build/source-checks/shader-program-size
           clang "${flags[@]}" -Werror engine/tools/test_vk_device_select.c \
             -o build/source-checks/vk-device-select
           build/source-checks/vk-device-select

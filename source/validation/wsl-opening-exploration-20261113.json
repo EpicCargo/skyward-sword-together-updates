@@ -1,0 +1,53 @@
+{
+  "date": "2026-11-13",
+  "scope": "Private isolated WSL opening-cinematic exploration using patch45",
+  "engine_patches": 45,
+  "runtime_sha256": "f2fbc4dba1b65348bb7ef2d3819af6733846b62d0c7fc4645f4e09b95b80f66b",
+  "controllable_scene_accepted": false,
+  "coop_gameplay_accepted": false,
+  "runs": [
+    {
+      "run": "20261114T005205",
+      "requested_final_capture_frame": 7200,
+      "process_exit": 0,
+      "capture_completed": true,
+      "seconds": 287.605,
+      "reviewed_content": "New-adventure setup, forest/monster opening and Skyloft bird cinematic",
+      "final_capture_sha256": "7d752a1557a5e43eee1a8961c339cfcaa1a180ac08d503274263457f719aefac",
+      "unsupported_bindless_shader_failures": 1,
+      "minimum_windows_free_bytes": 10760151040,
+      "remaining_linux_games": 0
+    },
+    {
+      "run": "20261114T005817",
+      "completed": false,
+      "reason": "Outer session interrupted; exact owned worker group was subsequently terminated",
+      "last_logged_frame": 9841,
+      "last_reviewed_capture_frame": 9600,
+      "reviewed_content": "Opening dream dialogue and Link cinematic; no free movement established",
+      "unsupported_bindless_shader_failures": 1,
+      "remaining_linux_games_after_recovery": 0
+    },
+    {
+      "run": "20261114T010900",
+      "expected_monitor_cancellation": true,
+      "cleanup_passed": true,
+      "resource_runner_exit": 143,
+      "remaining_linux_games": 0
+    },
+    {
+      "run": "20261114T011150",
+      "completed": false,
+      "reason": "Stopped automatically when Windows free memory fell below the 3072 MiB reserve",
+      "last_logged_frame": 4381,
+      "seconds": 297.070,
+      "unsupported_bindless_shader_failures": 1,
+      "remaining_linux_games": 0
+    }
+  ],
+  "open_renderer_issue": "The opening monster sequence uses a bindless TEX instruction unsupported by the translator, causing skipped draws. Visible cinematic progress is not complete visual acceptance.",
+  "harness_change": "SIGTERM/SIGHUP now execute worker and monitor cleanup. A bounded separately tracked monitor supports longer tests while retaining memory guards and the one-game limit.",
+  "original_game_assets_modified": false,
+  "user_saves_modified": false,
+  "private_artifacts_published": false
+}

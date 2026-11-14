@@ -1,0 +1,123 @@
+From ed7b68024e58640a26860360d18d90eb9099e8e1 Mon Sep 17 00:00:00 2001
+From: SST development <sst-development@localhost>
+Date: Fri, 13 Nov 2026 20:17:01 -0500
+Subject: [PATCH] Reject incomplete shader programs before header reads
+
+---
+ runtime/nvn/maxwell/shader.h     |  4 +-
+ runtime/nvn/maxwell/translate.c  |  8 ++++
+ tools/test_shader_program_size.c | 69 ++++++++++++++++++++++++++++++++
+ 3 files changed, 80 insertions(+), 1 deletion(-)
+ create mode 100644 tools/test_shader_program_size.c
+
+diff --git a/runtime/nvn/maxwell/shader.h b/runtime/nvn/maxwell/shader.h
+index f2c6168..f5edb10 100644
+--- a/runtime/nvn/maxwell/shader.h
++++ b/runtime/nvn/maxwell/shader.h
+@@ -99,7 +99,9 @@ extern int maxwell_dbg_reg;
+ extern const uint8_t *maxwell_dbg_vs;
+ #define DBG_VS_BUFFER_INDEX 29
+ 
+-// code: shader binary (with the 0x50-byte SPH header for graphics stages)
++// code: max_size accessible bytes, including the 0x30-byte NVN and 0x50-byte
++// SPH headers for graphics stages. Compute starts with instruction groups.
++// Null or incomplete programs return ShaderInfo with error set and no source.
+ ShaderInfo *maxwell_translate(const uint8_t *code, size_t max_size, int stage, const ShaderKey *key);
+ void maxwell_free(ShaderInfo *s);
+ // Disassemble for debugging (writes text to f).
+diff --git a/runtime/nvn/maxwell/translate.c b/runtime/nvn/maxwell/translate.c
+index ecd8f48..87621ac 100644
+--- a/runtime/nvn/maxwell/translate.c
++++ b/runtime/nvn/maxwell/translate.c
+@@ -1969,6 +1969,14 @@ static ShaderInfo *glsl_finish(Ctx *c, bool any_branch, bool dbg) {
+ ShaderInfo *maxwell_translate(const uint8_t *blob, size_t max_size, int stage, const ShaderKey *key) {
+     ShaderInfo *info = calloc(1, sizeof *info);
+     info->stage = stage;
++    // Graphics binaries include the NVN/SPH headers; compute starts at code.
++    // Require the scheduling word and at least one complete instruction before
++    // reading the fragment header or subtracting the header from max_size.
++    size_t code_offset = stage == STAGE_COMPUTE ? 0 : 0x80;
++    if (!blob || max_size < code_offset + 2 * sizeof(uint64_t)) {
++        snprintf(info->error, sizeof info->error, "truncated shader program");
++        return info;
++    }
+     Ctx *c = calloc(1, sizeof *c);
+     c->info = info;
+     c->key = key;
+diff --git a/tools/test_shader_program_size.c b/tools/test_shader_program_size.c
+new file mode 100644
+index 0000000..af03dcb
+--- /dev/null
++++ b/tools/test_shader_program_size.c
+@@ -0,0 +1,69 @@
++// Synthetic program-length regression: no game code or assets.
++#include <assert.h>
++#include <stdio.h>
++#include <stdlib.h>
++#include <string.h>
++#include "../runtime/nvn/maxwell/shader.h"
++
++#ifdef SHADER_REFERENCE
++ShaderInfo *old_maxwell_translate(const uint8_t *, size_t, int, const ShaderKey *);
++void old_maxwell_free(ShaderInfo *);
++#endif
++
++int main(int argc, char **argv) {
++#ifdef SHADER_REFERENCE
++    if (argc == 2 && !strcmp(argv[1], "--baseline-short")) {
++        uint8_t *short_program = calloc(0x30, 1);
++        ShaderInfo *s = old_maxwell_translate(short_program, 0x30, STAGE_FRAGMENT, NULL);
++        old_maxwell_free(s);
++        free(short_program);
++        return 0;
++    }
++#else
++    (void)argv;
++#endif
++    assert(argc == 1);
++    const int stages[] = {STAGE_VERTEX, STAGE_FRAGMENT, STAGE_COMPUTE};
++    unsigned rejected = 0, controls = 0;
++    for (unsigned dialect = 0; dialect < 2; ++dialect) {
++        ShaderKey key = {.glsl = dialect};
++        for (unsigned i = 0; i < sizeof stages / sizeof stages[0]; ++i) {
++            int stage = stages[i];
++            size_t offset = stage == STAGE_COMPUTE ? 0 : 0x80;
++            size_t minimum = offset + 16;
++            for (size_t size = 0; size < minimum; ++size) {
++                uint8_t *program = calloc(size ? size : 1, 1);
++                ShaderInfo *s = maxwell_translate(program, size, stage, &key);
++                assert(s && !s->msl && s->stage == stage);
++                assert(!strcmp(s->error, "truncated shader program"));
++                maxwell_free(s);
++                free(program);
++                ++rejected;
++            }
++            ShaderInfo *s = maxwell_translate(NULL, minimum, stage, &key);
++            assert(s && !s->msl && !strcmp(s->error, "truncated shader program"));
++            maxwell_free(s);
++            ++rejected;
++            // A scheduling word plus EXIT is the smallest complete program.
++            // Trailing incomplete words must neither be read nor change output.
++            for (size_t tail = 0; tail < 8; ++tail) {
++                size_t size = minimum + tail;
++                uint8_t *program = calloc(size, 1);
++                uint64_t exit_instruction = UINT64_C(0xe30000000007000f);
++                memcpy(program + offset + 8, &exit_instruction, 8);
++                s = maxwell_translate(program, size, stage, &key);
++                assert(s && s->msl && !s->error[0] && s->num_insts == 1);
++#ifdef SHADER_REFERENCE
++                ShaderInfo *old = old_maxwell_translate(program, size, stage, &key);
++                assert(old && old->msl && !strcmp(old->msl, s->msl));
++                old_maxwell_free(old);
++#endif
++                maxwell_free(s);
++                free(program);
++                ++controls;
++            }
++        }
++    }
++    printf("Shader program sizes PASS: %u rejected inputs, %u valid controls\n", rejected, controls);
++    return 0;
++}
+-- 
+2.43.0
