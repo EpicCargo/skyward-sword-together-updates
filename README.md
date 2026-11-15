@@ -8,9 +8,9 @@ Four-player co-op prototype for **Skyward Sword HD** on SkyRecomp 2.0.2.
 
 [![Source and co-op checks](https://github.com/EpicCargo/skyward-sword-together-updates/actions/workflows/source-checks.yml/badge.svg)](https://github.com/EpicCargo/skyward-sword-together-updates/actions/workflows/source-checks.yml)
 
-## Latest source update — November 14, 2026
+## Latest source update — November 15, 2026
 
-A new read-only animation evaluator is the first code step toward cold carry poses. It decodes the owned local carry resources and composes unit-scale joint hierarchies, with8,967 synthetic checks and private model bind-matrix comparison. Renderer blending, skinning palettes and live pose comparison remain to be implemented; fresh-client carry display is still unresolved. [Implementation and tested limits](source/docs/resource-pose.md).
+The independent animation evaluator now binds model resources and builds weighted position/normal palettes, with50,936 synthetic assertions passing under sanitizers. A rotation-precision correction reduces owned-model rest-palette error from0.0165 to0.0000148. The steady-carry resource produces6,992 matrices per palette across19 sampled frames. Native animation blending, separate hand geometry and live pose comparison remain before connecting this path to the renderer; fresh-client carry display is still unresolved. [Implementation, evidence and tested limits](source/docs/resource-model.md).
 
 Two independent full Linux clients now expose a missing-pose bug: a guest that has never carried a small pot receives the host's updates but shows ordinary standing posture with no held pot. A genuine local pickup then enables correct steady display of two different carried pots, retained after local putdown. Native handback of the host's placed pot also works after developer positioning. Cold carry display remains unresolved; a new CI regression distinguishes incoming packets, unsupported quest-barrel pickup and genuine local pose learning. [Independent-client evidence and next work](source/docs/independent-client-carry.md).
 
