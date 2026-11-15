@@ -51,9 +51,36 @@ The model fixture uses analytical two-bone skinning and NORMAL-normal expectatio
 missing-track bind fallback, authored weight preservation, malformed programs,
 alias protection, truncated prefixes and1,024 deterministic corrupted spans.
 
-Validation receipts will distinguish synthetic checks, owned resource checks and
-live native pose acceptance. Resource checks do not establish live rendering.
-Raw model/animation bytes, bind records and palettes remain private.
+## Validation
+
+The exact C implementation passes50,936 assertions under address,
+undefined-behavior and leak sanitizers:8,985 pose checks and41,951 model checks.
+Each fixture includes1,024 deterministic corrupted spans. Guarded local peak RSS
+was195.3MiB; one compiler ran under the existing512MiB cap and3GiB reserve on both
+Windows and Linux. Source CI explicitly executes both fixtures.
+
+Private owned-resource C checks admit the35-node `pl_body` model,384 world slots
+and368 visible matrices. The nine-frame steady carry resource produces6,992
+position and6,992 normal matrices at19 half-frame positions, including4.5. The
+ten-frame lift resource admits three sampled frames (1,104 matrices per palette)
+and rejects18 non-unit-scale frames with cleared outputs. These rejections are
+expected restrictions, not complete lift-animation support.
+
+An independent private bind oracle uses authored forward bind matrices for direct
+slots and identity for weighted inverse-bind slots. Stored and reconstructed rest
+palettes both match it within0.0000148 per element, below the unchanged0.002 gate.
+The reconstructed path previously failed at0.0165 with standard trigonometry.
+Owned-resource C checks passed sanitizers at191.9MiB peak; all input bytes remained
+unchanged. Animated checks establish finite complete palettes and the normal
+rule, not comparison with a genuine native animated pose. Only this body model
+and these two animation resources are qualified by this C audit.
+
+- [Synthetic C checks](../validation/resource-model-20261115.json)
+- [Owned model/resource checks](../validation/resource-model-owned-20261115.json)
+
+No live native pose or new gameplay acceptance is claimed. Raw model/animation
+bytes, bind records and palettes remain private. The module has no renderer
+callers, and cold carry display is still unresolved.
 
 ## Remaining renderer work
 

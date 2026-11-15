@@ -1,0 +1,23 @@
+{
+  "passed": true,
+  "source_sha256": {
+    "client/src/sst_resource_model.h": "91130338ba98c79da36499f54fafdc27d13002492f574390b367021b21b4a5a8",
+    "client/src/sst_resource_model.c": "cff2421fcf4de3603185b8ba4912953303cf546e6ce43714bfdf450eb05d5c4b",
+    "client/tests/resource_model_test.c": "19ba590d61970b776fd7c9d94d7ac7a8d01f6c48d3d180c7d67db7c1674f4117",
+    "client/src/sst_resource_pose.h": "d3466e311724af87907a93756056bdfe84a1d4a46c14e59e11c8097539221a56",
+    "client/src/sst_resource_pose.c": "76af69ab12c9262a53141205e595004e5e730a66b02a364c37878794d5dcc02a",
+    "client/tests/resource_pose_test.c": "6d2867605c77c0f7f1691a694f415359be2766d06dc436aeb5bbbbd447fb1404"
+  },
+  "address_sanitizer": true,
+  "undefined_behavior_sanitizer": true,
+  "leak_sanitizer": true,
+  "game_launched": false,
+  "native_rendering_accepted": false,
+  "raw_check_output": "resource pose: 8985 checks PASS; seven formats, native interpolation, repeated times, defaults, unit hierarchy, bounds and1024corrupted spans; no game or rendering acceptance\nresource model: 41951 checks PASS; weighted palettes, native NORMAL/APPROX normals, binding, aliases, bounds and1024corrupted spans; no live rendering acceptance",
+  "assertions": 50936,
+  "pose_assertions": 8985,
+  "model_assertions": 41951,
+  "deterministic_corrupted_spans_per_fixture": 1024,
+  "peak_sampled_group_rss_mib": 195.3,
+  "tested_candidate_commit": "13fef698f1511d21af174f2c5061951a61415f4f"
+}

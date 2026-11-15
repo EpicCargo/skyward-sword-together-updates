@@ -1,0 +1,61 @@
+{
+  "passed": true,
+  "model": "pl_body",
+  "model_sha256": "bd6d9b5eb900b2a6b317226a35c8c98943d4386075195e7fde87ed5bef93c44a",
+  "resources": [
+    {
+      "passed": true,
+      "nodes": 35,
+      "world_slots": 384,
+      "view_matrices": 368,
+      "matched_tracks": 35,
+      "accepted_frames": 19,
+      "nonunit_frames_rejected": 0,
+      "position_matrices": 6992,
+      "normal_matrices": 6992,
+      "stored_bind_palette_max_error": 1.47784258e-05,
+      "composed_bind_palette_max_error": 1.47784258e-05,
+      "animation": "LiftS_UtoD.rchaC.brres",
+      "animation_sha256": "2fea702bb3decf8e13ed236659a1b8b98f8b62013316e140bf4491d087335c2e"
+    },
+    {
+      "passed": true,
+      "nodes": 35,
+      "world_slots": 384,
+      "view_matrices": 368,
+      "matched_tracks": 35,
+      "accepted_frames": 3,
+      "nonunit_frames_rejected": 18,
+      "position_matrices": 1104,
+      "normal_matrices": 1104,
+      "stored_bind_palette_max_error": 1.47784258e-05,
+      "composed_bind_palette_max_error": 1.47784258e-05,
+      "animation": "LiftS.rchaC.brres",
+      "animation_sha256": "1751721a2b80c582c9f65daa78b89987cbc51129497294bcda142ab29fdada2f"
+    }
+  ],
+  "address_sanitizer": true,
+  "undefined_behavior_sanitizer": true,
+  "leak_sanitizer": true,
+  "input_bytes_unchanged": true,
+  "reference_uses_authored_bind_matrices": true,
+  "game_launched": false,
+  "live_native_pose_comparison": false,
+  "renderer_enabled": false,
+  "code_sha256": {
+    "client/src/sst_resource_model.c": "cff2421fcf4de3603185b8ba4912953303cf546e6ce43714bfdf450eb05d5c4b",
+    "client/src/sst_resource_model.h": "91130338ba98c79da36499f54fafdc27d13002492f574390b367021b21b4a5a8",
+    "client/src/sst_resource_pose.c": "76af69ab12c9262a53141205e595004e5e730a66b02a364c37878794d5dcc02a",
+    "client/src/sst_resource_pose.h": "d3466e311724af87907a93756056bdfe84a1d4a46c14e59e11c8097539221a56"
+  },
+  "peak_sampled_group_rss_mib": 191.9,
+  "tested_model_resource": "pl_body",
+  "steady_position_matrices": 6992,
+  "steady_normal_matrices": 6992,
+  "admitted_position_matrices_total": 8096,
+  "admitted_normal_matrices_total": 8096,
+  "synthetic_normal_approx_mode_parity": true,
+  "cold_carry_bug_fixed": false,
+  "full_object_sync_accepted": false,
+  "tested_candidate_commit": "13fef698f1511d21af174f2c5061951a61415f4f"
+}
