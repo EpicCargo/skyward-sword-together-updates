@@ -58,3 +58,30 @@ and quantitative callback comparison must be recorded separately, with exact
 runtime hashes and explicit remaining hypotheses. Raw controls, matrices, models,
 animations, profiles, screenshots and saves stay private and out of GitHub/source
 archives. Publish only scalar errors/counts/hashes. Cold rendering remains disabled.
+
+A fresh native run completed7,200 frames and normal pot pickup in479.04 seconds,
+with480 version2 records across16 idle/settling and16 steady-carry frames. It
+reported no Vulkan validation errors and cleaned up its owned processes. Nonzero
+head controls occurred in5 idle samples; hair-angle controls in2 idle/1 carry
+samples. All32 samples contained nonidentity hair quaternions and nonzero actor
+yaw. Waist/torso controls remained zero, so their nonzero behavior is unverified.
+
+The actual public C resource/world math, under sanitizers, was used in a private
+callback comparison. An independent evaluator agrees with its reported errors
+within3e-5. Applying the recorded head/hair controls reduces the following worst
+absolute position-palette element errors (game coordinates, not pixels):
+
+| Samples | Selected-track baseline | Observed head/hair controls | Observed body-head parent plus hair controls |
+| --- | ---: | ---: | ---: |
+| Idle/settling16 | 11.7682419 | 0.133779526 | 0.00168895721 |
+| Steady carry16 | 0.367022514 | 0.0948143005 | 0.000940322876 |
+
+The last column is a hybrid diagnostic using a captured parent joint. It does
+not prove independent body-head reconstruction. Native signed-angle rotation
+order, actor-yaw conjugation and timing-B parent/child propagation are applied
+explicitly; no controls were fitted to the output. The native child animation
+frame remains unobserved; the child frame0 and selected body layer weights are
+controlled hypotheses. Center/other body callbacks, ArmZ getters, limb/skirt
+state and actual blend weights remain missing. No generated pose is accepted or
+rendered. See [native evidence](../validation/native-controls-native-20261115.json)
+for exact runtime/source/capture hashes, coverage, residuals and resource limits.

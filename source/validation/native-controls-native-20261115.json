@@ -1,0 +1,266 @@
+{
+  "passed": true,
+  "scope": "Opt-in native control capture and partial offline callback verification; no live generated rendering",
+  "source_commit": "69b4e2e0559445cabdeef506194fa88923b7f772",
+  "runtime_sha256": "521924bc71a9808f67a21389f5146e85df0f04fa3b24b379d1adf505a5941342",
+  "game_frames": 7200,
+  "seconds": 479.03934070199466,
+  "native_game_completed": true,
+  "native_control_records": 480,
+  "sampled_frames": 32,
+  "coverage": {
+    "0": {
+      "frames": 16,
+      "nonzero_head": 5,
+      "nonzero_waist": 0,
+      "nonzero_torso": 0,
+      "nonzero_hair_angles": 2,
+      "nonidentity_quaternion_frames": 16,
+      "zero_quaternions": 0,
+      "nonzero_actor_yaw": 16,
+      "nonzero_relative_hair_yaw": 15,
+      "unit_quaternion_max_norm_error": 6.751676939753537e-08
+    },
+    "4": {
+      "frames": 16,
+      "nonzero_head": 0,
+      "nonzero_waist": 0,
+      "nonzero_torso": 0,
+      "nonzero_hair_angles": 1,
+      "nonidentity_quaternion_frames": 16,
+      "zero_quaternions": 0,
+      "nonzero_actor_yaw": 16,
+      "nonzero_relative_hair_yaw": 16,
+      "unit_quaternion_max_norm_error": 7.287785264153968e-08
+    }
+  },
+  "actual_c_comparison": {
+    "parsed": true,
+    "actual_public_c_math": true,
+    "records": 480,
+    "results": [
+      {
+        "context": 0,
+        "mode": "baseline",
+        "frames": 16,
+        "head_joint_max": 0.583358884,
+        "face_position_max": 9.08074093,
+        "face_normal_max": 0.673074186,
+        "head_position_max": 11.7682419,
+        "head_normal_max": 0.639622986
+      },
+      {
+        "context": 0,
+        "mode": "head_waist",
+        "frames": 16,
+        "head_joint_max": 0.109819174,
+        "face_position_max": 0.121084213,
+        "face_normal_max": 0.00204738416,
+        "head_position_max": 0.133779526,
+        "head_normal_max": 0.00201448798
+      },
+      {
+        "context": 0,
+        "mode": "head_waist_torso_zero_armz",
+        "frames": 16,
+        "head_joint_max": 0.109819174,
+        "face_position_max": 0.121084213,
+        "face_normal_max": 0.00204738416,
+        "head_position_max": 0.133779526,
+        "head_normal_max": 0.00201448798
+      },
+      {
+        "context": 0,
+        "mode": "hybrid_observed_head",
+        "frames": 16,
+        "head_joint_max": 0,
+        "face_position_max": 0.000477790833,
+        "face_normal_max": 2.38418579e-07,
+        "head_position_max": 0.00168895721,
+        "head_normal_max": 0.000131011009
+      },
+      {
+        "context": 4,
+        "mode": "baseline",
+        "frames": 16,
+        "head_joint_max": 0.0926523209,
+        "face_position_max": 0.0929536819,
+        "face_normal_max": 0.000218808651,
+        "head_position_max": 0.367022514,
+        "head_normal_max": 0.0333614498
+      },
+      {
+        "context": 4,
+        "mode": "head_waist",
+        "frames": 16,
+        "head_joint_max": 0.0926523209,
+        "face_position_max": 0.0929536819,
+        "face_normal_max": 0.000218808651,
+        "head_position_max": 0.0948143005,
+        "head_normal_max": 0.000218749046
+      },
+      {
+        "context": 4,
+        "mode": "head_waist_torso_zero_armz",
+        "frames": 16,
+        "head_joint_max": 0.0926523209,
+        "face_position_max": 0.0929536819,
+        "face_normal_max": 0.000218808651,
+        "head_position_max": 0.0948143005,
+        "head_normal_max": 0.000218749046
+      },
+      {
+        "context": 4,
+        "mode": "hybrid_observed_head",
+        "frames": 16,
+        "head_joint_max": 0,
+        "face_position_max": 0.000579833984,
+        "face_normal_max": 1.1920929e-07,
+        "head_position_max": 0.000940322876,
+        "head_normal_max": 6.89029694e-05
+      }
+    ],
+    "native_control_angles_observed": true,
+    "native_blend_weights_observed": false,
+    "armz_getters_observed": false,
+    "other_callbacks_observed": false,
+    "child_frame_observed": false,
+    "child_test_frame": 0,
+    "generated_pose_rendered": false,
+    "native_pose_match_accepted": false,
+    "code_sha256": {
+      "client/src/sst_resource_pose.c": "76af69ab12c9262a53141205e595004e5e730a66b02a364c37878794d5dcc02a",
+      "client/src/sst_resource_model.c": "3a5a7fb1712b4e207565583e71645bb6196ee4ecb6d67c68ce8a31f41c6b0029",
+      "client/src/sst_resource_world.c": "b2feef3c7ba513c3185bd38a563ab2699c395d908d925350dcdcd4e57e4b7f83"
+    },
+    "address_sanitizer": true,
+    "undefined_behavior_sanitizer": true,
+    "leak_sanitizer": true,
+    "inputs_unchanged": true,
+    "resources_sha256": {
+      "Alink.brres": "bd6d9b5eb900b2a6b317226a35c8c98943d4386075195e7fde87ed5bef93c44a",
+      "PLCommonAnime.brres": "b5ccd69261307a9d44899637baccb376cb392408af2d2ab26f7693032a2c7de5",
+      "F_Default.rchaC.brres": "7a0ab00190f14cc5787149e501186b9d4e46d62b481967f6ade44560023f36a3",
+      "native-poses-controls.bin": "c7f793c20a769c4c93b188199cdb95ad6178757dcbcc1e3bf483fb6e6be3c44d",
+      "waitS.rchaC.brres": "400c9ab8a8a5fcad61e592a75b8950ffb44f2dcbbfa7dbfe891a147df2603850",
+      "LiftS_UtoD.rchaC.brres": "2fea702bb3decf8e13ed236659a1b8b98f8b62013316e140bf4491d087335c2e"
+    },
+    "audit_sha256": "8ad14ad5c3d462fea250bb0dff18d0f760cef4d4189fd2c2d901689bcf1c21cb",
+    "new_game_launched": false,
+    "raw_matrices_exported": false
+  },
+  "independent_comparison": {
+    "results": {
+      "0:baseline": {
+        "frames": 16,
+        "head_joint_max": 0.583358877338469,
+        "face_position_max": 9.080740928649902,
+        "face_normal_max": 0.6730741858482361,
+        "head_position_max": 11.768241554498672,
+        "head_normal_max": 0.6396229579113424,
+        "hybrid_head_position_max": 0.8142240047454834,
+        "hybrid_head_normal_max": 0.09829296171665192
+      },
+      "0:head_waist": {
+        "frames": 16,
+        "head_joint_max": 0.10981917381286621,
+        "face_position_max": 0.12108421325683594,
+        "face_normal_max": 0.0020473841577768326,
+        "head_position_max": 0.13377952575683594,
+        "head_normal_max": 0.0020144879817962646,
+        "hybrid_head_position_max": 0.0016889572143554688,
+        "hybrid_head_normal_max": 0.0001310110092163086
+      },
+      "0:head_waist_torso_zero_armz": {
+        "frames": 16,
+        "head_joint_max": 0.10981917381286621,
+        "face_position_max": 0.12108421325683594,
+        "face_normal_max": 0.0020473841577768326,
+        "head_position_max": 0.13377952575683594,
+        "head_normal_max": 0.0020144879817962646,
+        "hybrid_head_position_max": 0.0016889572143554688,
+        "hybrid_head_normal_max": 0.0001310110092163086
+      },
+      "4:baseline": {
+        "frames": 16,
+        "head_joint_max": 0.0926523208618164,
+        "face_position_max": 0.09295368194580078,
+        "face_normal_max": 0.00021880865097045898,
+        "head_position_max": 0.3670225143432617,
+        "head_normal_max": 0.03336144983768463,
+        "hybrid_head_position_max": 0.35131072998046875,
+        "hybrid_head_normal_max": 0.033342912793159485
+      },
+      "4:head_waist": {
+        "frames": 16,
+        "head_joint_max": 0.0926523208618164,
+        "face_position_max": 0.09295368194580078,
+        "face_normal_max": 0.00021880865097045898,
+        "head_position_max": 0.09481430053710938,
+        "head_normal_max": 0.0002187490463256836,
+        "hybrid_head_position_max": 0.0009403228759765625,
+        "hybrid_head_normal_max": 6.890296936035156e-05
+      },
+      "4:head_waist_torso_zero_armz": {
+        "frames": 16,
+        "head_joint_max": 0.0926523208618164,
+        "face_position_max": 0.09295368194580078,
+        "face_normal_max": 0.00021880865097045898,
+        "head_position_max": 0.09481430053710938,
+        "head_normal_max": 0.0002187490463256836,
+        "hybrid_head_position_max": 0.0009403228759765625,
+        "hybrid_head_normal_max": 6.890296936035156e-05
+      }
+    },
+    "helper_sha256": "2db36f32c773893ee02aa93ef2e9193ff64a1d57b10ce368c8768ca79d1817b4",
+    "self_checks": 26,
+    "angle_table_source_sha256": "ce2ef09525e0ccab19cade472e5914d83432e617f38230cbf58c352ad6af8824",
+    "angle_table_offset": 20591820,
+    "angle_table_sha256": "390eec9ba6b4c821f0daf499ac699bed15efba38639e885dc17e10c603dd7a85"
+  },
+  "source_sha256": {
+    "client/src/sst_animation.c": "a0e2799fa417033c65f7d05652e7f4f48e571d9b63b2842f27291f6c92b6fe8c",
+    "client/src/sst_animation.h": "9a45eb9edb4f93dad5aaf5f7718a7bba52df9ff8faeed2dac72d5b9e74ed7dde",
+    "client/src/sst_game.c": "27b21ed49442cb119a35d2cbb0e19dcecf09857f20e0d8e09c28294ca3c32fc8",
+    "client/src/sst_game.h": "6cd203035d45858b08503a7d18769af1ef7a393bf7487605da4f1f8d62522fc4",
+    "client/src/sst_pose_probe.c": "4c8a1115b19c03d1297c239a53f72076fa57dcf2bde1e959de0ae895feb04690",
+    "client/src/sst_pose_probe.h": "d6cfeaf3ce309239c5522c124a1441ca14f34e7b004c2d59373a4745983adc2a",
+    "client/tests/pose_probe_test.c": "096b5c4d41dff57a0c6288b82b18d63b96b774d8edac45bf3ce6d80083e14f35",
+    "client/tests/probe_tracks_test.c": "56ec59c441df9d4b5b072963bef9c00d1fae3794d41ee640e9d0c28df8f5092a",
+    "client/Makefile": "cedaa0cb4acccc6a354a0d7046e7f1498d88980fbf360a5839155cce1962ba07"
+  },
+  "capture_sha256": "c7f793c20a769c4c93b188199cdb95ad6178757dcbcc1e3bf483fb6e6be3c44d",
+  "raw_capture_bytes": 5376784,
+  "native_head_and_hair_inputs_observed": true,
+  "nonzero_waist_behavior_verified": false,
+  "nonzero_torso_behavior_verified": false,
+  "native_blend_weights_observed": false,
+  "armz_getters_observed": false,
+  "limb_and_skirt_controller_state_observed": false,
+  "child_animation_frame_observed": false,
+  "child_test_frame": 0,
+  "selected_body_weights_are_hypotheses": true,
+  "other_body_callbacks_unobserved": true,
+  "hybrid_head_uses_observed_parent": true,
+  "native_pose_match_accepted": false,
+  "generated_pose_rendered": false,
+  "cold_carry_bug_fixed": false,
+  "full_object_sync_accepted": false,
+  "memory_policy": {
+    "startup_free_reserve_mib": 6144,
+    "running_free_reserve_mib": 3072,
+    "owned_group_cap_mib": 12288,
+    "deadline_seconds": 1200,
+    "minimum_windows_free_bytes": 6352371712,
+    "native_peak_sampled_group_rss_mib": 1898.2,
+    "c_callback_audit_peak_sampled_group_rss_mib": 208.7,
+    "private_file_comparison_peak_sampled_group_rss_mib": 28.4
+  },
+  "validation_errors": 0,
+  "inputs_unchanged": true,
+  "personal_game_files_modified": false,
+  "raw_capture_published": false,
+  "game_assets_published": false,
+  "installed": false,
+  "release_feed_updated": false
+}
