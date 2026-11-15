@@ -1,7 +1,7 @@
 CC ?= clang
 CFLAGS ?= -O2 -g -Wall -Wextra -std=c11 -D_GNU_SOURCE
 B := build
-LIB := src/sst_origin.c src/sst_net.c src/sst_host.c src/sst_pose_buffer.c src/sst_remote.c src/sst_avatar.c src/sst_hand.c src/sst_animation.c src/sst_resource_pose.c src/sst_resource_model.c src/sst_flags.c src/sst_backup.c src/sst_world.c src/sst_enemy_motion.c src/sst_chest.c src/sst_game.c src/sst_scene_history.c src/sst_props.c src/sst_pickup.c src/sst_census.c src/sst_debug.c src/sst_dev_tools.c src/sst_destinations.c src/sst_teleport.c
+LIB := src/sst_origin.c src/sst_net.c src/sst_host.c src/sst_pose_buffer.c src/sst_remote.c src/sst_avatar.c src/sst_hand.c src/sst_animation.c src/sst_pose_probe.c src/sst_resource_pose.c src/sst_resource_model.c src/sst_flags.c src/sst_backup.c src/sst_world.c src/sst_enemy_motion.c src/sst_chest.c src/sst_game.c src/sst_scene_history.c src/sst_props.c src/sst_pickup.c src/sst_census.c src/sst_debug.c src/sst_dev_tools.c src/sst_destinations.c src/sst_teleport.c
 HDR := $(wildcard src/*.h) $(wildcard src/*.inc)
 LDLIBS ?= -lpthread -lm
 
@@ -43,6 +43,14 @@ $(B)/avatar_test: tests/avatar_test.c $(LIB) $(HDR) | $(B)
 
 $(B)/animation_test: tests/animation_test.c $(LIB) $(HDR) | $(B)
 	$(CC) $(CFLAGS) -fsanitize=address,undefined -o $@ tests/animation_test.c $(LIB) $(LDLIBS)
+
+$(B)/probe_tracks_test: tests/probe_tracks_test.c $(LIB) $(HDR) | $(B)
+	$(CC) $(CFLAGS) -fsanitize=address,undefined -o $@ tests/probe_tracks_test.c $(LIB) $(LDLIBS)
+
+$(B)/pose_probe_test: tests/pose_probe_test.c src/sst_pose_probe.c src/sst_animation.c src/sst_avatar.c src/sst_hand.c $(HDR) | $(B)
+	$(CC) $(CFLAGS) -fsanitize=address,undefined -o $@ tests/pose_probe_test.c src/sst_pose_probe.c src/sst_animation.c src/sst_avatar.c src/sst_hand.c -lm
+
+test: $(B)/probe_tracks_test $(B)/pose_probe_test
 
 $(B)/carry_reader_test: tests/carry_reader_test.c tests/render_local_test.c $(LIB) $(HDR) | $(B)
 	$(CC) $(CFLAGS) -fsanitize=address,undefined -o $@ tests/carry_reader_test.c $(LIB) $(LDLIBS)
@@ -144,6 +152,8 @@ test: $(B)/prop_roster_test $(B)/origin_test $(B)/geometry_only_test $(B)/phase_
 	./$(B)/carry_cohort_test
 	./$(B)/resource_pose_test
 	./$(B)/resource_model_test
+	./$(B)/probe_tracks_test
+	python3 -c 'import subprocess,tempfile; d=tempfile.TemporaryDirectory(prefix="sst-probe-"); subprocess.run(["./$(B)/pose_probe_test",d.name],check=True); d.cleanup()'
 	./$(B)/carry_transport_test
 	./$(B)/carry_playout_test
 	./$(B)/render_local_test

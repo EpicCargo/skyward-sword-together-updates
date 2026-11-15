@@ -44,6 +44,8 @@ jobs:
             build/rejoin_test build/remote_frame_test build/motion_queue_test \
             build/enemy_motion_merge_test build/pickup_net_test \
             build/carry_cohort_test build/resource_pose_test build/resource_model_test \
+            build/probe_tracks_test build/pose_probe_test build/animation_test \
+            build/render_local_test build/geometry_only_test build/phase_admission_test \
             build/sst-session-host build/host_fixture
       - name: Check native prop, carry and session behavior
         run: |
@@ -59,6 +61,11 @@ jobs:
             client/build/resource_pose_test
           ASAN_OPTIONS=detect_leaks=1:halt_on_error=1 UBSAN_OPTIONS=halt_on_error=1:print_stacktrace=1 \
             client/build/resource_model_test
+          ASAN_OPTIONS=detect_leaks=1:halt_on_error=1 UBSAN_OPTIONS=halt_on_error=1:print_stacktrace=1 \
+            python3 -c 'import subprocess,tempfile; d=tempfile.TemporaryDirectory(prefix="sst-probe-"); subprocess.run(["client/build/pose_probe_test",d.name],check=True); d.cleanup()'
+          for check in probe_tracks_test animation_test render_local_test geometry_only_test phase_admission_test; do
+            ASAN_OPTIONS=detect_leaks=1:halt_on_error=1 UBSAN_OPTIONS=halt_on_error=1:print_stacktrace=1 "client/build/$check"
+          done
           python3 client/tests/session_host_test.py client/build/sst-session-host
       - name: Check the actual engine bridge and object-capacity regressions
         env:

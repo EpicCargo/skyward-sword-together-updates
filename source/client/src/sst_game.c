@@ -5,6 +5,7 @@
 #include "sst_enemy_motion.h"
 #include "sst_animation.h"
 #include "sst_avatar.h"
+#include "sst_pose_probe.h"
 
 #include <math.h>
 #include <stdlib.h>
@@ -107,6 +108,46 @@ static SstSwordUse native_sword_use(const SstGameLayout *l,uint64_t player) {
     if(vtable!=l->expected_player_vtable || !pointer_fits(l,player,l->off_item_being_used,2))
         return SST_SWORD_USE_UNAVAILABLE;
     return read16(player+l->off_item_being_used)==0x11?SST_SWORD_USE_IN_USE:SST_SWORD_USE_NOT_IN_USE;
+}
+static bool probe_snapshot(const SstGameLayout *l,const SstLocal *published,const SstPose *p,SstProbeTracks *out) {
+    if(!l->guest_lo||l->guest_hi<=l->guest_lo||!l->expected_player_vtable||!l->off_player_instance||
+       !l->off_anim_index||!l->off_anim_ids||!l->off_anim_tracks||!l->anim_track_stride||!l->off_anim_frame||!l->off_anim_length||
+       !l->off_action||!l->off_carried_actor||!published->player_address||p->tick!=published->pose.tick||
+       !pointer_fits(l,l->player_ptr,0,8)||!pointer_fits(l,l->stage_name,0,9)||!pointer_fits(l,l->room,0,1)||
+       !pointer_fits(l,l->layer,0,1)||!pointer_fits(l,l->entrance,0,1))return false;
+    uint64_t player,vtable;memcpy(&player,(const void*)(uintptr_t)l->player_ptr,8);
+    if(player!=published->player_address||!pointer_fits(l,player,0,8)||!pointer_fits(l,player,l->off_player_instance,4)||
+       !pointer_fits(l,player,l->off_anim_index,1)||!pointer_fits(l,player,l->off_pos,12)||!pointer_fits(l,player,l->off_rot,6)||!pointer_fits(l,player,l->off_action,4))return false;
+    memcpy(&vtable,(const void*)(uintptr_t)player,8);uint32_t instance,action;memcpy(&instance,(const void*)(uintptr_t)(player+l->off_player_instance),4);
+    if(vtable!=l->expected_player_vtable||instance!=published->player_instance)return false;
+    float position[3];int16_t rotation[3];memcpy(position,(const void*)(uintptr_t)(player+l->off_pos),12);memcpy(rotation,(const void*)(uintptr_t)(player+l->off_rot),6);
+    memcpy(&action,(const void*)(uintptr_t)(player+l->off_action),4);
+    if(action!=p->action||memcmp(position,p->pos,12)||memcmp(rotation,p->rot,6))return false;
+    for(unsigned i=0;i<3;i++)if(!isfinite(position[i])||fabsf(position[i])>1e6f)return false;
+    char stage[9];memcpy(stage,(const void*)(uintptr_t)l->stage_name,9);const char *end=memchr(stage,0,9);
+    if(!end||end==stage||strncmp(stage,published->scene.stage,9))return false;
+    for(const char *s=stage;s<end;s++)if(*s<32||*s>126)return false;
+    uint8_t room=RD(uint8_t,l->room),layer=RD(uint8_t,l->layer),entrance=RD(uint8_t,l->entrance);
+    if(room!=published->scene.room||layer!=published->scene.layer||entrance!=published->scene.entrance)return false;
+    if(native_pose_context(l,player)!=(p->equip_flags&SST_POSE_CONTEXT_MASK))return false;
+    out->scene.room=room;out->scene.layer=layer;out->scene.entrance=entrance;memcpy(out->scene.stage,stage,(size_t)(end-stage));
+    out->primary=RD(uint8_t,player+l->off_anim_index);if(out->primary>=6)return false;
+    for(unsigned i=0;i<6;i++) {
+        uint64_t id=(uint64_t)l->off_anim_ids+2*i,phase=(uint64_t)l->off_anim_tracks+(uint64_t)i*l->anim_track_stride+l->off_anim_frame;
+        uint64_t length=(uint64_t)l->off_anim_tracks+(uint64_t)i*l->anim_track_stride+l->off_anim_length;
+        if(id>UINT32_MAX||phase>UINT32_MAX||length>UINT32_MAX||!pointer_fits(l,player,(uint32_t)id,2)||
+           !pointer_fits(l,player,(uint32_t)phase,4)||!pointer_fits(l,player,(uint32_t)length,4))return false;
+        out->ids[i]=read16(player+id);float f,n;memcpy(&f,(const void*)(uintptr_t)(player+phase),4);memcpy(&n,(const void*)(uintptr_t)(player+length),4);
+        if(out->ids[i]<443&&isfinite(f)&&isfinite(n)&&f>=0&&n>0&&n<=65536&&f<=n){out->valid_mask|=(uint8_t)(1u<<i);out->frames[i]=f;out->lengths[i]=n;}
+    }
+    return (out->valid_mask&(1u<<out->primary))&&out->ids[out->primary]==p->anim_id&&isfinite(p->anim_frame)&&fabsf(out->frames[out->primary]-p->anim_frame)<.001f;
+}
+bool sst_game_probe_tracks(const SstGameLayout *l,const SstLocal *published,const SstPose *expected,SstProbeTracks *out) {
+    if(!out)return false;*out=(SstProbeTracks){0};
+    const char *debug=getenv("LARECOMP_DEBUG_DATA"),*enabled=getenv("SST_POSE_PROBE");
+    if(!debug||strcmp(debug,"1")||!enabled||strcmp(enabled,"1")||getenv("SST_NO_PLAYER_READ")||!l||!published||!published->valid||!expected)return false;
+    SstProbeTracks a={0},b={0};if(!probe_snapshot(l,published,expected,&a)||!probe_snapshot(l,published,expected,&b)||memcmp(&a,&b,sizeof a))return false;
+    *out=a;return true;
 }
 
 uint8_t sst_game_equipment_flags(const SstLocal *local,uint8_t observed) {
@@ -285,6 +326,9 @@ bool sst_game_session(char *code, size_t capacity, bool *creator) {
     return g_session_code[0] != 0;
 }
 SstLocal sst_game_local(void) { return g_local; }
+static bool read_probe_tracks(const SstPose *expected,SstProbeTracks *out,void *user) {
+    (void)user;return sst_game_probe_tracks(&SST_LAYOUT_SSHD_100,&g_local,expected,out);
+}
 uint32_t sst_game_pose_tick(void) { return atomic_load(&g_tick); }
 
 static SstConfig net_config(void) {
@@ -359,6 +403,7 @@ static bool connect_launcher_session(void) {
 void sst_game_reset(void) {
     sst_disconnect();
     sst_world_reset();
+    sst_pose_probe_reset();
     sst_animation_reset();
     sst_avatar_equipment_reset();
     g_initialized = false;
@@ -374,6 +419,7 @@ void sst_frame(uint64_t frame) {
     sst_motion_configure(g_sst.sync_enemy_motion && g_sst.sync_enemies);
     if (!g_initialized) {
         g_initialized = true;
+        sst_pose_probe_start(read_probe_tracks,NULL);
         const char *connect = getenv("SST_AUTOCONNECT");
         const char *hosting = getenv("SST_AUTOHOST");
         if (hosting && !strcmp(hosting, "1")) {

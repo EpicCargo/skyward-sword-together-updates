@@ -55,6 +55,9 @@ static uint32_t held_tick;
 static float settled, last_phase;
 static bool ready;
 static bool source_learning=true;
+static SstAnimationObserver observer;
+static void *observer_user;
+void sst_animation_observer(SstAnimationObserver callback,void *user) {observer=callback;observer_user=user;}
 static float canonical[(48 + 2 * PALETTE_MAX) / sizeof(float)];
 #define ATTACH_MESHES 64
 #define ATTACH_CLIPS 30
@@ -556,6 +559,10 @@ bool sst_animation_capture(uint16_t mesh, const SstPose *local, const float view
         (pn && !positions) || (nn && !normals) || pn % 48 || nn % 48) return false;
     float mv[12], inv[12];
     if (!model_view(local, view, mv)) return false;
+    if(observer) {
+        inverse(mv,inv);
+        observer(last_frame,mesh,pose_context(local),local,inv,model,positions,pn,normals,nn,observer_user);
+    }
     unsigned bucket = (unsigned)(local->anim_frame / (finite_clip(local->anim_id) ? 1.5f : 3.0f));
     uint64_t cohort=building_cohort && pose_context(local)==pose_context(&building_pose) &&
         local->anim_id==26 && local->action==building_pose.action?building_cohort:0;

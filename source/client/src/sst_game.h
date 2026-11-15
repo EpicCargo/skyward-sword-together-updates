@@ -67,6 +67,12 @@ SstLocal sst_game_read_local(const SstGameLayout *layout, uint32_t tick);
 // Does not publish or advance the pose clock. Native sword-use metadata is read
 // under the same guards; observed geometry ownership is merged separately.
 SstLocal sst_game_read_render_local(const SstGameLayout *layout, const SstLocal *published, uint32_t tick);
+struct SstProbeTracks;
+// Debug-only bounded in-process metadata read. Requires both diagnostic flags,
+// matching published player/vtable/instance/scene/pose and two equal snapshots.
+// Reads IDs/phases only; no blend weights inferred and no native writes.
+bool sst_game_probe_tracks(const SstGameLayout *layout,const SstLocal *published,
+                           const SstPose *expected,struct SstProbeTracks *out);
 // Returns ONLY sword equipment bits0..1. Native IN_USE yields SWORD|DRAWN;
 // NOT_IN_USE/UNAVAILABLE retain only observed ownership. UNKNOWN retains legacy
 // observed bits. NULL/invalid state clears DRAWN. This does not infer ownership

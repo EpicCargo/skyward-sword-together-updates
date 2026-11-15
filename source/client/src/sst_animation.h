@@ -43,6 +43,13 @@ typedef struct {
 typedef struct { uint64_t hits, misses; } SstAnimationPartStats;
 
 void sst_animation_reset(void);
+// Render-thread diagnostic only. Borrowed inputs live for this callback; never
+// retain pointers or write them. Called only for admitted genuine source draws,
+// before a cache hit can return. Does not provide/teach any replay palette.
+typedef void (*SstAnimationObserver)(uint64_t frame,uint16_t mesh,uint16_t context,const SstPose *pose,
+    const float canonical_from_view[12],const float model[12],const void *positions,size_t position_bytes,
+    const void *normals,size_t normal_bytes,void *user);
+void sst_animation_observer(SstAnimationObserver callback,void *user);
 // Begin the render frame before capturing; repeated calls within a frame are ignored. An absent
 // player pauses capture. Canonical copies survive area/player transitions within the 8 MiB cap;
 // reset explicitly on reboot or disabling avatars. Allow native clip transitions to settle first.
