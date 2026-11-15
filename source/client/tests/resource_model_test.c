@@ -78,6 +78,122 @@ static void binding_pose(void){
     b.tracks[1]=-2;check(!sst_model_pose(&b,2,j,3,p,n,4)&&zero(j,sizeof j));
     SstModelNode bad;memset(&bad,1,sizeof bad);check(!sst_mdl0_node(&m,2,&bad)&&zero(&bad,sizeof bad));
 }
+static SstChr0 constant_anim(unsigned char *a,const char *name,float xrot,float yrot,float zrot,float tx,unsigned patches){
+    memset(a,0,2048);memcpy(a+32,"CHR0",4);w32(a,36,1504);w32(a,40,5);w32(a,48,96);w16(a,64,4);w16(a,66,1);w32(a,72,2);
+    w32(a,128,40);w32(a,132,1);w32(a,160,1792-128);w32(a,164,192-128);memcpy(a+1792,name,strlen(name)+1);w32(a,192,1792-192);
+    unsigned flags=1|(1u<<3)|(1u<<4)|patches,at=200;
+    if(!(patches&(1u<<8)))flags|=(7u<<16)|(1u<<23);
+    if(!(patches&(1u<<9)))flags|=(7u<<19)|(1u<<24);
+    w32(a,196,flags);
+    if(!(patches&(1u<<8))){wf(a,at,xrot);wf(a,at+4,yrot);wf(a,at+8,zrot);at+=12;}
+    if(!(patches&(1u<<9))){wf(a,at,tx);wf(a,at+4,0);wf(a,at+8,0);}
+    SstChr0 view;check(sst_chr0_open(a,2048,32,&view));return view;
+}
+static void layers_numeric(void){
+    fixture();SstMdl0 m=opened();unsigned char a[2048],b[2048],c[2048];
+    SstChr0 ca=constant_anim(a,"tip",0,0,0,2,0),cb=constant_anim(b,"tip",0,0,90,6,0);
+    SstModelBinding ba,bb,bc;check(sst_model_bind(&m,&ca,&ba)&&sst_model_bind(&m,&cb,&bb));
+    SstModelLayer layers[6]={{&ba,NULL,0,0,1},{&bb,NULL,0,0,1}};float j[3][12],p[4][12],n[4][12];
+    check(sst_model_layers(&m,layers,2,j,3,p,n,4));near(j[1][3],14);near(j[1][7],20);
+    near(j[1][0],sqrtf(.5f));near(j[1][4],sqrtf(.5f));near(j[0][3],10);check(zero(j[2],sizeof j[2]));
+    layers[1].weight=3;check(sst_model_layers(&m,layers,2,j,3,p,n,4));near(j[1][3],15);
+    near(j[1][0],.3826834324f);near(j[1][4],.9238795325f);
+    // Masks exclude a contribution without changing the other joint's weights.
+    uint8_t mask[2]={1,0};layers[1].mask=mask;layers[1].mask_count=2;
+    check(sst_model_layers(&m,layers,2,j,3,p,n,4));near(j[1][3],12);near(j[1][0],1);
+    mask[1]=1;layers[1].weight=0;layers[1].frame=NAN;
+    check(sst_model_layers(&m,layers,2,j,3,p,n,4));near(j[1][3],12);
+    // A single active channel must avoid a quaternion round-trip, preserving FIdx.
+    ca=constant_anim(a,"tip",0,0,.703125f,2,0);check(sst_model_bind(&m,&ca,&ba));
+    check(sst_model_layers(&m,layers,1,j,3,p,n,4));check(fabsf(j[1][4]-.0122705f)<1e-8f);
+    // Shortest quaternion hemisphere, and all three largest-diagonal branches.
+    ca=constant_anim(a,"tip",0,0,170,2,0);cb=constant_anim(b,"tip",0,0,-170,2,0);
+    check(sst_model_bind(&m,&ca,&ba)&&sst_model_bind(&m,&cb,&bb));layers[1]=(SstModelLayer){&bb,NULL,0,0,1};
+    check(sst_model_layers(&m,layers,2,j,3,p,n,4));near(j[1][0],-1);near(j[1][5],-1);near(j[1][4],0);
+    for(unsigned axis=0;axis<3;axis++){
+        ca=constant_anim(a,"tip",axis==0?180:0,axis==1?180:0,axis==2?180:0,2,0);cb=constant_anim(b,"tip",axis==0?180:0,axis==1?180:0,axis==2?180:0,2,0);
+        check(sst_model_bind(&m,&ca,&ba)&&sst_model_bind(&m,&cb,&bb));check(sst_model_layers(&m,layers,2,j,3,p,n,4));
+        for(unsigned k=0;k<3;k++)near(j[1][5*k],axis==k?1:-1);
+    }
+    ca=constant_anim(a,"tip",0,0,0,2,0);cb=constant_anim(b,"tip",0,0,.001f,2,0);
+    check(sst_model_bind(&m,&ca,&ba)&&sst_model_bind(&m,&cb,&bb));check(sst_model_layers(&m,layers,2,j,3,p,n,4));check(j[1][4]>0&&j[1][4]<.00002f);
+    // Three noncommuting inputs: native sequential slerp is order-sensitive.
+    ca=constant_anim(a,"tip",0,0,0,2,0);cb=constant_anim(b,"tip",0,0,90,4,0);SstChr0 cc=constant_anim(c,"tip",90,0,0,6,0);
+    check(sst_model_bind(&m,&ca,&ba)&&sst_model_bind(&m,&cb,&bb)&&sst_model_bind(&m,&cc,&bc));layers[2]=(SstModelLayer){&bc,NULL,0,0,1};
+    check(sst_model_layers(&m,layers,3,j,3,p,n,4));float ordered[12];memcpy(ordered,j[1],sizeof ordered);
+    // Closed-form slerp(z45,x90,1/3), independently evaluated in float64.
+    const float expected[9]={.8500034014f,-.5065825605f,.1444587379f,.5065825605f,.7108780669f,-.4878795789f,.1444587379f,.4878795789f,.8608746654f};
+    for(unsigned row=0;row<3;row++)for(unsigned col=0;col<3;col++)near(ordered[4*row+col],expected[3*row+col]);
+    SstModelLayer tmp=layers[0];layers[0]=layers[2];layers[2]=tmp;check(sst_model_layers(&m,layers,3,j,3,p,n,4));
+    float difference=0;for(unsigned k=0;k<12;k++)difference=fmaxf(difference,fabsf(j[1][k]-ordered[k]));check(difference>.01f);near(j[1][3],14);
+    // Six layers normalize independently at each joint, omitting absent tracks.
+    for(unsigned l=0;l<6;l++)layers[l]=(SstModelLayer){l%2?&bb:&ba,NULL,0,0,1};
+    check(sst_model_layers(&m,layers,6,j,3,p,n,4));near(j[1][3],13);near(j[0][3],10);
+}
+static void layers_patch_defaults(void){
+    fixture();SstMdl0 m=opened();unsigned char a[2048],b[2048];
+    SstChr0 ca=constant_anim(a,"root",0,0,0,0,(1u<<8)|(1u<<9)),cb=constant_anim(b,"root",0,0,0,2,0);
+    SstModelBinding ba,bb;check(sst_model_bind(&m,&ca,&ba)&&sst_model_bind(&m,&cb,&bb));
+    SstModelLayer layers[2]={{&ba,NULL,0,0,1},{&bb,NULL,0,0,1}};float j[2][12],p[3][12],n[3][12];
+    // Mixed model-default/explicit translation uses raw identity THEN blending;
+    // pre-patching bind would incorrectly produce6 instead of1 on root.x.
+    check(sst_model_layers(&m,layers,2,j,2,p,n,3));near(j[0][3],1);near(j[0][7],0);near(j[1][3],3);
+    layers[1].binding=&ba;check(sst_model_layers(&m,layers,2,j,2,p,n,3));near(j[0][3],10);near(j[0][7],20);
+    // A rotated bind distinguishes patch-after-blend from pre-patched slerp.
+    fixture();wf(data,N1+0x34,90);const float forward[12]={0,-1,0,12,1,0,0,20,0,0,1,0},inverse[12]={0,1,0,-20,-1,0,0,12,0,0,1,0};
+    for(unsigned k=0;k<12;k++){wf(data,N1+0x70+4*k,forward[k]);wf(data,N1+0xa0+4*k,inverse[k]);}m=opened();
+    ca=constant_anim(a,"tip",0,0,0,0,(1u<<8)|(1u<<9));cb=constant_anim(b,"tip",0,0,0,2,0);
+    check(sst_model_bind(&m,&ca,&ba)&&sst_model_bind(&m,&cb,&bb));layers[1].binding=&bb;
+    check(sst_model_layers(&m,layers,2,j,2,p,n,3));near(j[1][0],1);near(j[1][4],0);near(j[1][3],11);
+    layers[1].binding=&ba;check(sst_model_layers(&m,layers,2,j,2,p,n,3));near(j[1][0],0);near(j[1][4],1);near(j[1][3],12);
+    check(sst_model_layers(&m,NULL,0,j,2,p,n,3));near(j[1][4],1);near(j[1][3],12);
+}
+static void layers_rejection_and_aliases(void){
+    fixture();SstMdl0 m=opened();SstChr0 a=anim();SstModelBinding b;check(sst_model_bind(&m,&a,&b));
+    SstModelLayer layer={&b,NULL,0,2,1};float j[3][12],p[4][12],n[4][12];
+    check(!sst_model_layers(&m,NULL,1,j,3,p,n,4)&&zero(j,sizeof j)&&zero(p,sizeof p)&&zero(n,sizeof n));
+    layer.weight=NAN;check(!sst_model_layers(&m,&layer,1,j,3,p,n,4)&&zero(j,sizeof j));layer.weight=-1;
+    check(!sst_model_layers(&m,&layer,1,j,3,p,n,4)&&zero(p,sizeof p));layer.weight=1;layer.frame=5;
+    check(!sst_model_layers(&m,&layer,1,j,3,p,n,4)&&zero(n,sizeof n));layer.frame=2;
+    uint8_t mask[2]={1,2};layer.mask=mask;layer.mask_count=2;check(!sst_model_layers(&m,&layer,1,j,3,p,n,4)&&zero(j,sizeof j));
+    mask[1]=1;layer.mask_count=1;check(!sst_model_layers(&m,&layer,1,j,3,p,n,4)&&zero(j,sizeof j));layer.mask_count=2;
+    b.tracks[1]=-2;check(!sst_model_layers(&m,&layer,1,j,3,p,n,4)&&zero(j,sizeof j));b.tracks[1]=0;b.tracks[0]=0;
+    check(!sst_model_layers(&m,&layer,1,j,3,p,n,4)&&zero(j,sizeof j));b.tracks[0]=-1;b.model.offset++;
+    check(!sst_model_layers(&m,&layer,1,j,3,p,n,4)&&zero(j,sizeof j));b.model=m;
+    // Explicit non-unit animation scale rejects, including when another layer is unit.
+    w32(animation,196,1|(1u<<4)|(1u<<5)|(1u<<6)|(1u<<22));wf(animation,200,2);check(sst_chr0_open(animation,sizeof animation,32,&a));check(sst_model_bind(&m,&a,&b));
+    check(!sst_model_layers(&m,&layer,1,j,3,p,n,4)&&zero(j,sizeof j)&&zero(p,sizeof p));
+    layer.weight=0;check(sst_model_layers(&m,&layer,1,j,3,p,n,4));near(j[1][3],12);
+    a=anim();check(sst_model_bind(&m,&a,&b));layer=(SstModelLayer){&b,NULL,0,2,1};
+    SstModelLayer empty={0};check(sst_model_layers(&m,&empty,1,j,3,p,n,4));near(j[1][3],12);
+    empty.weight=1;check(!sst_model_layers(&m,&empty,1,j,3,p,n,4)&&zero(j,sizeof j));
+    // Buffer extents and input aliases reject without touching their bytes.
+    memset(j,0x21,sizeof j);float saved_j[3][12];memcpy(saved_j,j,sizeof j);
+    check(!sst_model_layers(&m,&layer,7,j,3,p,n,4)&&!memcmp(saved_j,j,sizeof j));
+    layer.mask=(const uint8_t*)j;layer.mask_count=2;
+    check(!sst_model_layers(&m,&layer,1,j,3,p,n,4)&&!memcmp(saved_j,j,sizeof j));layer.mask=NULL;layer.mask_count=0;
+    unsigned char original[B];memcpy(original,data,sizeof data);
+    check(!sst_model_layers(&m,&layer,1,(float(*)[12])(void*)data,3,p,n,4)&&!memcmp(original,data,sizeof data));
+    union {SstModelLayer layer;float floats[3][12];} shared;memset(&shared,0,sizeof shared);shared.layer=layer;unsigned char saved[sizeof shared];memcpy(saved,&shared,sizeof shared);
+    check(!sst_model_layers(&m,&shared.layer,1,shared.floats,3,p,n,4)&&!memcmp(saved,&shared,sizeof shared));
+    union {SstModelBinding binding;float floats[3][12];} borrowed;memset(&borrowed,0,sizeof borrowed);borrowed.binding=b;layer.binding=&borrowed.binding;
+    unsigned char saved_binding[sizeof borrowed];memcpy(saved_binding,&borrowed,sizeof borrowed);
+    check(!sst_model_layers(&m,&layer,1,borrowed.floats,3,p,n,4)&&!memcmp(saved_binding,&borrowed,sizeof borrowed));
+}
+static void linked_joint_callback(void){
+    fixture();SstMdl0 m=opened();float source[2][12],j[3][12],p[4][12],n[4][12];worlds(source,true);SstModelJointLink links[2]={{1,1},{0,0}};
+    check(sst_model_linked_pose(&m,source,2,links,1,j,3,p,n,4));check(!memcmp(j[1],source[1],sizeof j[1]));near(p[1][3],24);near(p[1][7],6);check(zero(j[2],sizeof j[2]));
+    // Callback overwrites absolute joints after hierarchy evaluation, not parents.
+    links[0]=(SstModelJointLink){0,1};source[0][0]=NAN;
+    check(sst_model_linked_pose(&m,source,2,links,1,j,3,p,n,4));check(!memcmp(j[0],source[1],sizeof j[0]));near(j[1][3],12);near(j[1][0],1);
+    links[1]=links[0];check(!sst_model_linked_pose(&m,source,2,links,2,j,3,p,n,4)&&zero(j,sizeof j)&&zero(p,sizeof p)&&zero(n,sizeof n));
+    links[0].target=2;check(!sst_model_linked_pose(&m,source,2,links,1,j,3,p,n,4)&&zero(j,sizeof j));links[0]=(SstModelJointLink){1,2};
+    check(!sst_model_linked_pose(&m,source,2,links,1,j,3,p,n,4)&&zero(j,sizeof j));links[0].source=0;
+    check(!sst_model_linked_pose(&m,source,2,links,1,j,3,p,n,4)&&zero(j,sizeof j));
+    check(!sst_model_linked_pose(&m,NULL,0,links,1,j,3,p,n,4)&&zero(p,sizeof p));
+    float saved[2][12];memcpy(saved,source,sizeof source);check(!sst_model_linked_pose(&m,source,2,links,1,source,2,p,n,4)&&!memcmp(saved,source,sizeof source));
+    check(sst_model_linked_pose(&m,NULL,0,NULL,0,j,3,p,n,4));near(j[1][3],12);
+}
 static void rejected(void){SstMdl0 m;memset(&m,0x7f,sizeof m);check(!sst_mdl0_open(data,sizeof data,M,&m)&&zero(&m,sizeof m));}
 static void malformed(void){
     fixture();w32(data,M+8,10);rejected();fixture();w32(data,M+4,UINT32_MAX);rejected();fixture();w32(data,INFO+28,5);rejected();
@@ -119,7 +235,13 @@ static void corrupted(void){
             bool ok=sst_mdl0_palettes(&m,w,m.nodes,p,n,SST_MDL0_MAX_MATRICES);
             if(ok)for(unsigned i=0;i<m.view_matrices;i++)for(unsigned k=0;k<12;k++)check(isfinite(p[i][k])&&isfinite(n[i][k]));
             else check(zero(p,sizeof p)&&zero(n,sizeof n));
+            ok=sst_model_layers(&m,NULL,0,w,SST_CHR0_MAX_JOINTS,p,n,SST_MDL0_MAX_MATRICES);
+            if(!ok)check(zero(w,sizeof w)&&zero(p,sizeof p)&&zero(n,sizeof n));
+            else for(unsigned i=0;i<m.nodes;i++)for(unsigned k=0;k<12;k++)check(isfinite(w[i][k]));
+            ok=sst_model_linked_pose(&m,NULL,0,NULL,0,w,SST_CHR0_MAX_JOINTS,p,n,SST_MDL0_MAX_MATRICES);
+            if(!ok)check(zero(w,sizeof w)&&zero(p,sizeof p)&&zero(n,sizeof n));
+            else for(unsigned i=0;i<m.nodes;i++)for(unsigned k=0;k<12;k++)check(isfinite(w[i][k]));
         }else check(zero(&m,sizeof m));check(!memcmp(saved,input,size));free(input);
     }
 }
-int main(void){numeric_palettes();binding_pose();malformed();output_admission();corrupted();printf("resource model: %u checks PASS; weighted palettes, native NORMAL/APPROX normals, binding, aliases, bounds and1024corrupted spans; no live rendering acceptance\n",checks);return 0;}
+int main(void){numeric_palettes();binding_pose();layers_numeric();layers_patch_defaults();layers_rejection_and_aliases();linked_joint_callback();malformed();output_admission();corrupted();printf("resource model: %u checks PASS; weighted palettes, six masked quaternion layers, post-blend defaults, joint callbacks, NORMAL/APPROX normals, aliases, bounds and1024corrupted spans; no live rendering acceptance\n",checks);return 0;}

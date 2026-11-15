@@ -4,6 +4,11 @@
 binding and weighted position/normal palettes. It has no renderer callers yet.
 The cold observer's missing carried-pot display remains an integration task.
 
+The same module now also supplies masked quaternion layers and absolute joint
+links for separate models. See [resource-layers.md](resource-layers.md) for the
+current implementation and checks. The validation section below records the
+earlier single-animation/palette revision and its own receipt hashes.
+
 The library borrows immutable caller-owned bytes. It admits MDL0 version11,
 ordered unit-scale bind hierarchies, no billboards and NORMAL/APPROX envelope modes0/1.
 Names, IDs, parent links, matrix maps, stored bind/inverse-bind matrices and

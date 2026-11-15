@@ -164,3 +164,123 @@ bool sst_model_pose(const SstModelBinding *b,float frame,float (*j)[12],unsigned
     if(!sst_resource_pose_world(parents,local,b->model.nodes,world,b->model.nodes)||!sst_mdl0_palettes(&b->model,world,b->model.nodes,p,n,pc))return false;
     memcpy(j,world,(size_t)b->model.nodes*sizeof *j);return true;
 }
+
+// Native blend order/patch semantics are documented in docs/resource-layers.md.
+// Original bounded arithmetic; no native animation objects or pointers retained.
+static bool joint_outputs(const SstMdl0 *m,float (*j)[12],unsigned jc,float (*p)[12],float (*n)[12],unsigned pc){
+    if(!m||!j||!jc||jc>SST_CHR0_MAX_JOINTS||!outputs(m,p,n,pc))return false;
+    size_t jb=(size_t)jc*sizeof *j,pb=(size_t)pc*sizeof *p;
+    return !overlap(j,jb,m,sizeof *m)&&!overlap(j,jb,p,pb)&&!overlap(j,jb,n,pb)&&!overlap(j,jb,m->data,m->bytes);
+}
+static bool writes_overlap(const void *input,size_t bytes,float (*j)[12],unsigned jc,float (*p)[12],float (*n)[12],unsigned pc){
+    return input&&bytes&&(overlap(input,bytes,j,(size_t)jc*sizeof *j)||overlap(input,bytes,p,(size_t)pc*sizeof *p)||overlap(input,bytes,n,(size_t)pc*sizeof *n));
+}
+static void clear_pose(float (*j)[12],unsigned jc,float (*p)[12],float (*n)[12],unsigned pc){
+    memset(j,0,(size_t)jc*sizeof *j);memset(p,0,(size_t)pc*sizeof *p);memset(n,0,(size_t)pc*sizeof *n);
+}
+static bool same_model(const SstMdl0 *a,const SstMdl0 *b){
+    return a->data==b->data&&a->bytes==b->bytes&&a->offset==b->offset&&a->end==b->end&&a->bones==b->bones&&
+        a->matrix_table==b->matrix_table&&a->tree==b->tree&&a->tree_end==b->tree_end&&a->mix==b->mix&&a->mix_end==b->mix_end&&
+        a->nodes==b->nodes&&a->world_matrices==b->world_matrices&&a->view_matrices==b->view_matrices&&
+        a->scaling_rule==b->scaling_rule&&a->envelope_mode==b->envelope_mode;
+}
+static bool local_matrix(const SstResourceSrt *s,float out[12]){
+    const int16_t root=-1;return sst_resource_pose_world(&root,s,1,(float(*)[12])out,1);
+}
+static bool compose(const SstMdl0 *m,const float (*local)[12],float (*world)[12]){
+    for(unsigned i=0;i<m->nodes;i++){
+        SstModelNode node_data;if(!node(m,i,&node_data)||!rigid(local[i]))return false;
+        if(node_data.parent<0)memcpy(world[i],local[i],sizeof world[i]);
+        else if(!multiply(world[node_data.parent],local[i],world[i]))return false;
+    }return true;
+}
+static bool to_quaternion(const float m[12],float q[4]){
+    float trace=m[0]+m[5]+m[10];
+    if(trace>0){
+        float root=sqrtf(1+trace),r=.5f/root;q[3]=.5f*root;
+        q[0]=(m[9]-m[6])*r;q[1]=(m[2]-m[8])*r;q[2]=(m[4]-m[1])*r;
+    }else{
+        unsigned a=0;if(m[5]>m[0])a=1;if(m[10]>m[5*a])a=2;unsigned b=(a+1)%3,c=(a+2)%3;
+        float root=sqrtf(1+m[5*a]-m[5*b]-m[5*c]);if(!(root>0))return false;
+        float r=.5f/root;q[a]=.5f*root;q[b]=(m[4*a+b]+m[4*b+a])*r;
+        q[c]=(m[4*a+c]+m[4*c+a])*r;q[3]=(m[4*c+b]-m[4*b+c])*r;
+    }
+    for(unsigned k=0;k<4;k++)if(!isfinite(q[k]))return false;return true;
+}
+static bool slerp(float state[4],const float target[4],float t){
+    float dot=0;for(unsigned k=0;k<4;k++)dot+=state[k]*target[k];float sign=dot<0?-1.f:1.f;dot=fabsf(dot);
+    float a=1-t,b=t;
+    if(dot<=1.f-1e-5f){float angle=acosf(dot),s=sinf(angle);if(!(s>0))return false;a=sinf((1-t)*angle)/s;b=sinf(t*angle)/s;}
+    for(unsigned k=0;k<4;k++){state[k]=a*state[k]+sign*b*target[k];if(!isfinite(state[k]))return false;}return true;
+}
+static bool from_quaternion(const float q[4],float out[12]){
+    float norm=0;for(unsigned k=0;k<4;k++)norm+=q[k]*q[k];if(!isfinite(norm)||norm<.25f||norm>4)return false;
+    float factor=2/norm,x=q[0],y=q[1],z=q[2],w=q[3];
+    float xx=x*x*factor,yy=y*y*factor,zz=z*z*factor,xy=x*y*factor,xz=x*z*factor,yz=y*z*factor;
+    float wx=w*x*factor,wy=w*y*factor,wz=w*z*factor;
+    float m[12]={1-yy-zz,xy-wz,xz+wy,0,xy+wz,1-xx-zz,yz-wx,0,xz-wy,yz+wx,1-xx-yy,0};
+    memcpy(out,m,sizeof m);return rigid(out);
+}
+static bool layer_sample(const SstModelLayer *layer,unsigned index,const SstModelNode *node_data,const SstResourceSrt *defaults,SstResourceSrt *out){
+    int track=layer->binding->tracks[index];char name[128];
+    return track>=0&&sst_chr0_joint_name(&layer->binding->animation,(unsigned)track,name,sizeof name)&&!strcmp(name,node_data->name)&&
+        sst_chr0_sample(&layer->binding->animation,(unsigned)track,layer->frame,defaults,out);
+}
+bool sst_model_layers(const SstMdl0 *m,const SstModelLayer *layers,unsigned count,float (*j)[12],unsigned jc,float (*p)[12],float (*n)[12],unsigned pc){
+    if(count>SST_MODEL_MAX_LAYERS||!joint_outputs(m,j,jc,p,n,pc)||writes_overlap(layers,(size_t)count*sizeof *layers,j,jc,p,n,pc))return false;
+    // Admit all input spans before clearing outputs, including zero-weight layers.
+    if(layers)for(unsigned l=0;l<count;l++){
+        const SstModelLayer *x=&layers[l];if(x->mask_count>SST_CHR0_MAX_JOINTS||writes_overlap(x->mask,x->mask_count,j,jc,p,n,pc))return false;
+        if(x->binding&&(writes_overlap(x->binding,sizeof *x->binding,j,jc,p,n,pc)||
+            writes_overlap(x->binding->model.data,x->binding->model.bytes,j,jc,p,n,pc)||
+            writes_overlap(x->binding->animation.data,x->binding->animation.bytes,j,jc,p,n,pc)))return false;
+    }
+    clear_pose(j,jc,p,n,pc);R r=reader(m);if(!r.ok||jc<m->nodes||pc<m->view_matrices||(count&&!layers))return false;
+    for(unsigned l=0;l<count;l++){
+        const SstModelLayer *x=&layers[l];
+        if(!isfinite(x->weight)||x->weight<0||x->weight>1e6f||(!x->mask&&x->mask_count)||(x->mask&&x->mask_count!=m->nodes))return false;
+        if(x->mask)for(unsigned i=0;i<m->nodes;i++)if(x->mask[i]>1)return false;
+        if(!x->binding){if(x->weight||x->mask)return false;continue;}
+        if(!same_model(m,&x->binding->model))return false;
+        if(x->weight&&(!isfinite(x->frame)||x->frame<0||x->frame>x->binding->animation.duration))return false;
+        for(unsigned i=0;i<m->nodes;i++)if(x->binding->tracks[i]< -1)return false;
+    }
+    const SstResourceSrt identity_srt={{1,1,1},{0,0,0},{0,0,0},0};
+    float local[SST_CHR0_MAX_JOINTS][12],world[SST_CHR0_MAX_JOINTS][12];
+    for(unsigned i=0;i<m->nodes;i++){
+        SstModelNode node_data;if(!node(m,i,&node_data))return false;
+        unsigned active[SST_MODEL_MAX_LAYERS],num=0;float total=0;
+        for(unsigned l=0;l<count;l++)if(layers[l].binding&&layers[l].weight&&(!layers[l].mask||layers[l].mask[i])&&layers[l].binding->tracks[i]>=0){active[num++]=l;total+=layers[l].weight;}
+        if(!num){if(!local_matrix(&node_data.bind,local[i]))return false;continue;}
+        if(num==1){SstResourceSrt s;if(!layer_sample(&layers[active[0]],i,&node_data,&node_data.bind,&s)||!local_matrix(&s,local[i]))return false;continue;}
+        float q[4]={0,0,0,1},translation[3]={0},added=0;uint32_t common=UINT32_MAX;
+        for(unsigned a=0;a<num;a++){
+            const SstModelLayer *x=&layers[active[a]];SstResourceSrt s;float matrix[12],target[4];
+            if(!layer_sample(x,i,&node_data,&identity_srt,&s)||!local_matrix(&s,matrix)||!to_quaternion(matrix,target))return false;
+            common&=s.flags;added+=x->weight;if(!slerp(q,target,x->weight/added))return false;
+            float ratio=x->weight/total;for(unsigned k=0;k<3;k++)translation[k]+=ratio*s.translation[k];
+        }
+        if(!from_quaternion(q,local[i]))return false;
+        if(common&(1u<<8)){
+            float bind[12];if(!local_matrix(&node_data.bind,bind))return false;
+            for(unsigned k=0;k<12;k++)if(k%4!=3)local[i][k]=bind[k];
+        }
+        for(unsigned k=0;k<3;k++)local[i][4*k+3]=common&(1u<<9)?node_data.bind.translation[k]:translation[k];
+    }
+    if(!compose(m,local,world)||!sst_mdl0_palettes(m,world,m->nodes,p,n,pc))return false;
+    memcpy(j,world,(size_t)m->nodes*sizeof *j);return true;
+}
+bool sst_model_linked_pose(const SstMdl0 *m,const float (*source)[12],unsigned sc,const SstModelJointLink *links,unsigned lc,float (*j)[12],unsigned jc,float (*p)[12],float (*n)[12],unsigned pc){
+    if(sc>SST_CHR0_MAX_JOINTS||lc>SST_CHR0_MAX_JOINTS||!joint_outputs(m,j,jc,p,n,pc)||
+        writes_overlap(source,(size_t)sc*sizeof *source,j,jc,p,n,pc)||writes_overlap(links,(size_t)lc*sizeof *links,j,jc,p,n,pc))return false;
+    clear_pose(j,jc,p,n,pc);R r=reader(m);if(!r.ok||jc<m->nodes||pc<m->view_matrices||(lc&&(!source||!links||!sc)))return false;
+    SstResourceSrt bind[SST_CHR0_MAX_JOINTS];int16_t parents[SST_CHR0_MAX_JOINTS];float world[SST_CHR0_MAX_JOINTS][12];bool seen[SST_CHR0_MAX_JOINTS]={0};
+    for(unsigned i=0;i<m->nodes;i++){SstModelNode node_data;if(!node(m,i,&node_data))return false;bind[i]=node_data.bind;parents[i]=node_data.parent;}
+    if(!sst_resource_pose_world(parents,bind,m->nodes,world,m->nodes))return false;
+    for(unsigned i=0;i<lc;i++){
+        unsigned dst=links[i].target,src=links[i].source;if(dst>=m->nodes||src>=sc||seen[dst]||!rigid(source[src]))return false;
+        seen[dst]=true;memcpy(world[dst],source[src],sizeof world[dst]);
+    }
+    if(!sst_mdl0_palettes(m,world,m->nodes,p,n,pc))return false;
+    memcpy(j,world,(size_t)m->nodes*sizeof *j);return true;
+}

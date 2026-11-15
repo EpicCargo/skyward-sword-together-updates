@@ -1,0 +1,77 @@
+{
+  "passed": true,
+  "resources_sha256": {
+    "Alink.brres": "bd6d9b5eb900b2a6b317226a35c8c98943d4386075195e7fde87ed5bef93c44a",
+    "waitS.rchaC.brres": "400c9ab8a8a5fcad61e592a75b8950ffb44f2dcbbfa7dbfe891a147df2603850",
+    "LiftS_UtoD.rchaC.brres": "2fea702bb3decf8e13ed236659a1b8b98f8b62013316e140bf4491d087335c2e"
+  },
+  "body_model": "pl_body",
+  "resources": [
+    {
+      "passed": true,
+      "body_nodes": 35,
+      "lower_mask_nodes": 20,
+      "upper_mask_nodes": 15,
+      "hand_nodes": 3,
+      "hand_view_matrices": 2,
+      "idle_duration": 45,
+      "carry_duration": 9,
+      "masked_pose_cases": 57,
+      "six_layer_transition_cases": 25,
+      "body_position_matrices": 30176,
+      "body_normal_matrices": 30176,
+      "hand_position_matrices": 164,
+      "hand_normal_matrices": 164,
+      "reference_joint_max_error": 3.05175781e-05,
+      "reference_palette_max_error": 3.05175781e-05,
+      "linked_hand_max_error": 0,
+      "unmasked_carry_max_difference": 3.94374752,
+      "hand_model": "pl_hands"
+    },
+    {
+      "passed": true,
+      "body_nodes": 35,
+      "lower_mask_nodes": 20,
+      "upper_mask_nodes": 15,
+      "hand_nodes": 3,
+      "hand_view_matrices": 2,
+      "idle_duration": 45,
+      "carry_duration": 9,
+      "masked_pose_cases": 57,
+      "six_layer_transition_cases": 25,
+      "body_position_matrices": 30176,
+      "body_normal_matrices": 30176,
+      "hand_position_matrices": 164,
+      "hand_normal_matrices": 164,
+      "reference_joint_max_error": 3.05175781e-05,
+      "reference_palette_max_error": 3.05175781e-05,
+      "linked_hand_max_error": 0,
+      "unmasked_carry_max_difference": 3.94374752,
+      "hand_model": "al_hands"
+    }
+  ],
+  "inputs_unchanged": true,
+  "address_sanitizer": true,
+  "undefined_behavior_sanitizer": true,
+  "leak_sanitizer": true,
+  "sampled_weights_are_test_inputs": true,
+  "native_runtime_layer_weights_observed": false,
+  "game_launched": false,
+  "live_native_pose_comparison": false,
+  "renderer_enabled": false,
+  "code_sha256": {
+    "client/src/sst_resource_model.c": "3a5a7fb1712b4e207565583e71645bb6196ee4ecb6d67c68ce8a31f41c6b0029",
+    "client/src/sst_resource_model.h": "3f0a27c40871dffe4ccfef2004da050628ab32f2e00974829ae39c9e7375a7ec",
+    "client/src/sst_resource_pose.c": "76af69ab12c9262a53141205e595004e5e730a66b02a364c37878794d5dcc02a",
+    "client/src/sst_resource_pose.h": "d3466e311724af87907a93756056bdfe84a1d4a46c14e59e11c8097539221a56"
+  },
+  "peak_sampled_group_rss_mib": 206.5,
+  "previous_palette_regression": {
+    "passed": true,
+    "composed_bind_max_error": 1.47784258e-05,
+    "nonunit_lift_frames_rejected": 18
+  },
+  "native_layer_weights_are_test_inputs": true,
+  "cold_carry_bug_fixed": false,
+  "full_object_sync_accepted": false
+}

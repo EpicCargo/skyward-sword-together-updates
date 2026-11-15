@@ -38,6 +38,32 @@ bool sst_mdl0_palettes(const SstMdl0 *model,const float (*joints)[12],unsigned c
 bool sst_model_bind(const SstMdl0 *model,const SstChr0 *animation,SstModelBinding *out);
 bool sst_model_pose(const SstModelBinding *binding,float frame,float (*joints)[12],unsigned joint_capacity,
                     float (*positions)[12],float (*normals)[12],unsigned palette_capacity);
+#define SST_MODEL_MAX_LAYERS 6u
+typedef struct {
+    const SstModelBinding *binding;const uint8_t *mask;unsigned mask_count;
+    float frame,weight;
+} SstModelLayer;
+// Up to six ordered layers of the same model. NULL mask/count0 selects all
+// joints; otherwise exactly model.nodes binary bytes. Missing tracks do not
+// contribute weight. Zero active contributors use bind; one preserves native
+// S/R/T directly; multiple contributors use ordered quaternion slerp and
+// per-joint normalized translation. Model-default channels are patched AFTER
+// blending, only when requested by every contributing channel. Unit scale only.
+// No native layer weights, loop timing, callbacks or geometry selection inferred.
+// Weights must be finite/nonnegative and<=1e6. Frames are checked for nonzero
+// layers. NULL binding denotes an empty zero-weight layer without a mask.
+bool sst_model_layers(const SstMdl0 *model,const SstModelLayer *layers,unsigned layer_count,
+                      float (*joints)[12],unsigned joint_capacity,float (*positions)[12],
+                      float (*normals)[12],unsigned palette_capacity);
+typedef struct {uint16_t target,source;} SstModelJointLink;
+// Absolute world-joint overrides after child bind FK, matching a timing-C
+// callback. Source and child must use the same coordinate space. Unmapped
+// joints keep their bind worlds; overrides do NOT propagate into descendants.
+// Target IDs must be unique. Only explicitly linked source joints are read.
+// Does not choose the seven native hand shapes or modify any native object.
+bool sst_model_linked_pose(const SstMdl0 *model,const float (*source)[12],unsigned source_count,
+                           const SstModelJointLink *links,unsigned link_count,float (*joints)[12],
+                           unsigned joint_capacity,float (*positions)[12],float (*normals)[12],unsigned palette_capacity);
 #ifdef __cplusplus
 }
 #endif
