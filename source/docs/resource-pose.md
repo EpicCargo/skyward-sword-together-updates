@@ -49,7 +49,8 @@ standard client test target and source CI explicitly run the fixture.
 Private checks use the user's owned resources, with no game launch. The two
 small-carry animations provide1,480 local joint/frame samples. The steady
 nine-frame resource provides665 unit-scale body matrices across35 matched joints
-and19 half-frame positions, including the observed4.5 steady phase. Composed body
+and19 half-frame positions, including the observed4.5 steady phase. This model
+binding checks `pl_body`; other outfits are not covered. Composed body
 rest matrices differ from the model's stored bind matrices by at most0.000624 per
 matrix element. The separate ten-frame lift resource provides105 admitted body
 matrices;18 of its21 sampled frames have non-unit scale and are explicitly

@@ -43,6 +43,7 @@
   "source_sha256": "30b85c18ad0f9b0c84d33ea331b26474aec46ca63f7270c21b6f7f9ecc0c7b3d",
   "peak_sampled_group_rss_mib": 180.9,
   "model_reference_joints": 35,
+  "tested_model_resource": "pl_body",
   "rendering_integration_complete": false,
   "cold_carry_bug_fixed": false
 }
