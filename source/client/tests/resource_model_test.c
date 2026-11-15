@@ -49,6 +49,13 @@ static void numeric_palettes(void){
     near(p[2][0],.5f);near(p[2][1],-.5f);near(p[2][3],16);near(p[2][7],4);
     // NORMAL-mode normals use the weighted linear matrix, not its inverse transpose.
     for(unsigned i=0;i<3;i++)for(unsigned k=0;k<12;k++)near(n[i][k],k%4==3?0:p[i][k]);
+    // Link changes the model to APPROX at runtime. With a unit-scale root this
+    // preserves the same palettes; no resource mutation or mode override is needed.
+    float saved_p[5][12],saved_n[5][12];memcpy(saved_p,p,sizeof p);memcpy(saved_n,n,sizeof n);
+    data[INFO+35]=1;m=opened();check(m.envelope_mode==1&&sst_mdl0_palettes(&m,w,2,p,n,5));
+    check(!memcmp(saved_p,p,sizeof p)&&!memcmp(saved_n,n,sizeof n));
+    m.envelope_mode=0;check(!sst_mdl0_palettes(&m,w,2,p,n,5)&&zero(p,sizeof p)&&zero(n,sizeof n));
+    data[INFO+35]=0;
     // Accept bounded authored rounding, preserving it rather than renormalizing.
     wf(data,MIX+16,.250005f);m=opened();check(sst_mdl0_palettes(&m,w,2,p,n,5));check(fabsf(p[1][0]-.250005f)<.0000002f);
     fixture();w32(data,TABLE,5);w32(data,TABLE+20,0);w32(data,INFO+28,5);unsigned at=op(TREE+10,6,4,0);data[at]=1;
@@ -74,7 +81,7 @@ static void binding_pose(void){
 static void rejected(void){SstMdl0 m;memset(&m,0x7f,sizeof m);check(!sst_mdl0_open(data,sizeof data,M,&m)&&zero(&m,sizeof m));}
 static void malformed(void){
     fixture();w32(data,M+8,10);rejected();fixture();w32(data,M+4,UINT32_MAX);rejected();fixture();w32(data,INFO+28,5);rejected();
-    fixture();w32(data,TABLE,1025);rejected();fixture();w32(data,TABLE,0);rejected();fixture();data[INFO+35]=1;rejected();fixture();data[INFO+35]=2;rejected();
+    fixture();w32(data,TABLE,1025);rejected();fixture();w32(data,TABLE,0);rejected();fixture();data[INFO+35]=3;rejected();fixture();data[INFO+35]=2;rejected();
     fixture();w32(data,N0+24,1);rejected();fixture();wf(data,N1+0x20,2);rejected();fixture();wf(data,N1+0xa0,NAN);rejected();
     fixture();wf(data,N1+0xa0+12,0);rejected();fixture();w32(data,N1+0x5c,1);rejected();fixture();w32(data,N0+16,3);rejected();
     fixture();w32(data,N1+12,0);rejected();fixture();w32(data,GRAPH+36,UINT32_MAX);rejected();fixture();data[TREE]=0xff;rejected();
@@ -115,4 +122,4 @@ static void corrupted(void){
         }else check(zero(&m,sizeof m));check(!memcmp(saved,input,size));free(input);
     }
 }
-int main(void){numeric_palettes();binding_pose();malformed();output_admission();corrupted();printf("resource model: %u checks PASS; weighted palettes, native NORMAL normals, binding, aliases, bounds and1024corrupted spans; no live rendering acceptance\n",checks);return 0;}
+int main(void){numeric_palettes();binding_pose();malformed();output_admission();corrupted();printf("resource model: %u checks PASS; weighted palettes, native NORMAL/APPROX normals, binding, aliases, bounds and1024corrupted spans; no live rendering acceptance\n",checks);return 0;}

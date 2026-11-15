@@ -16,8 +16,8 @@ static bool text(R *r,size_t base,uint32_t value,char out[128]){
 static R reader(const SstMdl0 *v){
     R r={0};if(!v||!v->data||v->bytes>SST_CHR0_MAX_BYTES||v->offset>v->end||v->end>v->bytes||v->end-v->offset<0x90||
         !v->nodes||v->nodes>SST_CHR0_MAX_JOINTS||!v->world_matrices||v->world_matrices>SST_MDL0_MAX_MATRICES||
-        !v->view_matrices||v->view_matrices>v->world_matrices)return r;
-    r=(R){v->data,v->bytes,v->offset,v->end,true};if(r32(&r,v->offset)!=UINT32_C(0x4d444c30)||r32(&r,v->offset+8)!=11)r.ok=false;
+        !v->view_matrices||v->view_matrices>v->world_matrices||v->envelope_mode>1)return r;
+    r=(R){v->data,v->bytes,v->offset,v->end,true};if(r32(&r,v->offset)!=UINT32_C(0x4d444c30)||r32(&r,v->offset+8)!=11||r8(&r,v->offset+0x4c+35)!=v->envelope_mode)r.ok=false;
     span(&r,v->matrix_table,4+(size_t)v->world_matrices*4);span(&r,v->bones,24+(size_t)v->nodes*16);return r;
 }
 static bool dictionary(R *r,size_t at,unsigned maximum,unsigned *count){
@@ -103,9 +103,9 @@ bool sst_mdl0_open(const void *data,size_t bytes,size_t offset,SstMdl0 *out){
     R r={data,bytes,offset,bytes,true};if(r32(&r,offset)!=UINT32_C(0x4d444c30)||r32(&r,offset+8)!=11)return false;
     uint32_t size=r32(&r,offset+4);if(size<0x90||size>bytes-offset)return false;r.hi=offset+size;
     SstMdl0 v={.data=data,.bytes=bytes,.offset=offset,.end=r.hi};size_t info=offset+0x4c;
-    if(r32(&r,info)<0x40||rel(&r,info,r32(&r,info+4))!=offset||r8(&r,info+35)!=0||
+    if(r32(&r,info)<0x40||rel(&r,info,r32(&r,info+4))!=offset||r8(&r,info+35)>1||
         r8(&r,info+32)>1||r8(&r,info+33)>1||r8(&r,info+34)>1)return false;
-    v.scaling_rule=r32(&r,info+8);unsigned views=r32(&r,info+28);v.matrix_table=rel(&r,info,r32(&r,info+36));unsigned worlds=r32(&r,v.matrix_table);
+    v.envelope_mode=(uint8_t)r8(&r,info+35);v.scaling_rule=r32(&r,info+8);unsigned views=r32(&r,info+28);v.matrix_table=rel(&r,info,r32(&r,info+36));unsigned worlds=r32(&r,v.matrix_table);
     if(!r.ok||v.scaling_rule>2||!worlds||worlds>SST_MDL0_MAX_MATRICES||!views||views>worlds)return false;
     v.world_matrices=(uint16_t)worlds;v.view_matrices=(uint16_t)views;v.bones=rel(&r,offset,r32(&r,offset+20));unsigned count;
     if(!dictionary(&r,v.bones,SST_CHR0_MAX_JOINTS,&count)||!count||!text(&r,offset,r32(&r,offset+0x48),v.name))return false;v.nodes=(uint16_t)count;
