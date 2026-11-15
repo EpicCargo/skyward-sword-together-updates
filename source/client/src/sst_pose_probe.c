@@ -7,7 +7,7 @@
 #include <string.h>
 _Static_assert(sizeof(float)==4&&sizeof(SstProbeRecord)==160,"probe v1 layout");
 enum {PALETTE_BYTES=65536,PATH_BYTES=4096};
-typedef struct {uint64_t active,last;unsigned samples;bool have_last;uint64_t meshes;SstProbeTracks tracks;} Context;
+typedef struct {uint64_t active,last;unsigned samples;bool have_last;uint64_t meshes;SstProbeTracks tracks;SstPose pose;} Context;
 static struct {
     bool started,failed;FILE *file;char path[PATH_BYTES];SstProbeTrackReader reader;void *user;
     Context contexts[2];uint32_t bytes,records;float scratch[12+2*PALETTE_BYTES/4];
@@ -28,6 +28,10 @@ static bool equal_tracks(const SstProbeTracks *a,const SstProbeTracks *b){
         !memcmp(a->frames,b->frames,sizeof a->frames)&&!memcmp(a->lengths,b->lengths,sizeof a->lengths)&&
         a->scene.room==b->scene.room&&a->scene.layer==b->scene.layer&&a->scene.entrance==b->scene.entrance&&!memcmp(a->scene.stage,b->scene.stage,9);
 }
+static bool equal_pose(const SstPose *a,const SstPose *b){
+    return a->tick==b->tick&&a->anim_id==b->anim_id&&a->action==b->action&&a->anim_frame==b->anim_frame&&a->equip_flags==b->equip_flags&&
+        !memcmp(a->pos,b->pos,sizeof a->pos)&&!memcmp(a->rot,b->rot,sizeof a->rot);
+}
 static void stop_failed(void){probe.failed=true;if(probe.file){fclose(probe.file);probe.file=NULL;}fprintf(stderr,"[sst-pose-probe] stopped after file/record limit or write failure\n");}
 static void capture(uint64_t frame,uint16_t mesh,uint16_t context,const SstPose *pose,const float basis[12],const float model[12],
                     const void *positions,size_t pn,const void *normals,size_t nn,void *unused){
@@ -40,6 +44,7 @@ static void capture(uint64_t frame,uint16_t mesh,uint16_t context,const SstPose 
     Context *c=&probe.contexts[bank];bool active=c->samples&&c->active==frame;
     if(!active&&(c->samples>=SST_PROBE_MAX_CONTEXT_SAMPLES||(c->have_last&&(frame<c->last||frame-c->last<60))))return;
     if(active&&(c->meshes&(UINT64_C(1)<<mesh)))return;
+    if(active&&!equal_pose(&c->pose,pose))return;
     SstProbeTracks tracks={0};if(!probe.reader(pose,&tracks,probe.user)||!valid_tracks(&tracks)||
         tracks.ids[tracks.primary]!=pose->anim_id||fabsf(tracks.frames[tracks.primary]-pose->anim_frame)>.001f)return;
     if(bank==1&&(!(tracks.valid_mask&(1u<<5))||tracks.ids[5]!=431||fabsf(tracks.frames[5]-4.5f)>.001f||fabsf(tracks.lengths[5]-9.f)>.001f))return;
@@ -65,7 +70,7 @@ static void capture(uint64_t frame,uint16_t mesh,uint16_t context,const SstPose 
     memcpy(record.stage,tracks.scene.stage,8);memcpy(record.model,probe.scratch,48);
     if(fwrite(&record,sizeof record,1,probe.file)!=1||fwrite(probe.scratch+12,1,pn+nn,probe.file)!=pn+nn||fflush(probe.file)){stop_failed();return;}
     probe.bytes+=bytes;probe.records++;
-    if(!active){c->samples++;c->have_last=true;c->last=c->active=frame;c->meshes=0;c->tracks=tracks;
+    if(!active){c->samples++;c->have_last=true;c->last=c->active=frame;c->meshes=0;c->tracks=tracks;c->pose=*pose;
         fprintf(stderr,"[sst-pose-probe] frame=%llu context=%u sample=%u primary=%u phase=%.6g tracks=%02x; weights unobserved\n",(unsigned long long)frame,context,c->samples,tracks.primary,(double)pose->anim_frame,tracks.valid_mask);}
     c->meshes|=UINT64_C(1)<<mesh;
 }

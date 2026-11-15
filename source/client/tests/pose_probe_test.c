@@ -62,6 +62,10 @@ int main(int argc,char **argv){
     for(mode=1;mode<=2;mode++){setup(0,0);check(sst_pose_probe_start(reader,NULL));check(capture(6,identity,model,position,identity));check(!exists());sst_pose_probe_reset();}mode=0;
     setup(0,0);check(sst_pose_probe_start(reader,NULL));mode=3;reads=0;
     check(capture(6,identity,model,position,identity));check(capture(7,identity,model,position,identity));sst_pose_probe_reset();mode=0;check(read_records(true)==1);check(!remove(path));
+    setup(0,0);check(sst_pose_probe_start(reader,NULL));check(capture(6,identity,model,position,identity));pose.pos[0]++;
+    check(capture(7,identity,model,position,identity));sst_pose_probe_reset();check(read_records(true)==1);check(!remove(path));
+    setup(0,0);check(sst_pose_probe_start(reader,NULL));check(capture(6,identity,model,position,identity));pose.tick++;
+    check(capture(7,identity,model,position,identity));sst_pose_probe_reset();check(read_records(true)==1);check(!remove(path));
     // Separate bounded sample banks for ordinary idle and steady carry.
     setup(0,0);check(sst_pose_probe_start(reader,NULL));
     for(unsigned i=0;i<18;i++){pose.anim_frame=6+(float)i;sst_animation_frame(&scene,&pose,6+60*i);check(capture(6,identity,model,position,identity));}

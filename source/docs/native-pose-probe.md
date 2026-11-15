@@ -34,17 +34,21 @@ Position and normal matrices follow as float32. The existing actor-origin/yaw an
 camera transform is removed; normal conversion omits translation. No native
 pointers are recorded. One coherent set of parts is sampled at most every60
 presented frames, with at most16 sampled frames per context,64 mesh identities,
-1,024 records and32MiB total. Nonfinite, inconsistent and out-of-scope data are
+1,024 records and32MiB total. Parts in one sampled frame must also retain the
+same local tick, position, rotation, clip, phase, action and equipment identity.
+Nonfinite, inconsistent and out-of-scope data are
 skipped. Capacity or write failure stops recording without affecting rendering.
 
-The synthetic recorder fixture passes5,937 assertions; the in-process track
+The initial diagnostic revision's synthetic recorder fixture passes5,937 assertions; the in-process track
 reader fixture passes49. Checks cover strict opt-in, unchanged inputs, cache-hit
 observation without extra stored palettes, camera canonicalization, forced-viewer
 denial, metadata identity/bounds, inconsistent part rejection, independent context
 caps, the1,024-record limit and exclusive output. Existing animation, fresh-local,
 carry-cohort, geometry-only and phase-admission regression fixtures also pass under
 address, undefined-behavior and leak sanitizers. These are CPU checks, not native
-carry-pose acceptance. See [CPU evidence](../validation/pose-probe-20261115.json).
+carry-pose acceptance. See [initial CPU evidence](../validation/pose-probe-20261115.json),
+which records its exact source hashes. The additional same-frame pose guard and
+its regressions are awaiting the new candidate's hosted checks.
 
 Native capture and comparison will be recorded separately with exact runtime
 hashes and limits. Cold rendering integration, actual native weights, callbacks,
