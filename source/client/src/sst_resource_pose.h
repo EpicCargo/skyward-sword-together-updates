@@ -38,6 +38,7 @@ bool sst_chr0_sample(const SstChr0 *view,unsigned joint,float frame,
 // must be-1 or a preceding joint. This restricted form deliberately rejects
 // non-unit scale: native segment compensation is not implemented here.
 // Row-major3x4 matrices, Rz*Ry*Rx local rotation, no skin weights or bind inverse.
+// Uses the native interpolated FIdx rotation convention (generated math samples).
 // Output capacity1..256 matrices; failure clears that bounded output.
 bool sst_resource_pose_world(const int16_t *parents,const SstResourceSrt *local,
                              unsigned count,float (*out)[12],unsigned capacity);

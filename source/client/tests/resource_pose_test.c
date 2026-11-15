@@ -175,6 +175,28 @@ static void world_hierarchy(void) {
     check(!sst_resource_pose_world(parent,pose,3,out,4) && zero(out,sizeof out));
 }
 static uint32_t random_state=UINT32_C(0x531a47c9);
+static void native_rotation_precision(void) {
+    int16_t parents[2]={-1,0};SstResourceSrt pose[2]={
+        {{1,1,1},{0,0,.703125f},{0,0,0},0},{{1,1,1},{0,0,0},{1000,0,0},0}};
+    float out[2][12];
+    // Halfway through the first 1.40625-degree table segment. The native
+    // midpoint differs from exact trigonometry; a long child exposes drift.
+    check(sst_resource_pose_world(parents,pose,2,out,2));
+    check(fabsf(out[0][4]-.0122705f)<1e-8f);
+    check(fabsf(out[0][0]-.9998495f)<1e-7f);
+    closef(out[1][3],999.8495f);closef(out[1][7],12.2705f);
+    check(fabsf(out[1][3]-(float)(1000*cos(.703125*0.017453292519943295)))>.07f);
+    pose[0].rotation[2]=-.703125f;check(sst_resource_pose_world(parents,pose,2,out,2));
+    closef(out[1][3],999.8495f);closef(out[1][7],-12.2705f);
+    pose[0].rotation[2]=90.703125f;check(sst_resource_pose_world(parents,pose,2,out,2));
+    closef(out[1][3],-12.2705f);closef(out[1][7],999.8495f);
+    pose[0].rotation[2]=360.703125f;check(sst_resource_pose_world(parents,pose,2,out,2));
+    closef(out[1][3],999.8495f);closef(out[1][7],12.2705f);
+    // Large signed rotations stay bounded and are periodic after FIdx's
+    // single-precision degree conversion (do not reduce degrees first).
+    pose[0].rotation[2]=92160.703125f;check(sst_resource_pose_world(parents,pose,2,out,2));
+    closef(out[1][3],999.8495f);closef(out[1][7],12.2705f);
+}
 static uint32_t random_word(void){random_state^=random_state<<13;random_state^=random_state>>17;random_state^=random_state<<5;return random_state;}
 static void corrupted_spans(void) {
     for(unsigned trial=0;trial<1024;trial++) {
@@ -196,7 +218,7 @@ static void corrupted_spans(void) {
     }
 }
 int main(void) {
-    expected_formats();bind_identity_and_versions();malformed();repeated_key_times();world_hierarchy();corrupted_spans();
+    expected_formats();bind_identity_and_versions();malformed();repeated_key_times();world_hierarchy();native_rotation_precision();corrupted_spans();
     printf("resource pose: %u checks PASS; seven formats, native interpolation, repeated times, defaults, unit hierarchy, bounds and1024corrupted spans; no game or rendering acceptance\n",checks);
     return 0;
 }

@@ -38,6 +38,11 @@ not implemented by this function.
 
 ## Validation
 
+The receipts in this section record the original decoder revision. The shared
+hierarchy function now uses native interpolated FIdx rotation math, and a separate
+module constructs weighted model palettes. Its updated checks and remaining
+integration gates are described in [resource-model.md](resource-model.md).
+
 The synthetic fixture passes8,967 assertions under address, undefined-behavior
 and leak sanitizers. It covers all seven channel formats, fractional-frame
 numeric expectations, repeated times and initial endpoints, model defaults,
@@ -65,10 +70,10 @@ Raw model/animation files, bind references and skeletal matrices remain private.
 
 ## Renderer integration still required
 
-Bind this evaluator to verified model resources and the complete body-part
-manifest. Reproduce native primary/secondary animation blending and any relevant
-model callbacks, then construct the weighted position and normal palettes for
-each draw. Body joint matrices alone are insufficient for the existing native
+Qualify the new model binding and weighted palette module against the complete
+body-part manifest. Reproduce native primary/secondary animation blending and
+any relevant model callbacks, then connect each draw's palettes. Body joint
+matrices alone are insufficient for the existing native
 skinning buffers. Carrying hand variants and attachments also need a coherent
 independent geometry/pose source. Compare the result with genuine native carry
 before allowing a cold observer to use it. Forced viewer draws must not teach

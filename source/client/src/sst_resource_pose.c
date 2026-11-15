@@ -201,6 +201,23 @@ bool sst_chr0_sample(const SstChr0 *view,unsigned index,float frame,const SstRes
     *out=(SstResourceSrt){0};
     return sample(view,index,frame,bind,out);
 }
+// NintendoWare uses a 256-step FIdx table with linear interpolation. Generate
+// the mathematical samples (and their independently rounded deltas) on demand;
+// no table or game data is embedded. Standard sin/cos changes inverse-bind skin
+// translations enough to be visible. See docs/resource-model.md for references.
+static void rotation_sincos(float degrees,double *sine,double *cosine) {
+    float index=degrees*(256.f/360.f);
+    float magnitude=fmodf(fabsf(index),65536.f);
+    unsigned whole=(unsigned)magnitude;
+    float fraction=magnitude-(float)whole;
+    double step=0.024543692606170259675,angle=(whole&255u)*step;
+    double s=sin(angle),c=cos(angle);
+    float sv=(float)(round(s*1e6)/1e6),cv=(float)(round(c*1e6)/1e6);
+    float ds=(float)(round((sin(angle+step)-s)*1e6)/1e6);
+    float dc=(float)(round((cos(angle+step)-c)*1e6)/1e6);
+    float result=fmaf(fraction,ds,sv);
+    *sine=index<0?-result:result;*cosine=fmaf(fraction,dc,cv);
+}
 bool sst_resource_pose_world(const int16_t *parents,const SstResourceSrt *local,
                              unsigned count,float (*out)[12],unsigned capacity) {
     if(!out || !capacity || capacity>SST_CHR0_MAX_JOINTS)return false;
@@ -209,14 +226,15 @@ bool sst_resource_pose_world(const int16_t *parents,const SstResourceSrt *local,
     for(unsigned i=0;i<count;i++) {
         int parent=parents[i];
         if(parent< -1 || (parent>=0 && (unsigned)parent>=i))goto fail;
-        double angle[3];
         for(unsigned axis=0;axis<3;axis++) {
             if(!isfinite(local[i].scale[axis]) || local[i].scale[axis]!=1.f ||
                !isfinite(local[i].rotation[axis]) || fabsf(local[i].rotation[axis])>1e6f ||
                !isfinite(local[i].translation[axis]) || fabsf(local[i].translation[axis])>1e6f)goto fail;
-            angle[axis]=fmod((double)local[i].rotation[axis],360.0)*0.017453292519943295;
         }
-        double sx=sin(angle[0]),cx=cos(angle[0]),sy=sin(angle[1]),cy=cos(angle[1]),sz=sin(angle[2]),cz=cos(angle[2]);
+        double sx,cx,sy,cy,sz,cz;
+        rotation_sincos(local[i].rotation[0],&sx,&cx);
+        rotation_sincos(local[i].rotation[1],&sy,&cy);
+        rotation_sincos(local[i].rotation[2],&sz,&cz);
         double transform[12]={cz*cy,cz*sy*sx-sz*cx,cz*sy*cx+sz*sx,local[i].translation[0],
             sz*cy,sz*sy*sx+cz*cx,sz*sy*cx-cz*sx,local[i].translation[1],
             -sy,cy*sx,cy*cx,local[i].translation[2]};
