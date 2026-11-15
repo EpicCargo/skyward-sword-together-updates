@@ -45,6 +45,20 @@ position max error2.98140335. Hand errors are unchanged. These are game coordina
 and matrix-element errors, not pixels. See
 [owned-resource comparison](../validation/resource-world-owned-20261115.json).
 
+The same API can attach a child model by adding a caller-supplied parent world
+as an anchor and explicitly transforming each child's world. A separate hybrid
+diagnostic evaluates owned `al_face`/`pl_head` models and default animations under
+the **observed native body-head joint**, not a generated parent. Across32 captured
+frames, face frame0 has max position errors0.00048828125 idle/0.000549316406 carry,
+and max normal linear errors below2.4e-7. Head/hair frame0 still has errors up to
+0.810333014 idle/0.29196167 carry, with normal errors0.0989589542/0.0335944742.
+Scanning the12 head and3 face integer-frame candidates does not improve those
+maxima. The native child animation frame was not observed; this scan is only a
+diagnostic fit. Separate head/hair callbacks remain necessary to investigate.
+These results support the default face palette/parent transform path under this
+hybrid scope, not independent cold rendering or complete resource/geometry identity.
+The scalar child diagnostic is included in the owned-resource evidence above.
+
 This comparison uses explicit test inputs: one selected lower/upper track, unit
 layer weights, and zero limb correction angles/offsets. Those values have NOT been
 observed as native callback state. The segment lengths follow the

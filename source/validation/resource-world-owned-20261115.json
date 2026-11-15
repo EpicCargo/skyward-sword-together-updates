@@ -62,6 +62,109 @@
   "upstream_game_version": "Wii reference; HD correctness requires native comparison",
   "zero_correction_angles_observed": false,
   "zero_leg_offset_observed": false,
+  "child_diagnostic": {
+    "parsed": true,
+    "hybrid_observed_body_head_anchor": true,
+    "native_child_frame_observed": false,
+    "best_frame_is_only_a_diagnostic_fit": true,
+    "contexts": [
+      {
+        "context": 0,
+        "model": "pl_head",
+        "sampled_frames": 16,
+        "candidate_integer_frames": 12,
+        "frame0_position_max": 0.810333014,
+        "frame0_normal_linear_max": 0.0989589542,
+        "best_candidate_position_worst": 0.810333014,
+        "best_candidate_normal_worst": 0.0989589542,
+        "best_position_frame_histogram": [
+          16,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      },
+      {
+        "context": 0,
+        "model": "al_face",
+        "sampled_frames": 16,
+        "candidate_integer_frames": 3,
+        "frame0_position_max": 0.00048828125,
+        "frame0_normal_linear_max": 2.38418579e-07,
+        "best_candidate_position_worst": 0.00048828125,
+        "best_candidate_normal_worst": 2.38418579e-07,
+        "best_position_frame_histogram": [
+          16,
+          0,
+          0
+        ]
+      },
+      {
+        "context": 4,
+        "model": "pl_head",
+        "sampled_frames": 16,
+        "candidate_integer_frames": 12,
+        "frame0_position_max": 0.29196167,
+        "frame0_normal_linear_max": 0.0335944742,
+        "best_candidate_position_worst": 0.29196167,
+        "best_candidate_normal_worst": 0.0335944742,
+        "best_position_frame_histogram": [
+          16,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      },
+      {
+        "context": 4,
+        "model": "al_face",
+        "sampled_frames": 16,
+        "candidate_integer_frames": 3,
+        "frame0_position_max": 0.000549316406,
+        "frame0_normal_linear_max": 1.78813934e-07,
+        "best_candidate_position_worst": 0.000549316406,
+        "best_candidate_normal_worst": 1.78813934e-07,
+        "best_position_frame_histogram": [
+          16,
+          0,
+          0
+        ]
+      }
+    ],
+    "resource_identity_accepted": false,
+    "geometry_identity_accepted": false,
+    "generated_pose_rendered": false,
+    "address_sanitizer": true,
+    "undefined_behavior_sanitizer": true,
+    "leak_sanitizer": true,
+    "inputs_unchanged": true,
+    "resources_sha256": {
+      "Alink.brres": "bd6d9b5eb900b2a6b317226a35c8c98943d4386075195e7fde87ed5bef93c44a",
+      "PLCommonAnime.brres": "b5ccd69261307a9d44899637baccb376cb392408af2d2ab26f7693032a2c7de5",
+      "F_Default.rchaC.brres": "7a0ab00190f14cc5787149e501186b9d4e46d62b481967f6ade44560023f36a3",
+      "native-poses.bin": "49bad1614bf17b04392de0236bcf5416e8372b6260b71d57245ab82f8494da76"
+    },
+    "audit_sha256": "3e4c5a0b3bc7924074aa296a69f304a61c19edabdf6b011b425429c60a22f3ab",
+    "new_game_launched": false,
+    "raw_matrices_exported": false,
+    "peak_sampled_group_rss_mib": 198.4
+  },
   "passed": true,
   "peak_sampled_group_rss_mib": 198.5,
   "new_game_launched": false,
