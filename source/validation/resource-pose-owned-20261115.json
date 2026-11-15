@@ -1,0 +1,48 @@
+{
+  "passed": true,
+  "resources": [
+    {
+      "opened": true,
+      "joints": 37,
+      "duration": 9,
+      "scaling_rule": 2,
+      "half_frame_samples": 703,
+      "model_default_component_flags": 0,
+      "model_joints": 35,
+      "world_matrices": 665,
+      "nonunit_frame_rejections": 0,
+      "bind_reference_max_abs_error": 0.000623703003,
+      "resource_name": "LiftS_UtoD.rchaC.brres",
+      "resource_sha256": "2fea702bb3decf8e13ed236659a1b8b98f8b62013316e140bf4491d087335c2e",
+      "source_bytes_unchanged": true
+    },
+    {
+      "opened": true,
+      "joints": 37,
+      "duration": 10,
+      "scaling_rule": 2,
+      "half_frame_samples": 777,
+      "model_default_component_flags": 0,
+      "model_joints": 35,
+      "world_matrices": 105,
+      "nonunit_frame_rejections": 18,
+      "bind_reference_max_abs_error": 0.000623703003,
+      "resource_name": "LiftS.rchaC.brres",
+      "resource_sha256": "1751721a2b80c582c9f65daa78b89987cbc51129497294bcda142ab29fdada2f",
+      "source_bytes_unchanged": true
+    }
+  ],
+  "address_sanitizer": true,
+  "undefined_behavior_sanitizer": true,
+  "leak_sanitizer": true,
+  "game_launched": false,
+  "native_pose_comparison": false,
+  "resource_bind_pose_comparison": true,
+  "rendering_enabled": false,
+  "resource_bytes_published": false,
+  "source_sha256": "30b85c18ad0f9b0c84d33ea331b26474aec46ca63f7270c21b6f7f9ecc0c7b3d",
+  "peak_sampled_group_rss_mib": 180.9,
+  "model_reference_joints": 35,
+  "rendering_integration_complete": false,
+  "cold_carry_bug_fixed": false
+}

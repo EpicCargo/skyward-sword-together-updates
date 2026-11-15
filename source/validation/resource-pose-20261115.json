@@ -1,0 +1,17 @@
+{
+  "passed": true,
+  "source_sha256": {
+    "client/src/sst_resource_pose.h": "5197a5193a36ce4cbac1b2ddbcef558fa9ee00ec41a55c1e15cd696b83a14da5",
+    "client/src/sst_resource_pose.c": "30b85c18ad0f9b0c84d33ea331b26474aec46ca63f7270c21b6f7f9ecc0c7b3d",
+    "client/tests/resource_pose_test.c": "519df91b27446b248b39cba6794a9b89246a4498755ebd0a0fe730bc3e5a0d4d"
+  },
+  "address_sanitizer": true,
+  "undefined_behavior_sanitizer": true,
+  "leak_sanitizer": true,
+  "game_launched": false,
+  "native_rendering_accepted": false,
+  "assertions": 8967,
+  "deterministic_corrupted_spans": 1024,
+  "peak_sampled_group_rss_mib": 200.0,
+  "raw_check_output": "resource pose: 8967 checks PASS; seven formats, native interpolation, repeated times, defaults, unit hierarchy, bounds and1024corrupted spans; no game or rendering acceptance"
+}

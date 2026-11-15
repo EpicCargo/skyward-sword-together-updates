@@ -10,6 +10,8 @@ Four-player co-op prototype for **Skyward Sword HD** on SkyRecomp 2.0.2.
 
 ## Latest source update — November 14, 2026
 
+A new read-only animation evaluator is the first code step toward cold carry poses. It decodes the owned local carry resources and composes unit-scale joint hierarchies, with8,967 synthetic checks and private model bind-matrix comparison. Renderer blending, skinning palettes and live pose comparison remain to be implemented; fresh-client carry display is still unresolved. [Implementation and tested limits](source/docs/resource-pose.md).
+
 Two independent full Linux clients now expose a missing-pose bug: a guest that has never carried a small pot receives the host's updates but shows ordinary standing posture with no held pot. A genuine local pickup then enables correct steady display of two different carried pots, retained after local putdown. Native handback of the host's placed pot also works after developer positioning. Cold carry display remains unresolved; a new CI regression distinguishes incoming packets, unsupported quest-barrel pickup and genuine local pose learning. [Independent-client evidence and next work](source/docs/independent-client-carry.md).
 
 The latest native prop checks verify one small pot: genuine pickup/putdown, steady remote hand alignment, movement, stale-carry floor restoration and remote placement. The placed pot also remains on the floor after the test peers depart. Carrying nameplates now sit above the pot instead of obscuring it. This is one actual WSL game with three lightweight peers; large pots, barrels, pickup/throw animations and independent full clients remain unverified. [Scoped prop evidence](source/validation/wsl-props-20261114.json).
