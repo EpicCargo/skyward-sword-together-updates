@@ -1,0 +1,31 @@
+{
+  "passed": true,
+  "address_sanitizer": true,
+  "undefined_behavior_sanitizer": true,
+  "leak_sanitizer": true,
+  "synthetic_output_cleaned": true,
+  "game_launched": false,
+  "source_sha256": {
+    "client/src/sst_animation.c": "a0e2799fa417033c65f7d05652e7f4f48e571d9b63b2842f27291f6c92b6fe8c",
+    "client/src/sst_animation.h": "9a45eb9edb4f93dad5aaf5f7718a7bba52df9ff8faeed2dac72d5b9e74ed7dde",
+    "client/src/sst_game.c": "4968a49f5fa40577be8c05411993be744a9dc8d4e2f4ce152fe784481f6eeb45",
+    "client/src/sst_game.h": "ad1da42a5549396d448eaaacabd703be42f94ad7105be4d1a3f69bbda3f9da3c",
+    "client/src/sst_pose_probe.c": "0079b2dd1ec3d5bd10dbb1381856e44ba04ddd8c3473807bc1dbc28238662b97",
+    "client/src/sst_pose_probe.h": "3ec74f49481a1eb4adeed020bc1a072cd95af825460fef12bf1d122ab5b15fc2",
+    "client/tests/pose_probe_test.c": "618242c6a6a109a3b28c0c5e014b499b09ee0de1762370af3d886f609bf28ebb",
+    "client/tests/probe_tracks_test.c": "d400069b0d1397b05185d4599442512b2520476f291c3c51c9d2da7d5a330738",
+    "client/Makefile": "adbec2cd997720b88520d6d331fbee978d316686ae51e48949baabdede3b7708"
+  },
+  "recorder_assertions": 5993,
+  "track_reader_assertions": 49,
+  "raw_check_output": "pose probe: 5993 checks PASS; opt-in/private exclusive output, canonical matrices, genuine-source/cache-hit hooks, caps and immutable inputs; no game\nprobe tracks: 49 checks PASS; strict opt-in, actor/scene/phase identity, bounds, immutable inputs; weights unobserved; no game\n[sst-attachment] cleared 3 rigid pose samples for isolated verification\n[sst-attachment] cleared 4 rigid pose samples for isolated verification\n[sst-attachment] cleared 16 rigid pose samples for isolated verification\nanimation library: observed clips, independent exact/coherent neutral replay, cold-cache suppression, verified wrist/attachment/layout/action gates, retained transitions and 8 MiB cap PASS\ncurrent native palette canonicalization: cached-root residual=7.500 fresh-root residual=0.000\nrender local tests passed: fresh primary/root, publisher identity fence, no stale fallback, unchanged clock; no head-additive fix claimed\ncold receiver: missing pose, receive-only isolation, unsupported pickup, local learning and post-putdown replay PASS\ncarry cohort: exact priority, coherent native idle, complete manifest, scene/unsafe/lifetime gates PASS\ngeometry-only: strict retained replay, no source/hand/neutral teaching, sticky mixed-frame denial and fresh settling PASS\ncontext0 source46/length45 admitted=0 remote1_selected=0 y=0.000\ncontext2 source46/length45 admitted=0 remote1_selected=0 y=0.000\ncontext4 source46/length45 admitted=0 remote1_selected=0 y=0.000\ncontext6 source46/length45 admitted=0 remote1_selected=0 y=0.000\nphase admission: known source bounds, endpoints, settling, neutral, contexts and duration transitions PASS",
+  "peak_sampled_group_rss_mib": 230.1,
+  "full_compile_peak_sampled_group_rss_mib": 230.1,
+  "diagnostic_disabled_by_default": true,
+  "existing_cache_regressions_pass": true,
+  "native_capture_performed": false,
+  "tested_source_commit": "ccffac69ce0ca155d3ec222e4d7cac62c3a2637f",
+  "hosted_source_windows_run": 43682692217,
+  "hosted_linux_run": 43682694290,
+  "same_frame_pose_identity_regressions": true
+}

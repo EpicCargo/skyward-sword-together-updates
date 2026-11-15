@@ -1,0 +1,322 @@
+{
+  "passed": true,
+  "scope": "Opt-in native observation and controlled comparison only; generated pose is NOT accepted for replacement rendering",
+  "source_commit": "ccffac69ce0ca155d3ec222e4d7cac62c3a2637f",
+  "runtime_sha256": "7ba0b8943ad0ad84831974e5479e905bdc4ed2bd75977cfb734999877e4f0691",
+  "native_game_completed": true,
+  "game_frames": 7200,
+  "full_native_clients": 1,
+  "scalar_peers": 0,
+  "scene": "F001r academy hall",
+  "normal_pickup_observed": true,
+  "native_pose_records": 480,
+  "sampled_frames": 32,
+  "idle_frames": 16,
+  "steady_carry_frames": 16,
+  "part_manifest": {
+    "0:52:0:0": 16,
+    "0:53:0:0": 16,
+    "0:15:24:24": 16,
+    "0:2:0:0": 16,
+    "0:3:0:0": 16,
+    "0:1:44:44": 16,
+    "0:4:0:0": 16,
+    "0:5:0:0": 16,
+    "0:9:186:186": 16,
+    "0:12:368:368": 16,
+    "0:6:368:368": 16,
+    "0:8:0:0": 16,
+    "0:11:360:360": 16,
+    "0:7:0:0": 16,
+    "0:10:359:359": 16,
+    "4:52:0:0": 16,
+    "4:53:0:0": 16,
+    "4:2:0:0": 16,
+    "4:3:0:0": 16,
+    "4:1:44:44": 16,
+    "4:4:0:0": 16,
+    "4:5:0:0": 16,
+    "4:15:24:24": 16,
+    "4:9:186:186": 16,
+    "4:12:368:368": 16,
+    "4:6:368:368": 16,
+    "4:8:0:0": 16,
+    "4:11:360:360": 16,
+    "4:7:0:0": 16,
+    "4:10:359:359": 16
+  },
+  "actual_c_evaluator": {
+    "parsed": true,
+    "records": 480,
+    "unsupported_records": 0,
+    "contexts": [
+      {
+        "context": 0,
+        "frames": 16,
+        "body_records": 32,
+        "position_max": 17.5677509,
+        "normal_linear_max": 0.661020696,
+        "left_hand_records": 16,
+        "right_hand_records": 16,
+        "left_hand_translation_max": 0.245598316,
+        "right_hand_translation_max": 0.13671279,
+        "left_hand_linear_max": 0.00715184212,
+        "right_hand_linear_max": 0.00742149353
+      },
+      {
+        "context": 4,
+        "frames": 16,
+        "body_records": 32,
+        "position_max": 2.98140335,
+        "normal_linear_max": 0.00790379569,
+        "left_hand_records": 16,
+        "right_hand_records": 16,
+        "left_hand_translation_max": 0.0838088989,
+        "right_hand_translation_max": 0.0984344482,
+        "left_hand_linear_max": 0.000409781933,
+        "right_hand_linear_max": 0.000296235085
+      }
+    ],
+    "weights_observed": false,
+    "native_pose_match_accepted": false,
+    "generated_pose_rendered": false,
+    "actual_c_evaluator": true,
+    "address_sanitizer": true,
+    "undefined_behavior_sanitizer": true,
+    "leak_sanitizer": true,
+    "inputs_unchanged": true,
+    "resources_sha256": {
+      "Alink.brres": "bd6d9b5eb900b2a6b317226a35c8c98943d4386075195e7fde87ed5bef93c44a",
+      "waitS.rchaC.brres": "400c9ab8a8a5fcad61e592a75b8950ffb44f2dcbbfa7dbfe891a147df2603850",
+      "LiftS_UtoD.rchaC.brres": "2fea702bb3decf8e13ed236659a1b8b98f8b62013316e140bf4491d087335c2e",
+      "native-poses.bin": "49bad1614bf17b04392de0236bcf5416e8372b6260b71d57245ab82f8494da76"
+    },
+    "code_sha256": {
+      "client/src/sst_resource_model.c": "3a5a7fb1712b4e207565583e71645bb6196ee4ecb6d67c68ce8a31f41c6b0029",
+      "client/src/sst_resource_model.h": "3f0a27c40871dffe4ccfef2004da050628ab32f2e00974829ae39c9e7375a7ec",
+      "client/src/sst_resource_pose.c": "76af69ab12c9262a53141205e595004e5e730a66b02a364c37878794d5dcc02a",
+      "client/src/sst_resource_pose.h": "d3466e311724af87907a93756056bdfe84a1d4a46c14e59e11c8097539221a56"
+    },
+    "audit_sha256": "54e063c3f6b0aa8547cfbec4f64bead4bdf1f8daebb9b5c75b53e63d9e2a0e83"
+  },
+  "independent_checker": {
+    "reference_check": {
+      "passed": true,
+      "body_nodes": 35,
+      "view_matrices": 368,
+      "authored_bind_palette_max_error": 1.4778425793338101e-05
+    },
+    "analytic_curve_checks": 26,
+    "private_record_parser_checks": 23,
+    "helper_sha256": "6165ce2a396812f027284c03052c9f1ebc83332875904203d3b50122c1447c1b",
+    "body_comparisons": {
+      "0": {
+        "frames": 16,
+        "direct_position_max": 17.567750453948975,
+        "direct_normal_linear_max": 0.661020724568516,
+        "model_position_max": 186.4899139404297,
+        "model_normal_linear_max": 1.9995904564857483
+      },
+      "4": {
+        "frames": 16,
+        "direct_position_max": 2.981403350830078,
+        "direct_normal_linear_max": 0.007903795689344406,
+        "model_position_max": 155.1837921142578,
+        "model_normal_linear_max": 1.9630047678947449
+      }
+    },
+    "body_joint_errors": {
+      "0": {
+        "backbone2": {
+          "translation_max": 0.07850027084350586,
+          "linear_max": 0.006028464064002037
+        },
+        "head": {
+          "translation_max": 0.10304975509643555,
+          "linear_max": 0.6606734679080546
+        },
+        "armL1": {
+          "translation_max": 0.18370866775512695,
+          "linear_max": 0.007534772157669067
+        },
+        "armL2": {
+          "translation_max": 0.27399396896362305,
+          "linear_max": 0.007151812314987183
+        },
+        "armR1": {
+          "translation_max": 0.0705718994140625,
+          "linear_max": 0.006386369466781616
+        },
+        "armR2": {
+          "translation_max": 0.10662841796875,
+          "linear_max": 0.007410585880279541
+        },
+        "waist": {
+          "translation_max": 0.10344278812408447,
+          "linear_max": 0.004250610247254372
+        },
+        "legL1": {
+          "translation_max": 0.13184165954589844,
+          "linear_max": 0.00373627245426178
+        },
+        "legL2": {
+          "translation_max": 2.9751014709472656,
+          "linear_max": 0.004007220268249512
+        },
+        "footL": {
+          "translation_max": 0.7928325533866882,
+          "linear_max": 0.0007012486457824707
+        },
+        "toeL": {
+          "translation_max": 0.4964885711669922,
+          "linear_max": 0.000743865966796875
+        },
+        "legR1": {
+          "translation_max": 0.13198375701904297,
+          "linear_max": 0.0039090365171432495
+        },
+        "legR2": {
+          "translation_max": 2.9846534729003906,
+          "linear_max": 0.004332348704338074
+        },
+        "footR": {
+          "translation_max": 0.9086842052638531,
+          "linear_max": 0.000814240425825119
+        },
+        "toeR": {
+          "translation_max": 0.4877510070800781,
+          "linear_max": 0.0008141212165355682
+        },
+        "fskirtL1": {
+          "translation_max": 0.16398334503173828,
+          "linear_max": 0.00778605043888092
+        },
+        "fskirtR1": {
+          "translation_max": 0.16327667236328125,
+          "linear_max": 0.004237161949276924
+        },
+        "rskirtL1": {
+          "translation_max": 0.10635972023010254,
+          "linear_max": 0.0059812068939208984
+        },
+        "rskirtR1": {
+          "translation_max": 0.0879354476928711,
+          "linear_max": 0.007119506597518921
+        }
+      },
+      "4": {
+        "backbone2": {
+          "translation_max": 0.08781051635742188,
+          "linear_max": 0.0002205967903137207
+        },
+        "head": {
+          "translation_max": 0.08646106719970703,
+          "linear_max": 0.00019276142120361328
+        },
+        "armL1": {
+          "translation_max": 0.08495140075683594,
+          "linear_max": 0.0002320408821105957
+        },
+        "armL2": {
+          "translation_max": 0.08342552185058594,
+          "linear_max": 0.0003420710563659668
+        },
+        "armR1": {
+          "translation_max": 0.09055328369140625,
+          "linear_max": 0.00023156404495239258
+        },
+        "armR2": {
+          "translation_max": 0.09717941284179688,
+          "linear_max": 0.00021660327911376953
+        },
+        "waist": {
+          "translation_max": 0.0883253812789917,
+          "linear_max": 0.004390674643218517
+        },
+        "legL1": {
+          "translation_max": 0.1241292953491211,
+          "linear_max": 0.0031595379114151
+        },
+        "legL2": {
+          "translation_max": 2.974071502685547,
+          "linear_max": 0.003551274538040161
+        },
+        "footL": {
+          "translation_max": 0.8035899996757507,
+          "linear_max": 0.0005621910095214844
+        },
+        "toeL": {
+          "translation_max": 0.4975566864013672,
+          "linear_max": 0.0005564391613006592
+        },
+        "legR1": {
+          "translation_max": 0.125885009765625,
+          "linear_max": 0.004040420055389404
+        },
+        "legR2": {
+          "translation_max": 2.981403350830078,
+          "linear_max": 0.0043582916259765625
+        },
+        "footR": {
+          "translation_max": 0.8565516024827957,
+          "linear_max": 0.0004959702491760254
+        },
+        "toeR": {
+          "translation_max": 0.4845895767211914,
+          "linear_max": 0.0005681870970875025
+        },
+        "fskirtL1": {
+          "translation_max": 0.1596508026123047,
+          "linear_max": 0.00788499042391777
+        },
+        "fskirtR1": {
+          "translation_max": 0.16196250915527344,
+          "linear_max": 0.004641951993107796
+        },
+        "rskirtL1": {
+          "translation_max": 0.10537564754486084,
+          "linear_max": 0.007435157895088196
+        },
+        "rskirtR1": {
+          "translation_max": 0.07311153411865234,
+          "linear_max": 0.006256386637687683
+        }
+      }
+    }
+  },
+  "controlled_recipe": "One selected track per joint: lower primary even slot and upper adjacent idle slot or slot5 carry. Unit test weights; native weights unobserved.",
+  "memory_policy": {
+    "startup_free_reserve_mib": 6144,
+    "running_free_reserve_mib": 3072,
+    "owned_group_cap_mib": 12288,
+    "deadline_seconds": 1200,
+    "minimum_sampled_windows_free_bytes": 7521185792
+  },
+  "source_sha256": {
+    "client/src/sst_animation.c": "a0e2799fa417033c65f7d05652e7f4f48e571d9b63b2842f27291f6c92b6fe8c",
+    "client/src/sst_animation.h": "9a45eb9edb4f93dad5aaf5f7718a7bba52df9ff8faeed2dac72d5b9e74ed7dde",
+    "client/src/sst_game.c": "4968a49f5fa40577be8c05411993be744a9dc8d4e2f4ce152fe784481f6eeb45",
+    "client/src/sst_game.h": "ad1da42a5549396d448eaaacabd703be42f94ad7105be4d1a3f69bbda3f9da3c",
+    "client/src/sst_pose_probe.c": "0079b2dd1ec3d5bd10dbb1381856e44ba04ddd8c3473807bc1dbc28238662b97",
+    "client/src/sst_pose_probe.h": "3ec74f49481a1eb4adeed020bc1a072cd95af825460fef12bf1d122ab5b15fc2",
+    "client/tests/pose_probe_test.c": "618242c6a6a109a3b28c0c5e014b499b09ee0de1762370af3d886f609bf28ebb",
+    "client/tests/probe_tracks_test.c": "d400069b0d1397b05185d4599442512b2520476f291c3c51c9d2da7d5a330738",
+    "client/Makefile": "adbec2cd997720b88520d6d331fbee978d316686ae51e48949baabdede3b7708"
+  },
+  "private_audit_sha256": "54e063c3f6b0aa8547cfbec4f64bead4bdf1f8daebb9b5c75b53e63d9e2a0e83",
+  "capture_sha256": "49bad1614bf17b04392de0236bcf5416e8372b6260b71d57245ab82f8494da76",
+  "raw_capture_bytes": 5326864,
+  "raw_captures_published": false,
+  "game_assets_published": false,
+  "validation_errors": 0,
+  "inputs_unchanged": true,
+  "personal_game_files_modified": false,
+  "weights_observed": false,
+  "native_pose_match_accepted": false,
+  "generated_pose_rendered": false,
+  "cold_carry_bug_fixed": false,
+  "full_object_sync_accepted": false,
+  "independent_client_gameplay_accepted": false,
+  "installed": false,
+  "release_feed_updated": false
+}

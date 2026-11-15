@@ -47,9 +47,34 @@ caps, the1,024-record limit and exclusive output. Existing animation, fresh-loca
 carry-cohort, geometry-only and phase-admission regression fixtures also pass under
 address, undefined-behavior and leak sanitizers. These are CPU checks, not native
 carry-pose acceptance. See [initial CPU evidence](../validation/pose-probe-20261115.json),
-which records its exact source hashes. The additional same-frame pose guard and
-its regressions are awaiting the new candidate's hosted checks.
+which records its exact source hashes. The additional same-frame pose guard passes
+5,993 recorder assertions and49 reader assertions, plus the same five regression
+fixtures, under local address, undefined-behavior and leak sanitizers with strict
+compiler warnings. Source tests and Windows/Linux builds also pass on the hosted
+candidate. See [coherence check evidence](../validation/pose-probe-coherence-20261115.json)
+for exact code hashes; the initial evidence remains scoped to its earlier revision.
 
-Native capture and comparison will be recorded separately with exact runtime
-hashes and limits. Cold rendering integration, actual native weights, callbacks,
+A finite native run completed7,200 frames in a fresh private profile, including
+normal pickup of an academy-hall pot. It captured480 records across16 idle and16
+steady-carry frames, with15 part identities per frame and no validation errors.
+The actual C evaluator was compared with those captures under address,
+undefined-behavior and leak sanitizers. An independent Python evaluator agrees
+with its body error maxima. Both use a controlled one-track-per-joint recipe;
+actual native blend weights remain unobserved.
+
+For steady carry, the largest absolute position-palette element error is2.98140335
+and the largest normal linear-element error is0.00790379569. Rigid hand model
+translation errors against generated hand joints are0.0838088989 left and
+0.0984344482 right, with linear errors0.000409781933/0.000296235085. These are game
+coordinate and matrix-element errors, not pixel distances. Idle captures include
+scene and movement settling, with larger errors up to17.5677509; they must not be
+reported as a steady idle match. Joint diagnostics locate prominent lower-body
+differences around knees/feet, but do not establish their cause. Weights,
+callbacks, controller settling and model-specific work remain candidates to
+investigate. No generated pose is accepted or rendered from this comparison.
+See [native comparison evidence](../validation/pose-probe-native-20261115.json)
+for exact runtime/source hashes, counts, errors and resource limits. The raw
+capture, resources, screenshots and profile remain private.
+
+ Cold rendering integration, actual native weights, callbacks,
 hand-shape geometry and independent-client gameplay acceptance remain unfinished.
