@@ -1,0 +1,85 @@
+{
+  "input_sha256": "ce2ef09525e0ccab19cade472e5914d83432e617f38230cbf58c352ad6af8824",
+  "nso_build_id": "d824d4b1bbd45d03668380d6d041ba4ca00a64ff000000000000000000000000",
+  "game_version": "SSHD1.0.0 owned main",
+  "player_yaw_offset": 318,
+  "player_action_offset": 1128,
+  "callback_player_pointer_offset": 8,
+  "fields": {
+    "waist_z_y": {
+      "offset": 6740,
+      "bytes": 4
+    },
+    "head_z_y_x": {
+      "offset": 6786,
+      "bytes": 6
+    },
+    "torso_x_y_z": {
+      "offset": 6792,
+      "bytes": 6
+    },
+    "hair_x_then_z": {
+      "offset": 6744,
+      "bytes": 20
+    },
+    "hair_yaw": {
+      "offset": 6774,
+      "bytes": 2
+    },
+    "hair_quaternions_xyzw": {
+      "offset": 6944,
+      "bytes": 64
+    },
+    "actor_yaw": {
+      "offset": 318,
+      "bytes": 2,
+      "source": "already-validated native player pose yaw"
+    }
+  },
+  "body_timing_a": {
+    "start": 14539992,
+    "end": 14540992,
+    "sha256": "133d104ff5906c43b4f868207a7ae139432e8b13fb0c1972851b984cbef0dbdf",
+    "head_reads": [
+      14540280,
+      14540296,
+      14540308
+    ],
+    "waist_reads": [
+      14540324,
+      14540336
+    ]
+  },
+  "body_timing_b": {
+    "start": 14540992,
+    "end": 14547704,
+    "sha256": "f421287068f7b996cb378c00648f95da88000205f74f4fb2074116a9af725766",
+    "torso_reads": [
+      14542208,
+      14542216,
+      14542292
+    ]
+  },
+  "head_timing_b": {
+    "start": 14554064,
+    "end": 14555004,
+    "sha256": "dcf7b5ca725b7902811791349dad7f45954087d3976e70b70f8c517c1b958bdf",
+    "hair_reads": [
+      14554184,
+      14554208,
+      14554212
+    ],
+    "quaternion_reads": [
+      14554272,
+      14554276,
+      14554280,
+      14554288
+    ]
+  },
+  "static_layout_identified": true,
+  "native_runtime_controls_verified": false,
+  "native_blend_weights_observed": false,
+  "external_process_reads": false,
+  "game_launched": false,
+  "raw_instructions_published": false
+}

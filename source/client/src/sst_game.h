@@ -30,6 +30,8 @@ typedef struct {
     // Optional HD player-model controller layout (six native animation tracks).
     uint32_t off_anim_index, off_anim_ids, off_anim_tracks, anim_track_stride, off_anim_frame, off_anim_length;
     uint32_t off_player_instance;
+    // Optional diagnostic control layout; zero offsets disable control reads.
+    uint32_t off_probe_waist,off_probe_head,off_probe_torso,off_probe_hair,off_probe_hair_yaw,off_probe_hair_quat;
     uint32_t off_carried_actor; // optional held-object getter field; never dereferenced
     uint32_t off_item_being_used; // optional verified native u16 active-item field
     uint64_t expected_player_vtable; // required exact identity before active-item reads

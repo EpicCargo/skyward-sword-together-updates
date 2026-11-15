@@ -19,6 +19,8 @@ static void env(const char *key,const char *value){
 }
 static bool reader(const SstPose *p,SstProbeTracks *out,void *user){
     (void)user;reads++;if(!allow)return false;*out=(SstProbeTracks){.scene=scene,.primary=0,.valid_mask=33};out->ids[0]=26;out->frames[0]=p->anim_frame;out->lengths[0]=45;out->ids[5]=431;out->frames[5]=4.5f;out->lengths[5]=9;
+    if(mode>=4){out->controls_valid=mode!=5;out->controls.head[1]=-1234;for(unsigned i=0;i<4;i++)out->controls.hair_quat[i][3]=1;
+        if(mode==6)out->controls.hair_quat[2][1]=NAN;if(mode==7)out->controls.hair_quat[0][0]=2.001f;if(mode==8)out->controls.head[1]+=(int16_t)((reads+1)%2);}
     if(mode==1)out->frames[0]=NAN;if(mode==2)out->valid_mask|=128;if(mode==3)out->frames[5]+=(reads%2)*.1f;return true;
 }
 static void count_observer(uint64_t f,uint16_t m,uint16_t c,const SstPose *p,const float t[12],const float model[12],const void *positions,size_t pn,const void *normals,size_t nn,void *user){
@@ -39,9 +41,17 @@ static unsigned read_records(bool numeric){
         if(numeric){check(fabsf(r.model[3]-2)<.001f&&fabsf(r.model[7]-3)<.001f);check(fabsf(p[3]-4)<.001f&&fabsf(p[7]-5)<.001f);for(unsigned k=0;k<12;k++)check(fabsf(n[k]-identity[k])<.001f);}count++;
     }check(feof(f)&&!ferror(f));fclose(f);return count;
 }
+static unsigned read_controls(void){
+    FILE *f=fopen(path,"rb");check(f!=NULL);unsigned char header[16],expected[16]={'S','S','T','C','5','8',0,0,2,0,0,0,4,3,2,1};check(fread(header,1,16,f)==16&&!memcmp(header,expected,16));
+    unsigned count=0;SstProbeRecord r;
+    while(fread(&r,1,sizeof r,f)==sizeof r){SstProbeControls c;float payload[24];check(r.bytes==sizeof r+sizeof c+96&&r.position_bytes==48&&r.normal_bytes==48);
+        check(fread(&c,1,sizeof c,f)==sizeof c&&fread(payload,1,96,f)==96);check(c.head[1]==-1234&&c.actor_yaw==0);
+        for(unsigned i=0;i<4;i++)for(unsigned k=0;k<4;k++)check(c.hair_quat[i][k]==(k==3?1.f:0.f));count++;
+    }check(feof(f)&&!ferror(f));fclose(f);return count;
+}
 int main(int argc,char **argv){
     if(argc!=2)return 2;check(snprintf(path,sizeof path,"%s/native-poses.bin",argv[1])>0);check(!exists());
-    env("LARECOMP_DEBUG_DATA",NULL);env("SST_POSE_PROBE",NULL);env("SST_POSE_PROBE_DIR",argv[1]);check(!sst_pose_probe_start(reader,NULL));
+    env("SST_POSE_CONTROLS",NULL);env("LARECOMP_DEBUG_DATA",NULL);env("SST_POSE_PROBE",NULL);env("SST_POSE_PROBE_DIR",argv[1]);check(!sst_pose_probe_start(reader,NULL));
     env("LARECOMP_DEBUG_DATA","1");check(!sst_pose_probe_start(reader,NULL));env("SST_POSE_PROBE","0");check(!sst_pose_probe_start(reader,NULL));env("SST_POSE_PROBE","1");
     env("SST_POSE_PROBE_DIR","relative");check(!sst_pose_probe_start(reader,NULL)&&!exists());env("SST_POSE_PROBE_DIR",argv[1]);
     float model[12],position[12];memcpy(model,identity,48);model[3]=12;model[7]=23;memcpy(position,identity,48);position[3]=14;position[7]=25;
@@ -82,6 +92,13 @@ int main(int argc,char **argv){
             for(unsigned mesh=1;mesh<64;mesh++)check(capture((uint16_t)mesh,identity,model,position,identity));}
     }
     sst_pose_probe_reset();check(read_records(false)==1024);check(!remove(path));
+    // Version2 is separately opted in and uses a distinct exclusive filename.
+    env("SST_POSE_CONTROLS","1");check(snprintf(path,sizeof path,"%s/native-poses-controls.bin",argv[1])>0);check(!exists());
+    for(mode=5;mode<=7;mode++){setup(0,0);check(sst_pose_probe_start(reader,NULL));check(capture(6,identity,model,position,identity));check(!exists());sst_pose_probe_reset();}
+    mode=4;setup(0,0);check(sst_pose_probe_start(reader,NULL));check(capture(6,identity,model,position,identity));check(capture(7,identity,model,position,identity));sst_pose_probe_reset();check(read_controls()==2);
+    setup(0,0);check(sst_pose_probe_start(reader,NULL));check(capture(6,identity,model,position,identity));sst_pose_probe_reset();check(read_controls()==2);check(!remove(path));
+    mode=8;reads=0;setup(0,0);check(sst_pose_probe_start(reader,NULL));check(capture(6,identity,model,position,identity));check(capture(7,identity,model,position,identity));sst_pose_probe_reset();check(read_controls()==1);check(!remove(path));mode=0;
+    env("SST_POSE_CONTROLS",NULL);
     env("LARECOMP_DEBUG_DATA",NULL);env("SST_POSE_PROBE",NULL);env("SST_POSE_PROBE_DIR",NULL);sst_animation_reset();
     printf("pose probe: %u checks PASS; opt-in/private exclusive output, canonical matrices, genuine-source/cache-hit hooks, caps and immutable inputs; no game\n",checks);return 0;
 }

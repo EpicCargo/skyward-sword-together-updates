@@ -5,7 +5,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-typedef struct {unsigned char actor[384];uint64_t player;char stage[16];uint8_t room,layer,entrance;SstGameLayout layout;} Fixture;
+typedef struct {unsigned char actor[512];uint64_t player;char stage[16];uint8_t room,layer,entrance;SstGameLayout layout;} Fixture;
 static unsigned checks;
 static void check(bool b){checks++;assert(b);}
 static bool zero(const void *p,size_t bytes){const unsigned char *s=p;for(size_t i=0;i<bytes;i++)if(s[i])return false;return true;}
@@ -27,7 +27,7 @@ static void initialize(Fixture *f){
 }
 static void rejected(Fixture *f,const SstLocal *pub,const SstPose *p){SstProbeTracks out;memset(&out,0x13,sizeof out);check(!sst_game_probe_tracks(f?&f->layout:NULL,pub,p,&out)&&zero(&out,sizeof out));}
 int main(void){
-    env("LARECOMP_DEBUG_DATA",NULL);env("SST_POSE_PROBE",NULL);env("SST_NO_PLAYER_READ",NULL);
+    env("LARECOMP_DEBUG_DATA",NULL);env("SST_POSE_PROBE",NULL);env("SST_NO_PLAYER_READ",NULL);env("SST_POSE_CONTROLS",NULL);
     Fixture f;initialize(&f);SstLocal pub=sst_game_read_local(&f.layout,17);check(pub.valid);SstPose expected=pub.pose;
     SstGameLayout inaccessible={.player_ptr=1};SstProbeTracks out;check(!sst_game_probe_tracks(&inaccessible,&pub,&expected,&out)&&zero(&out,sizeof out));
     env("LARECOMP_DEBUG_DATA","1");rejected(&f,&pub,&expected);env("SST_POSE_PROBE","0");rejected(&f,&pub,&expected);env("SST_POSE_PROBE","1");
@@ -54,6 +54,22 @@ int main(void){
     pub=sst_game_read_local(&f.layout,17);expected=pub.pose;check(pub.valid&&(expected.equip_flags&SST_POSE_CONTEXT_MASK)==SST_POSE_CONTEXT_SMALL_CARRY);
     check(sst_game_probe_tracks(&f.layout,&pub,&expected,&out)&&out.ids[5]==431&&out.frames[5]==4.5f&&out.lengths[5]==9);
     memcpy(saved,&f,sizeof f);check(sst_game_probe_tracks(&f.layout,&pub,&expected,&out)&&!memcmp(saved,&f,sizeof f));
+    // Control reads need separate exact opt-in and a complete bounded layout.
+    check(!out.controls_valid&&zero(&out.controls,sizeof out.controls));env("SST_POSE_CONTROLS","1");rejected(&f,&pub,&expected);
+    f.layout.off_probe_head=320;f.layout.off_probe_waist=326;f.layout.off_probe_torso=330;f.layout.off_probe_hair=336;f.layout.off_probe_hair_yaw=356;f.layout.off_probe_hair_quat=360;
+    int16_t h[3]={123,-456,789},waist[2]={-91,82},torso[3]={-73,64,-55},hair[10]={-1,2,-3,4,-5,6,-7,8,-9,10},yaw=-32000;float quats[4][4]={{0,0,0,1},{0,0,0,1},{0,0,0,1},{0,0,0,1}};
+    put(&f,320,h,6);put(&f,326,waist,4);put(&f,330,torso,6);put(&f,336,hair,20);put(&f,356,&yaw,2);put(&f,360,quats,64);memcpy(saved,&f,sizeof f);
+    check(sst_game_probe_tracks(&f.layout,&pub,&expected,&out)&&out.controls_valid&&!memcmp(saved,&f,sizeof f));
+    check(!memcmp(out.controls.head,h,6)&&!memcmp(out.controls.waist,waist,4)&&!memcmp(out.controls.torso,torso,6)&&!memcmp(out.controls.hair,hair,20)&&out.controls.hair_yaw==yaw&&!memcmp(out.controls.hair_quat,quats,64)&&out.controls.actor_yaw==expected.rot[1]);
+    int16_t actor_yaw=-2345;put(&f,50,&actor_yaw,2);pub=sst_game_read_local(&f.layout,17);expected=pub.pose;check(sst_game_probe_tracks(&f.layout,&pub,&expected,&out)&&out.controls.actor_yaw==actor_yaw);
+    SstGameLayout controls_good=f.layout;f.layout.off_probe_hair_quat=UINT32_MAX;rejected(&f,&pub,&expected);f.layout=controls_good;
+    f.layout.off_probe_head=0;rejected(&f,&pub,&expected);f.layout=controls_good;
+    f.layout.off_probe_hair_quat=(uint32_t)(f.layout.guest_hi-f.player-32);rejected(&f,&pub,&expected);f.layout=controls_good;
+    float bad=NAN;put(&f,360,&bad,4);rejected(&f,&pub,&expected);bad=2.001f;put(&f,360,&bad,4);rejected(&f,&pub,&expected);bad=0;put(&f,360,&bad,4);
+    // Zero quaternion components are observable unused state, not auto-normalized.
+    memset(quats,0,sizeof quats);put(&f,360,quats,64);check(sst_game_probe_tracks(&f.layout,&pub,&expected,&out)&&out.controls_valid&&zero(out.controls.hair_quat,64));
+    env("SST_POSE_CONTROLS","yes");f.layout.off_probe_head=0;check(sst_game_probe_tracks(&f.layout,&pub,&expected,&out)&&!out.controls_valid&&zero(&out.controls,sizeof out.controls));f.layout=controls_good;
+    env("SST_NO_PLAYER_READ","1");check(!sst_game_probe_tracks(&inaccessible,&pub,&expected,&out)&&zero(&out,sizeof out));env("SST_NO_PLAYER_READ",NULL);env("SST_POSE_CONTROLS",NULL);
     env("LARECOMP_DEBUG_DATA",NULL);env("SST_POSE_PROBE",NULL);
     printf("probe tracks: %u checks PASS; strict opt-in, actor/scene/phase identity, bounds, immutable inputs; weights unobserved; no game\n",checks);return 0;
 }

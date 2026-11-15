@@ -39,6 +39,9 @@ const SstGameLayout SST_LAYOUT_SSHD_100 = {
     .off_anim_index = 0x1a2c, .off_anim_ids = 0x1a3a,
     .off_anim_tracks = 0xb08, .anim_track_stride = 0x58, .off_anim_frame = 0x50, .off_anim_length = 0x48,
     .off_player_instance = 8,
+    // Pinned1.0.0 callback loads: timingA0xdddcd8/headB0xde13d0.
+    .off_probe_waist=0x1a54,.off_probe_head=0x1a82,.off_probe_torso=0x1a88,
+    .off_probe_hair=0x1a58,.off_probe_hair_yaw=0x1a76,.off_probe_hair_quat=0x1b20,
     .off_carried_actor = 0x1b90,
     .off_item_being_used = 0x6404,
     .expected_player_vtable = UINT64_C(0x7001637d28),
@@ -109,6 +112,22 @@ static SstSwordUse native_sword_use(const SstGameLayout *l,uint64_t player) {
         return SST_SWORD_USE_UNAVAILABLE;
     return read16(player+l->off_item_being_used)==0x11?SST_SWORD_USE_IN_USE:SST_SWORD_USE_NOT_IN_USE;
 }
+static bool probe_controls(const SstGameLayout *l,uint64_t player,int16_t actor_yaw,SstProbeTracks *out){
+    const char *enabled=getenv("SST_POSE_CONTROLS");if(!enabled||strcmp(enabled,"1"))return true;
+    uint32_t offsets[]={l->off_probe_waist,l->off_probe_head,l->off_probe_torso,l->off_probe_hair,l->off_probe_hair_yaw,l->off_probe_hair_quat};
+    size_t sizes[]={4,6,6,20,2,64};
+    for(unsigned i=0;i<6;i++)if(!offsets[i]||!pointer_fits(l,player,offsets[i],sizes[i]))return false;
+    memcpy(out->controls.waist,(const void*)(uintptr_t)(player+offsets[0]),4);
+    memcpy(out->controls.head,(const void*)(uintptr_t)(player+offsets[1]),6);
+    memcpy(out->controls.torso,(const void*)(uintptr_t)(player+offsets[2]),6);
+    memcpy(out->controls.hair,(const void*)(uintptr_t)(player+offsets[3]),20);
+    memcpy(&out->controls.hair_yaw,(const void*)(uintptr_t)(player+offsets[4]),2);
+    memcpy(out->controls.hair_quat,(const void*)(uintptr_t)(player+offsets[5]),64);
+    // Record bounded raw components, including a possible unused zero state.
+    // Unit-quaternion/callback applicability is a separate comparison gate.
+    for(unsigned i=0;i<4;i++)for(unsigned k=0;k<4;k++)if(!isfinite(out->controls.hair_quat[i][k])||fabsf(out->controls.hair_quat[i][k])>2)return false;
+    out->controls.actor_yaw=actor_yaw;out->controls_valid=true;return true;
+}
 static bool probe_snapshot(const SstGameLayout *l,const SstLocal *published,const SstPose *p,SstProbeTracks *out) {
     if(!l->guest_lo||l->guest_hi<=l->guest_lo||!l->expected_player_vtable||!l->off_player_instance||
        !l->off_anim_index||!l->off_anim_ids||!l->off_anim_tracks||!l->anim_track_stride||!l->off_anim_frame||!l->off_anim_length||
@@ -140,6 +159,7 @@ static bool probe_snapshot(const SstGameLayout *l,const SstLocal *published,cons
         out->ids[i]=read16(player+id);float f,n;memcpy(&f,(const void*)(uintptr_t)(player+phase),4);memcpy(&n,(const void*)(uintptr_t)(player+length),4);
         if(out->ids[i]<443&&isfinite(f)&&isfinite(n)&&f>=0&&n>0&&n<=65536&&f<=n){out->valid_mask|=(uint8_t)(1u<<i);out->frames[i]=f;out->lengths[i]=n;}
     }
+    if(!probe_controls(l,player,rotation[1],out))return false;
     return (out->valid_mask&(1u<<out->primary))&&out->ids[out->primary]==p->anim_id&&isfinite(p->anim_frame)&&fabsf(out->frames[out->primary]-p->anim_frame)<.001f;
 }
 bool sst_game_probe_tracks(const SstGameLayout *l,const SstLocal *published,const SstPose *expected,SstProbeTracks *out) {

@@ -13,6 +13,10 @@ never overwritten. With the flags unset, it performs no file operations. Raw
 records are private game-derived data and must stay out of GitHub, source ZIPs,
 release artifacts and public evidence. Publish scalar errors/counts only.
 
+Optional `SST_POSE_CONTROLS=1` adds a separate version2 control capture; see
+[native control observations](native-controls.md). The legacy format below remains
+available without that flag.
+
 The recorder admits only ordinary clip26/action0 or steady small-carry
 clip26/action67. It uses the existing genuine-source readiness gate. Declared
 forced-viewer draws never invoke it. Metadata reads require the exact configured
