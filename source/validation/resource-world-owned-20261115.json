@@ -1,0 +1,72 @@
+{
+  "parsed": true,
+  "records": 480,
+  "unsupported_records": 0,
+  "contexts": [
+    {
+      "context": 0,
+      "frames": 16,
+      "body_records": 32,
+      "position_max": 17.5677509,
+      "normal_linear_max": 0.661020696,
+      "maximum_position_error_slot": 129,
+      "left_hand_records": 16,
+      "right_hand_records": 16,
+      "left_hand_translation_max": 0.245598316,
+      "right_hand_translation_max": 0.13671279,
+      "left_hand_linear_max": 0.00715184212,
+      "right_hand_linear_max": 0.00742149353
+    },
+    {
+      "context": 4,
+      "frames": 16,
+      "body_records": 32,
+      "position_max": 0.765304089,
+      "normal_linear_max": 0.00790379569,
+      "maximum_position_error_slot": 166,
+      "left_hand_records": 16,
+      "right_hand_records": 16,
+      "left_hand_translation_max": 0.0838088989,
+      "right_hand_translation_max": 0.0984344482,
+      "left_hand_linear_max": 0.000409781933,
+      "right_hand_linear_max": 0.000296235085
+    }
+  ],
+  "previous_inline_world_max_difference": 5.7220459e-06,
+  "public_world_ops_used": true,
+  "zero_leg_angles_and_offset_are_hypotheses": true,
+  "weights_observed": false,
+  "native_pose_match_accepted": false,
+  "generated_pose_rendered": false,
+  "actual_c_evaluator": true,
+  "address_sanitizer": true,
+  "undefined_behavior_sanitizer": true,
+  "leak_sanitizer": true,
+  "inputs_unchanged": true,
+  "resources_sha256": {
+    "Alink.brres": "bd6d9b5eb900b2a6b317226a35c8c98943d4386075195e7fde87ed5bef93c44a",
+    "waitS.rchaC.brres": "400c9ab8a8a5fcad61e592a75b8950ffb44f2dcbbfa7dbfe891a147df2603850",
+    "LiftS_UtoD.rchaC.brres": "2fea702bb3decf8e13ed236659a1b8b98f8b62013316e140bf4491d087335c2e",
+    "native-poses.bin": "49bad1614bf17b04392de0236bcf5416e8372b6260b71d57245ab82f8494da76"
+  },
+  "code_sha256": {
+    "client/src/sst_resource_world.c": "b2feef3c7ba513c3185bd38a563ab2699c395d908d925350dcdcd4e57e4b7f83",
+    "client/src/sst_resource_world.h": "80670d3daf98810c6dc975e92bf543086844b23e40b2da03fc68b6205d2119a5",
+    "client/src/sst_resource_model.c": "3a5a7fb1712b4e207565583e71645bb6196ee4ecb6d67c68ce8a31f41c6b0029",
+    "client/src/sst_resource_model.h": "3f0a27c40871dffe4ccfef2004da050628ab32f2e00974829ae39c9e7375a7ec",
+    "client/src/sst_resource_pose.c": "76af69ab12c9262a53141205e595004e5e730a66b02a364c37878794d5dcc02a",
+    "client/src/sst_resource_pose.h": "d3466e311724af87907a93756056bdfe84a1d4a46c14e59e11c8097539221a56"
+  },
+  "audit_sha256": "36ece16c1a5bf92c82ee31d69f0509373327f02534807df034302c6825d18ac1",
+  "upstream_reference": "https://github.com/zeldaret/ss/blob/96f2dd5497c4ceb595de76fd897fbb1542b27323/src/d/d_player_mdl.cpp#L1449",
+  "upstream_game_version": "Wii reference; HD correctness requires native comparison",
+  "zero_correction_angles_observed": false,
+  "zero_leg_offset_observed": false,
+  "passed": true,
+  "peak_sampled_group_rss_mib": 198.5,
+  "new_game_launched": false,
+  "previous_capture_source_commit": "ccffac69ce0ca155d3ec222e4d7cac62c3a2637f",
+  "previous_capture_runtime_sha256": "7ba0b8943ad0ad84831974e5479e905bdc4ed2bd75977cfb734999877e4f0691",
+  "cold_carry_bug_fixed": false,
+  "full_object_sync_accepted": false
+}

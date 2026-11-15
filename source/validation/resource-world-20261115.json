@@ -1,0 +1,26 @@
+{
+  "passed": true,
+  "source_sha256": {
+    "client/src/sst_resource_world.h": "80670d3daf98810c6dc975e92bf543086844b23e40b2da03fc68b6205d2119a5",
+    "client/src/sst_resource_world.c": "b2feef3c7ba513c3185bd38a563ab2699c395d908d925350dcdcd4e57e4b7f83",
+    "client/tests/resource_world_test.c": "92b31f2292c6e49daf8d4fcd31785570303f2382d7c8888d38688e71ff5c8c28",
+    "client/src/sst_resource_model.h": "3f0a27c40871dffe4ccfef2004da050628ab32f2e00974829ae39c9e7375a7ec",
+    "client/src/sst_resource_model.c": "3a5a7fb1712b4e207565583e71645bb6196ee4ecb6d67c68ce8a31f41c6b0029",
+    "client/tests/resource_model_test.c": "b6ccffd6a72f3731522ce9abfd948a0c2c7728de3ae8ac633f353e204cf327bc",
+    "client/src/sst_resource_pose.h": "d3466e311724af87907a93756056bdfe84a1d4a46c14e59e11c8097539221a56",
+    "client/src/sst_resource_pose.c": "76af69ab12c9262a53141205e595004e5e730a66b02a364c37878794d5dcc02a",
+    "client/tests/resource_pose_test.c": "6d2867605c77c0f7f1691a694f415359be2766d06dc436aeb5bbbbd447fb1404"
+  },
+  "address_sanitizer": true,
+  "undefined_behavior_sanitizer": true,
+  "leak_sanitizer": true,
+  "game_launched": false,
+  "native_rendering_accepted": false,
+  "raw_check_output": "resource pose: 8985 checks PASS; seven formats, native interpolation, repeated times, defaults, unit hierarchy, bounds and1024corrupted spans; no game or rendering acceptance\nresource model: 72723 checks PASS; weighted palettes, six masked quaternion layers, post-blend defaults, joint callbacks, NORMAL/APPROX normals, aliases, bounds and1024corrupted spans; no live rendering acceptance\nresource world: 12968 checks PASS; ordered world rotations, anchor chains, no descendant propagation, immutable inputs and atomic failure; no game",
+  "assertions": 94676,
+  "pose_assertions": 8985,
+  "model_assertions": 72723,
+  "world_assertions": 12968,
+  "corrupted_world_operations": 1024,
+  "peak_sampled_group_rss_mib": 207.6
+}
